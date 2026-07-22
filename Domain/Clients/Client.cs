@@ -1,3 +1,5 @@
+using Domain.Identity;
+
 namespace Domain.Clients;
 
 public sealed class Client
@@ -17,6 +19,7 @@ public sealed class Client
         string? phone,
         string? address,
         string? city,
+        Guid createdByUserId,
         DateTimeOffset createdAtUtc)
     {
         Id = id;
@@ -29,6 +32,7 @@ public sealed class Client
         Phone = NormalizeOptional(phone);
         Address = NormalizeOptional(address);
         City = NormalizeOptional(city);
+        CreatedByUserId = createdByUserId;
         IsActive = true;
         CreatedAtUtc = createdAtUtc;
         UpdatedAtUtc = createdAtUtc;
@@ -54,11 +58,15 @@ public sealed class Client
 
     public string? City { get; private set; }
 
+    public Guid CreatedByUserId { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public DateTimeOffset UpdatedAtUtc { get; private set; }
+
+    public User CreatedByUser { get; private set; } = null!;
 
     public static Client Create(
         ClientType clientType,
@@ -70,8 +78,16 @@ public sealed class Client
         string? phone,
         string? address,
         string? city,
+        Guid createdByUserId,
         DateTimeOffset createdAtUtc)
     {
+        if (createdByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario creador es obligatorio.",
+                nameof(createdByUserId));
+        }
+
         return new Client(
             Guid.NewGuid(),
             clientType,
@@ -83,6 +99,7 @@ public sealed class Client
             phone,
             address,
             city,
+            createdByUserId,
             createdAtUtc);
     }
 

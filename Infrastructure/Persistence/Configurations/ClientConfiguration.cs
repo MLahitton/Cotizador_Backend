@@ -57,6 +57,10 @@ public sealed class ClientConfiguration
             .HasColumnName("city")
             .HasMaxLength(100);
 
+        builder.Property(client => client.CreatedByUserId)
+            .HasColumnName("created_by_user_id")
+            .IsRequired();
+
         builder.Property(client => client.IsActive)
             .HasColumnName("is_active")
             .IsRequired();
@@ -71,6 +75,11 @@ public sealed class ClientConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.HasOne(client => client.CreatedByUser)
+            .WithMany()
+            .HasForeignKey(client => client.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(client => new
             {
                 client.DocumentType,
@@ -82,5 +91,8 @@ public sealed class ClientConfiguration
                 "AND \"document_number\" IS NOT NULL")
             .HasDatabaseName(
                 "ux_clients_document_type_number");
+
+        builder.HasIndex(client => client.CreatedByUserId)
+            .HasDatabaseName("ix_clients_created_by_user_id");
     }
 }
