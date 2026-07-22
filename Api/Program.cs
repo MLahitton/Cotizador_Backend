@@ -8,6 +8,8 @@ using Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
+const string FrontendDevelopmentCorsPolicy = "FrontendDevelopment";
+
 var builder = WebApplication.CreateBuilder(args);
 
 var authenticationOptions =
@@ -58,7 +60,48 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+if (builder.Environment.IsDevelopment())
+{
+    var allowedOrigins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .GetChildren()
+        .Select(origin => origin.Value)
+        .Where(origin => !string.IsNullOrWhiteSpace(origin))
+        .Select(origin => origin!.Trim())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    if (allowedOrigins.Length == 0)
+    {
+        throw new InvalidOperationException(
+            "La configuracion CORS de desarrollo 'Cors:AllowedOrigins' no esta definida.");
+    }
+
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(
+            FrontendDevelopmentCorsPolicy,
+            policy =>
+            {
+                policy
+                    .WithOrigins(allowedOrigins)
+                    .WithMethods(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS")
+                    .WithHeaders(
+                        "Content-Type",
+                        "Authorization");
+            });
+    });
+}
+
 var app = builder.Build();
+
+app.UseHttpsRedirection();
 
 if (app.Environment.IsDevelopment())
 {
@@ -70,9 +113,9 @@ if (app.Environment.IsDevelopment())
             "/openapi/v1.json",
             "Cotizador Backend API v1");
     });
-}
 
-app.UseHttpsRedirection();
+    app.UseCors(FrontendDevelopmentCorsPolicy);
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
