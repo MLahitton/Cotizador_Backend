@@ -8,6 +8,10 @@ public interface IClientRepository
         Guid clientId,
         CancellationToken cancellationToken);
 
+    Task<Client?> FindForUpdateByIdAsync(
+        Guid clientId,
+        CancellationToken cancellationToken);
+
     Task<ClientSearchPage> SearchActiveAsync(
         string? search,
         int page,
@@ -15,6 +19,12 @@ public interface IClientRepository
         CancellationToken cancellationToken);
 
     Task<bool> ExistsByDocumentAsync(
+        ClientDocumentType documentType,
+        string documentNumber,
+        CancellationToken cancellationToken);
+
+    Task<bool> ExistsByDocumentForOtherClientAsync(
+        Guid clientId,
         ClientDocumentType documentType,
         string documentNumber,
         CancellationToken cancellationToken);

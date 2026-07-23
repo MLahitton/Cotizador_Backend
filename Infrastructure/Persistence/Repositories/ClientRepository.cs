@@ -27,6 +27,23 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<Client?> FindForUpdateByIdAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Clients
+                .SingleOrDefaultAsync(
+                    client => client.Id == clientId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ClientQueryException(exception);
+        }
+    }
+
     public async Task<ClientSearchPage> SearchActiveAsync(
         string? search,
         int page,
@@ -104,6 +121,28 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
                 client => client.DocumentType == documentType
                     && client.DocumentNumber == documentNumber,
                 cancellationToken);
+    }
+
+    public async Task<bool> ExistsByDocumentForOtherClientAsync(
+        Guid clientId,
+        ClientDocumentType documentType,
+        string documentNumber,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Clients
+                .AsNoTracking()
+                .AnyAsync(
+                    client => client.Id != clientId
+                        && client.DocumentType == documentType
+                        && client.DocumentNumber == documentNumber,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ClientQueryException(exception);
+        }
     }
 
     public void Add(Client client)

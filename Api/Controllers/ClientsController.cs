@@ -1,5 +1,7 @@
 using Application.Clients.CreateClient;
+using Application.Clients.GetClientById;
 using Application.Clients.GetClients;
+using Application.Clients.UpdateClient;
 using Contracts.Clients;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,7 +13,9 @@ namespace Api.Controllers;
 [Route("api/v1/clients")]
 public sealed class ClientsController(
     CreateClientService createClientService,
-    GetClientsService getClientsService)
+    GetClientsService getClientsService,
+    GetClientByIdService getClientByIdService,
+    UpdateClientService updateClientService)
     : ControllerBase
 {
     [HttpGet]
@@ -60,6 +64,45 @@ public sealed class ClientsController(
             clientsPage.PageSize,
             clientsPage.TotalCount,
             clientsPage.TotalPages));
+    }
+
+    [HttpGet("{clientId:guid}")]
+    [ProducesResponseType<ClientDetailsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ClientDetailsResponse>> GetById(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        var result = await getClientByIdService.ExecuteAsync(
+            new GetClientByIdQuery(clientId),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return MapGetClientByIdFailure(result.Failure);
+        }
+
+        var client = result.Client!;
+
+        return Ok(new ClientDetailsResponse(
+            client.Id,
+            client.ClientType.ToString(),
+            client.LegalName,
+            client.TradeName,
+            client.DocumentType?.ToString(),
+            client.DocumentNumber,
+            client.Email,
+            client.Phone,
+            client.Address,
+            client.City,
+            client.IsActive,
+            client.CreatedAtUtc,
+            client.UpdatedAtUtc));
     }
 
     [HttpPost]
@@ -111,6 +154,57 @@ public sealed class ClientsController(
         return StatusCode(StatusCodes.Status201Created, response);
     }
 
+    [HttpPut("{clientId:guid}")]
+    [ProducesResponseType<ClientDetailsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ClientDetailsResponse>> Update(
+        Guid clientId,
+        [FromBody] UpdateClientRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await updateClientService.ExecuteAsync(
+            new UpdateClientCommand(
+                clientId,
+                request.ClientType,
+                request.LegalName,
+                request.TradeName,
+                request.DocumentType,
+                request.DocumentNumber,
+                request.Email,
+                request.Phone,
+                request.Address,
+                request.City),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return MapUpdateClientFailure(result.Failure);
+        }
+
+        var client = result.Client!;
+
+        return Ok(new ClientDetailsResponse(
+            client.Id,
+            client.ClientType.ToString(),
+            client.LegalName,
+            client.TradeName,
+            client.DocumentType?.ToString(),
+            client.DocumentNumber,
+            client.Email,
+            client.Phone,
+            client.Address,
+            client.City,
+            client.IsActive,
+            client.CreatedAtUtc,
+            client.UpdatedAtUtc));
+    }
+
     private ActionResult<GetClientsResponse> MapGetClientsFailure(
         GetClientsFailure failure)
     {
@@ -160,6 +254,70 @@ public sealed class ClientsController(
                 StatusCodes.Status500InternalServerError,
                 "Error al crear el cliente",
                 "No fue posible guardar el cliente.")
+        };
+    }
+
+    private ActionResult<ClientDetailsResponse> MapGetClientByIdFailure(
+        GetClientByIdFailure failure)
+    {
+        return failure switch
+        {
+            GetClientByIdFailure.InvalidRequest => ClientProblem(
+                StatusCodes.Status400BadRequest,
+                "Solicitud inválida",
+                "El identificador del cliente no es válido."),
+            GetClientByIdFailure.Unauthorized => ClientProblem(
+                StatusCodes.Status401Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            GetClientByIdFailure.InactiveUser => ClientProblem(
+                StatusCodes.Status403Forbidden,
+                "Usuario inactivo",
+                "El usuario no tiene acceso para consultar clientes."),
+            GetClientByIdFailure.NotFound => ClientProblem(
+                StatusCodes.Status404NotFound,
+                "Cliente no encontrado",
+                "No existe un cliente con el identificador indicado."),
+            _ => ClientProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al consultar el cliente",
+                "No fue posible consultar el cliente.")
+        };
+    }
+
+    private ActionResult<ClientDetailsResponse> MapUpdateClientFailure(
+        UpdateClientFailure failure)
+    {
+        return failure switch
+        {
+            UpdateClientFailure.InvalidRequest => ClientProblem(
+                StatusCodes.Status400BadRequest,
+                "Solicitud inválida",
+                "Los datos enviados para actualizar el cliente no son válidos."),
+            UpdateClientFailure.Unauthorized => ClientProblem(
+                StatusCodes.Status401Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            UpdateClientFailure.InactiveUser => ClientProblem(
+                StatusCodes.Status403Forbidden,
+                "Usuario inactivo",
+                "El usuario no tiene acceso para actualizar clientes."),
+            UpdateClientFailure.NotFound => ClientProblem(
+                StatusCodes.Status404NotFound,
+                "Cliente no encontrado",
+                "No existe un cliente con el identificador indicado."),
+            UpdateClientFailure.DuplicateDocument => ClientProblem(
+                StatusCodes.Status409Conflict,
+                "Cliente duplicado",
+                "Ya existe otro cliente con el tipo y número de documento indicados."),
+            UpdateClientFailure.QueryError => ClientProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al consultar el cliente",
+                "No fue posible consultar el cliente para actualizarlo."),
+            _ => ClientProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al actualizar el cliente",
+                "No fue posible guardar los cambios del cliente.")
         };
     }
 
