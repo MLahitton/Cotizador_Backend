@@ -1,5 +1,6 @@
 using Domain.Clients;
 using Domain.Identity;
+using Domain.PreQuotes;
 using Domain.Projects;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,11 @@ public sealed class ApplicationDbContext(
     public DbSet<Client> Clients => Set<Client>();
 
     public DbSet<Project> Projects => Set<Project>();
+
+    public DbSet<PreQuote> PreQuotes => Set<PreQuote>();
+
+    public DbSet<PreQuoteDocument> PreQuoteDocuments =>
+        Set<PreQuoteDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
