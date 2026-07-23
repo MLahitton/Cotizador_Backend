@@ -5,6 +5,7 @@ using Application.Clients.GetClientById;
 using Application.Clients.GetClients;
 using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
+using Application.PreQuotes.CreatePreQuote;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -29,6 +30,7 @@ public static class DependencyInjection
         services.AddScoped<GetClientsService>();
         services.AddScoped<SetClientActivationService>();
         services.AddScoped<UpdateClientService>();
+        services.AddScoped<CreatePreQuoteService>();
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
