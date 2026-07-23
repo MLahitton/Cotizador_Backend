@@ -51,12 +51,26 @@ public sealed class GetClientsService(
             ? null
             : query.Search.Trim();
 
+        var normalizedStatus = string.IsNullOrWhiteSpace(query.Status)
+            ? "active"
+            : query.Status.Trim().ToLowerInvariant();
+
+        bool? isActive = normalizedStatus switch
+        {
+            "active" => true,
+            "inactive" => false,
+            "all" => null,
+            _ => throw new InvalidOperationException(
+                "El estado de cliente validado no es reconocido.")
+        };
+
         ClientSearchPage clientsPage;
 
         try
         {
-            clientsPage = await clientRepository.SearchActiveAsync(
+            clientsPage = await clientRepository.SearchAsync(
                 search,
+                isActive,
                 query.Page,
                 query.PageSize,
                 cancellationToken);

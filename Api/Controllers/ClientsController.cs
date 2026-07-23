@@ -29,12 +29,13 @@ public sealed class ClientsController(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<GetClientsResponse>> Get(
         [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
         var result = await getClientsService.ExecuteAsync(
-            new GetClientsQuery(search, page, pageSize),
+            new GetClientsQuery(search, status, page, pageSize),
             cancellationToken);
 
         if (!result.IsSuccess)
@@ -258,7 +259,7 @@ public sealed class ClientsController(
             GetClientsFailure.InvalidRequest => ClientProblem(
                 StatusCodes.Status400BadRequest,
                 "Solicitud inválida",
-                "Los parámetros de búsqueda y paginación no son válidos."),
+                "Los parámetros de búsqueda, estado y paginación no son válidos."),
             GetClientsFailure.Unauthorized => ClientProblem(
                 StatusCodes.Status401Unauthorized,
                 "No autorizado",

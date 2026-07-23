@@ -12,8 +12,9 @@ public interface IClientRepository
         Guid clientId,
         CancellationToken cancellationToken);
 
-    Task<ClientSearchPage> SearchActiveAsync(
+    Task<ClientSearchPage> SearchAsync(
         string? search,
+        bool? isActive,
         int page,
         int pageSize,
         CancellationToken cancellationToken);

@@ -44,8 +44,9 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
         }
     }
 
-    public async Task<ClientSearchPage> SearchActiveAsync(
+    public async Task<ClientSearchPage> SearchAsync(
         string? search,
+        bool? isActive,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
@@ -54,7 +55,13 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
         {
             var query = dbContext.Clients
                 .AsNoTracking()
-                .Where(client => client.IsActive);
+                .AsQueryable();
+
+            if (isActive is bool activeState)
+            {
+                query = query.Where(
+                    client => client.IsActive == activeState);
+            }
 
             if (search is not null)
             {
