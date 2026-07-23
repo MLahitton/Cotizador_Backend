@@ -3,6 +3,7 @@ using Application.Authentication.GoogleSignIn;
 using Application.Clients.CreateClient;
 using Application.Clients.GetClientById;
 using Application.Clients.GetClients;
+using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
@@ -24,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<CreateClientService>();
         services.AddScoped<GetClientByIdService>();
         services.AddScoped<GetClientsService>();
+        services.AddScoped<SetClientActivationService>();
         services.AddScoped<UpdateClientService>();
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();

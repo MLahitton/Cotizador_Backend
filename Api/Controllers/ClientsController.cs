@@ -1,6 +1,7 @@
 using Application.Clients.CreateClient;
 using Application.Clients.GetClientById;
 using Application.Clients.GetClients;
+using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
 using Contracts.Clients;
 using Microsoft.AspNetCore.Authorization;
@@ -15,7 +16,8 @@ public sealed class ClientsController(
     CreateClientService createClientService,
     GetClientsService getClientsService,
     GetClientByIdService getClientByIdService,
-    UpdateClientService updateClientService)
+    UpdateClientService updateClientService,
+    SetClientActivationService setClientActivationService)
     : ControllerBase
 {
     [HttpGet]
@@ -205,6 +207,49 @@ public sealed class ClientsController(
             client.UpdatedAtUtc));
     }
 
+    [HttpPatch("{clientId:guid}/activation")]
+    [ProducesResponseType<ClientDetailsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ClientDetailsResponse>> SetActivation(
+        Guid clientId,
+        [FromBody] SetClientActivationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await setClientActivationService.ExecuteAsync(
+            new SetClientActivationCommand(
+                clientId,
+                request.IsActive),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return MapSetClientActivationFailure(result.Failure);
+        }
+
+        var client = result.Client!;
+        var response = new ClientDetailsResponse(
+            client.Id,
+            client.ClientType.ToString(),
+            client.LegalName,
+            client.TradeName,
+            client.DocumentType?.ToString(),
+            client.DocumentNumber,
+            client.Email,
+            client.Phone,
+            client.Address,
+            client.City,
+            client.IsActive,
+            client.CreatedAtUtc,
+            client.UpdatedAtUtc);
+
+        return Ok(response);
+    }
+
     private ActionResult<GetClientsResponse> MapGetClientsFailure(
         GetClientsFailure failure)
     {
@@ -318,6 +363,39 @@ public sealed class ClientsController(
                 StatusCodes.Status500InternalServerError,
                 "Error al actualizar el cliente",
                 "No fue posible guardar los cambios del cliente.")
+        };
+    }
+
+    private ActionResult<ClientDetailsResponse>
+        MapSetClientActivationFailure(
+            SetClientActivationFailure failure)
+    {
+        return failure switch
+        {
+            SetClientActivationFailure.InvalidRequest => ClientProblem(
+                StatusCodes.Status400BadRequest,
+                "Solicitud inválida",
+                "Los datos enviados para cambiar el estado del cliente no son válidos."),
+            SetClientActivationFailure.Unauthorized => ClientProblem(
+                StatusCodes.Status401Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            SetClientActivationFailure.InactiveUser => ClientProblem(
+                StatusCodes.Status403Forbidden,
+                "Usuario inactivo",
+                "El usuario no tiene acceso para cambiar el estado de clientes."),
+            SetClientActivationFailure.NotFound => ClientProblem(
+                StatusCodes.Status404NotFound,
+                "Cliente no encontrado",
+                "No existe un cliente con el identificador indicado."),
+            SetClientActivationFailure.QueryError => ClientProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al consultar el cliente",
+                "No fue posible consultar el cliente para cambiar su estado."),
+            _ => ClientProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al cambiar el estado del cliente",
+                "No fue posible guardar el nuevo estado del cliente.")
         };
     }
 
