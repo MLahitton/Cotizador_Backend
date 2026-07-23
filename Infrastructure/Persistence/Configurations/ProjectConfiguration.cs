@@ -43,6 +43,13 @@ public sealed class ProjectConfiguration
             .HasColumnName("created_by_user_id")
             .IsRequired();
 
+        builder.Property(project => project.UpdatedByUserId)
+            .HasColumnName("updated_by_user_id")
+            .IsRequired();
+
+        builder.Property(project => project.StatusChangedByUserId)
+            .HasColumnName("status_changed_by_user_id");
+
         builder.Property(project => project.IsActive)
             .HasColumnName("is_active")
             .IsRequired();
@@ -57,6 +64,10 @@ public sealed class ProjectConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(project => project.StatusChangedAtUtc)
+            .HasColumnName("status_changed_at_utc")
+            .HasColumnType("timestamp with time zone");
+
         builder.HasOne(project => project.Client)
             .WithMany()
             .HasForeignKey(project => project.ClientId)
@@ -65,6 +76,16 @@ public sealed class ProjectConfiguration
         builder.HasOne(project => project.CreatedByUser)
             .WithMany()
             .HasForeignKey(project => project.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(project => project.UpdatedByUser)
+            .WithMany()
+            .HasForeignKey(project => project.UpdatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(project => project.StatusChangedByUser)
+            .WithMany()
+            .HasForeignKey(project => project.StatusChangedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(project => project.Code)
@@ -76,5 +97,11 @@ public sealed class ProjectConfiguration
 
         builder.HasIndex(project => project.CreatedByUserId)
             .HasDatabaseName("ix_projects_created_by_user_id");
+
+        builder.HasIndex(project => project.UpdatedByUserId)
+            .HasDatabaseName("ix_projects_updated_by_user_id");
+
+        builder.HasIndex(project => project.StatusChangedByUserId)
+            .HasDatabaseName("ix_projects_status_changed_by_user_id");
     }
 }

@@ -61,6 +61,13 @@ public sealed class ClientConfiguration
             .HasColumnName("created_by_user_id")
             .IsRequired();
 
+        builder.Property(client => client.UpdatedByUserId)
+            .HasColumnName("updated_by_user_id")
+            .IsRequired();
+
+        builder.Property(client => client.StatusChangedByUserId)
+            .HasColumnName("status_changed_by_user_id");
+
         builder.Property(client => client.IsActive)
             .HasColumnName("is_active")
             .IsRequired();
@@ -75,9 +82,23 @@ public sealed class ClientConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(client => client.StatusChangedAtUtc)
+            .HasColumnName("status_changed_at_utc")
+            .HasColumnType("timestamp with time zone");
+
         builder.HasOne(client => client.CreatedByUser)
             .WithMany()
             .HasForeignKey(client => client.CreatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(client => client.UpdatedByUser)
+            .WithMany()
+            .HasForeignKey(client => client.UpdatedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(client => client.StatusChangedByUser)
+            .WithMany()
+            .HasForeignKey(client => client.StatusChangedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(client => new
@@ -94,5 +115,11 @@ public sealed class ClientConfiguration
 
         builder.HasIndex(client => client.CreatedByUserId)
             .HasDatabaseName("ix_clients_created_by_user_id");
+
+        builder.HasIndex(client => client.UpdatedByUserId)
+            .HasDatabaseName("ix_clients_updated_by_user_id");
+
+        builder.HasIndex(client => client.StatusChangedByUserId)
+            .HasDatabaseName("ix_clients_status_changed_by_user_id");
     }
 }
