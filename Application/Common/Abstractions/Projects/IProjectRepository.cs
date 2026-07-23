@@ -4,6 +4,13 @@ namespace Application.Common.Abstractions.Projects;
 
 public interface IProjectRepository
 {
+    Task<ProjectSearchPage> SearchActiveByClientAsync(
+        Guid clientId,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
     Task<bool> ExistsByCodeAsync(
         string normalizedCode,
         CancellationToken cancellationToken);
@@ -12,6 +19,10 @@ public interface IProjectRepository
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
+
+public sealed record ProjectSearchPage(
+    IReadOnlyList<Project> Items,
+    int TotalCount);
 
 public sealed class ProjectQueryException : Exception
 {

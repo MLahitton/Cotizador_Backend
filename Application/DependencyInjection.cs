@@ -3,6 +3,7 @@ using Application.Authentication.GoogleSignIn;
 using Application.Clients.CreateClient;
 using Application.Clients.GetClients;
 using Application.Projects.CreateProject;
+using Application.Projects.GetClientProjects;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -21,6 +22,7 @@ public static class DependencyInjection
         services.AddScoped<CreateClientService>();
         services.AddScoped<GetClientsService>();
         services.AddScoped<CreateProjectService>();
+        services.AddScoped<GetClientProjectsService>();
 
         return services;
     }
