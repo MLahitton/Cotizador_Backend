@@ -1,5 +1,6 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
+using Application.Common.Abstractions.Projects;
 using Infrastructure.Authentication;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
@@ -34,6 +35,7 @@ public static class DependencyInjection
         services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.AddScoped<IIdentityRepository, IdentityRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<IProjectRepository, ProjectRepository>();
 
         return services;
     }

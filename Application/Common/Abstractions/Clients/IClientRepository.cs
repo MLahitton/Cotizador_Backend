@@ -4,6 +4,10 @@ namespace Application.Common.Abstractions.Clients;
 
 public interface IClientRepository
 {
+    Task<Client?> FindByIdAsync(
+        Guid clientId,
+        CancellationToken cancellationToken);
+
     Task<ClientSearchPage> SearchActiveAsync(
         string? search,
         int page,

@@ -9,6 +9,24 @@ namespace Infrastructure.Persistence.Repositories;
 public sealed class ClientRepository(ApplicationDbContext dbContext)
     : IClientRepository
 {
+    public async Task<Client?> FindByIdAsync(
+        Guid clientId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Clients
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    client => client.Id == clientId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ClientQueryException(exception);
+        }
+    }
+
     public async Task<ClientSearchPage> SearchActiveAsync(
         string? search,
         int page,
