@@ -7,6 +7,8 @@ using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
+using Application.Projects.GetProjectById;
+using Application.Projects.UpdateProject;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -29,6 +31,8 @@ public static class DependencyInjection
         services.AddScoped<UpdateClientService>();
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();
+        services.AddScoped<GetProjectByIdService>();
+        services.AddScoped<UpdateProjectService>();
 
         return services;
     }

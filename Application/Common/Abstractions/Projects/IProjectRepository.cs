@@ -4,6 +4,14 @@ namespace Application.Common.Abstractions.Projects;
 
 public interface IProjectRepository
 {
+    Task<Project?> FindByIdAsync(
+        Guid projectId,
+        CancellationToken cancellationToken);
+
+    Task<Project?> FindForUpdateByIdAsync(
+        Guid projectId,
+        CancellationToken cancellationToken);
+
     Task<ProjectSearchPage> SearchActiveByClientAsync(
         Guid clientId,
         string? search,
@@ -12,6 +20,11 @@ public interface IProjectRepository
         CancellationToken cancellationToken);
 
     Task<bool> ExistsByCodeAsync(
+        string normalizedCode,
+        CancellationToken cancellationToken);
+
+    Task<bool> ExistsByCodeForOtherProjectAsync(
+        Guid projectId,
         string normalizedCode,
         CancellationToken cancellationToken);
 

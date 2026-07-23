@@ -9,6 +9,41 @@ namespace Infrastructure.Persistence.Repositories;
 public sealed class ProjectRepository(ApplicationDbContext dbContext)
     : IProjectRepository
 {
+    public async Task<Project?> FindByIdAsync(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Projects
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    project => project.Id == projectId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ProjectQueryException(exception);
+        }
+    }
+
+    public async Task<Project?> FindForUpdateByIdAsync(
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Projects
+                .SingleOrDefaultAsync(
+                    project => project.Id == projectId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ProjectQueryException(exception);
+        }
+    }
+
     public async Task<ProjectSearchPage> SearchActiveByClientAsync(
         Guid clientId,
         string? search,
@@ -87,6 +122,26 @@ public sealed class ProjectRepository(ApplicationDbContext dbContext)
                 .AsNoTracking()
                 .AnyAsync(
                     project => project.Code == normalizedCode,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new ProjectQueryException(exception);
+        }
+    }
+
+    public async Task<bool> ExistsByCodeForOtherProjectAsync(
+        Guid projectId,
+        string normalizedCode,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Projects
+                .AsNoTracking()
+                .AnyAsync(
+                    project => project.Id != projectId
+                        && project.Code == normalizedCode,
                     cancellationToken);
         }
         catch (DbException exception)
