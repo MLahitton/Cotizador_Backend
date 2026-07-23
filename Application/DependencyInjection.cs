@@ -1,5 +1,6 @@
 using Application.Authentication.GetCurrentUser;
 using Application.Authentication.GoogleSignIn;
+using Application.Clients.CreateClient;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -15,6 +16,7 @@ public static class DependencyInjection
 
         services.AddScoped<GoogleSignInService>();
         services.AddScoped<GetCurrentUserService>();
+        services.AddScoped<CreateClientService>();
 
         return services;
     }

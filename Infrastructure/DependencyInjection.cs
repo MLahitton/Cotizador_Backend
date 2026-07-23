@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Clients;
 using Infrastructure.Authentication;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
@@ -32,6 +33,7 @@ public static class DependencyInjection
         services.AddSingleton<IGoogleTokenValidator, GoogleTokenValidator>();
         services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.AddScoped<IIdentityRepository, IdentityRepository>();
+        services.AddScoped<IClientRepository, ClientRepository>();
 
         return services;
     }
