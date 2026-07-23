@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Application.Common.Abstractions.Clients;
 using Domain.Clients;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +9,72 @@ namespace Infrastructure.Persistence.Repositories;
 public sealed class ClientRepository(ApplicationDbContext dbContext)
     : IClientRepository
 {
+    public async Task<ClientSearchPage> SearchActiveAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var query = dbContext.Clients
+                .AsNoTracking()
+                .Where(client => client.IsActive);
+
+            if (search is not null)
+            {
+                var escapedSearch = EscapeLikePattern(search);
+                var pattern = $"%{escapedSearch}%";
+
+                query = query.Where(client =>
+                    EF.Functions.ILike(
+                        client.LegalName,
+                        pattern,
+                        "\\")
+                    || (client.TradeName != null
+                        && EF.Functions.ILike(
+                            client.TradeName,
+                            pattern,
+                            "\\"))
+                    || (client.DocumentNumber != null
+                        && EF.Functions.ILike(
+                            client.DocumentNumber,
+                            pattern,
+                            "\\"))
+                    || (client.Email != null
+                        && EF.Functions.ILike(
+                            client.Email,
+                            pattern,
+                            "\\")));
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+            var skip = ((long)page - 1L) * pageSize;
+
+            if (totalCount == 0
+                || skip >= totalCount
+                || skip > int.MaxValue)
+            {
+                return new ClientSearchPage(
+                    Array.Empty<Client>(),
+                    totalCount);
+            }
+
+            var items = await query
+                .OrderBy(client => client.LegalName)
+                .ThenBy(client => client.Id)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return new ClientSearchPage(items, totalCount);
+        }
+        catch (DbException exception)
+        {
+            throw new ClientQueryException(exception);
+        }
+    }
+
     public Task<bool> ExistsByDocumentAsync(
         ClientDocumentType documentType,
         string documentNumber,
@@ -45,5 +112,13 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
         {
             throw new ClientPersistenceException(exception);
         }
+    }
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal);
     }
 }
