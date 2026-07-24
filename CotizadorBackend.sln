@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "Infrastru
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Contracts", "Contracts\Contracts.csproj", "{18170FE6-8BB1-455D-8BB9-387F0556BC2D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CotizadorBackend.Tests", "Tests\CotizadorBackend.Tests.csproj", "{3C659996-AD67-4639-A964-AE59DBA66B6C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,8 +87,23 @@ Global
 		{18170FE6-8BB1-455D-8BB9-387F0556BC2D}.Release|x64.Build.0 = Release|Any CPU
 		{18170FE6-8BB1-455D-8BB9-387F0556BC2D}.Release|x86.ActiveCfg = Release|Any CPU
 		{18170FE6-8BB1-455D-8BB9-387F0556BC2D}.Release|x86.Build.0 = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|x64.Build.0 = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Debug|x86.Build.0 = Debug|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|x64.ActiveCfg = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|x64.Build.0 = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|x86.ActiveCfg = Release|Any CPU
+		{3C659996-AD67-4639-A964-AE59DBA66B6C}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3C659996-AD67-4639-A964-AE59DBA66B6C} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal
