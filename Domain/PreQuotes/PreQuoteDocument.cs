@@ -57,6 +57,34 @@ public sealed class PreQuoteDocument
         Guid createdByUserId,
         DateTimeOffset createdAtUtc)
     {
+        return Create(
+            Guid.NewGuid(),
+            preQuoteId,
+            originalFileName,
+            contentType,
+            sizeBytes,
+            storageKey,
+            createdByUserId,
+            createdAtUtc);
+    }
+
+    public static PreQuoteDocument Create(
+        Guid id,
+        Guid preQuoteId,
+        string originalFileName,
+        string contentType,
+        long sizeBytes,
+        string storageKey,
+        Guid createdByUserId,
+        DateTimeOffset createdAtUtc)
+    {
+        if (id == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El identificador del documento es obligatorio.",
+                nameof(id));
+        }
+
         if (preQuoteId == Guid.Empty)
         {
             throw new ArgumentException(
@@ -79,7 +107,7 @@ public sealed class PreQuoteDocument
         }
 
         return new PreQuoteDocument(
-            Guid.NewGuid(),
+            id,
             preQuoteId,
             NormalizeRequired(
                 originalFileName,

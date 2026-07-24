@@ -4,6 +4,10 @@ namespace Application.Common.Abstractions.PreQuotes;
 
 public interface IPreQuoteRepository
 {
+    Task<PreQuote?> FindForUpdateByIdAsync(
+        Guid preQuoteId,
+        CancellationToken cancellationToken);
+
     Task<PreQuoteDetails?> FindByIdAsync(
         Guid preQuoteId,
         CancellationToken cancellationToken);
@@ -15,6 +19,8 @@ public interface IPreQuoteRepository
         CancellationToken cancellationToken);
 
     void Add(PreQuote preQuote);
+
+    void AddDocument(PreQuoteDocument document);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
