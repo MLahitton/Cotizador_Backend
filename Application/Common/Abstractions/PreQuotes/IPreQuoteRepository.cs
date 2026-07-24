@@ -4,6 +4,10 @@ namespace Application.Common.Abstractions.PreQuotes;
 
 public interface IPreQuoteRepository
 {
+    Task<PreQuoteDetails?> FindByIdAsync(
+        Guid preQuoteId,
+        CancellationToken cancellationToken);
+
     Task<PreQuoteSearchPage> SearchByProjectAsync(
         Guid projectId,
         int page,
@@ -14,6 +18,13 @@ public interface IPreQuoteRepository
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
+
+public sealed record PreQuoteDetails(
+    Guid Id,
+    Guid ProjectId,
+    int DocumentCount,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc);
 
 public sealed record PreQuoteSearchItem(
     Guid Id,

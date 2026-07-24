@@ -8,6 +8,30 @@ namespace Infrastructure.Persistence.Repositories;
 public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
     : IPreQuoteRepository
 {
+    public async Task<PreQuoteDetails?> FindByIdAsync(
+        Guid preQuoteId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.PreQuotes
+                .AsNoTracking()
+                .Where(preQuote => preQuote.Id == preQuoteId)
+                .Select(preQuote => new PreQuoteDetails(
+                    preQuote.Id,
+                    preQuote.ProjectId,
+                    dbContext.PreQuoteDocuments.Count(document =>
+                        document.PreQuoteId == preQuote.Id),
+                    preQuote.CreatedAtUtc,
+                    preQuote.UpdatedAtUtc))
+                .SingleOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new PreQuoteQueryException(exception);
+        }
+    }
+
     public async Task<PreQuoteSearchPage> SearchByProjectAsync(
         Guid projectId,
         int page,
