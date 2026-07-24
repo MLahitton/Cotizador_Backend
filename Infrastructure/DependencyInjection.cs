@@ -1,9 +1,12 @@
+using System.Net.Http.Headers;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
+using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
 using Infrastructure.Authentication;
+using Infrastructure.DocumentProcessing;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
 using Infrastructure.Storage;
@@ -23,6 +26,9 @@ public static class DependencyInjection
         var fileStorageOptions =
             FileStorageOptions.FromConfiguration(configuration);
 
+        var cotizadorAiOptions =
+            CotizadorAiOptions.FromConfiguration(configuration);
+
         var connectionString = configuration.GetConnectionString(
             "DefaultConnection");
 
@@ -40,7 +46,23 @@ public static class DependencyInjection
         services.AddSingleton<IGoogleTokenValidator, GoogleTokenValidator>();
         services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.AddSingleton(fileStorageOptions);
+        services.AddSingleton(cotizadorAiOptions);
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddHttpClient<
+            IDocumentProcessingClient,
+            CotizadorAiDocumentProcessingClient>(
+            (serviceProvider, httpClient) =>
+            {
+                var options =
+                    serviceProvider.GetRequiredService<CotizadorAiOptions>();
+
+                httpClient.BaseAddress = options.BaseUri;
+                httpClient.Timeout = Timeout.InfiniteTimeSpan;
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue(
+                        "application/json"));
+            });
         services.AddScoped<IIdentityRepository, IdentityRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
         services.AddScoped<IPreQuoteRepository, PreQuoteRepository>();
