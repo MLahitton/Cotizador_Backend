@@ -5,6 +5,7 @@ using Application.Clients.GetClientById;
 using Application.Clients.GetClients;
 using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
+using Application.PreQuotes.CreateDocumentProcessingAttempt;
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
@@ -33,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<GetClientsService>();
         services.AddScoped<SetClientActivationService>();
         services.AddScoped<UpdateClientService>();
+        services.AddScoped<CreateDocumentProcessingAttemptService>();
         services.AddScoped<CreatePreQuoteService>();
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();
