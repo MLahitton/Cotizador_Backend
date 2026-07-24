@@ -24,6 +24,12 @@ public sealed class ApplicationDbContext(
     public DbSet<PreQuoteDocument> PreQuoteDocuments =>
         Set<PreQuoteDocument>();
 
+    public DbSet<DocumentProcessingAttempt> DocumentProcessingAttempts =>
+        Set<DocumentProcessingAttempt>();
+
+    public DbSet<DocumentExtractionResult> DocumentExtractionResults =>
+        Set<DocumentExtractionResult>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
