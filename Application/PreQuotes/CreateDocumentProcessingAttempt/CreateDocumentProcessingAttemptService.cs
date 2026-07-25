@@ -268,7 +268,7 @@ public sealed class CreateDocumentProcessingAttemptService(
                 "El intento debe encontrarse finalizado.");
         }
 
-        return CreateDocumentProcessingAttemptResult.Success(
+        return CreateDocumentProcessingAttemptResult.ProcessingFailed(
             new CreatedDocumentProcessingAttemptResult(
                 attempt.Id,
                 source.DocumentId,
@@ -314,8 +314,7 @@ public sealed class CreateDocumentProcessingAttemptService(
         if (clientResult.Failure
                 == DocumentProcessingClientFailure.RemoteRejection
             && clientResult.RemoteError is { } remoteError
-            && !string.IsNullOrWhiteSpace(remoteError.ErrorCode)
-            && remoteError.ErrorCode.Length <= 64)
+            && IsRecognizedRemoteRejectionCode(remoteError.ErrorCode))
         {
             return remoteError.ErrorCode;
         }
@@ -330,5 +329,19 @@ public sealed class CreateDocumentProcessingAttemptService(
                 AiServiceErrorCode,
             _ => AiInvalidResponseCode
         };
+    }
+
+    private static bool IsRecognizedRemoteRejectionCode(
+        string errorCode)
+    {
+        return errorCode is
+            "INVALID_REQUEST"
+            or "INVALID_CORRELATION_ID"
+            or "EMPTY_FILE"
+            or "INVALID_PDF"
+            or "PDF_PASSWORD_REQUIRED"
+            or "PDF_PAGE_LIMIT_EXCEEDED"
+            or "FILE_TOO_LARGE"
+            or "UNSUPPORTED_FILE_TYPE";
     }
 }

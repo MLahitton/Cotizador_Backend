@@ -30,7 +30,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         AllowTrailingCommas = false,
         ReadCommentHandling = JsonCommentHandling.Disallow,
-        NumberHandling = JsonNumberHandling.Strict
+        NumberHandling = JsonNumberHandling.Strict,
+        WriteIndented = false
     };
 
     public async Task<DocumentProcessingClientResult> ProcessAsync(
@@ -173,6 +174,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
             HttpMethod.Post,
             DocumentExtractionPath);
 
+        requestMessage.Headers.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+
         requestMessage.Headers.Add(
             CorrelationHeaderName,
             request.CorrelationId.ToString("D"));
@@ -214,6 +218,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
     {
         var statusCode = (int)response.StatusCode;
 
+        ValidateCorrelationHeader(response, request.CorrelationId);
+
         if (statusCode is 502 or 503)
         {
             return DocumentProcessingClientResult.Failed(
@@ -232,7 +238,6 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
 
-        ValidateCorrelationHeader(response, request.CorrelationId);
         ValidateContentType(response);
 
         var payloadJson = await ReadResponseBodyAsync(
@@ -355,7 +360,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
             checked((int)totalBytesRead));
     }
 
-    private static DocumentProcessingResponseData ParseSuccessResponse(
+    private DocumentProcessingResponseData ParseSuccessResponse(
         string payloadJson,
         DocumentProcessingClientRequest request)
     {
@@ -404,6 +409,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 StringComparison.Ordinal)
             || response.Document.SizeBytes != request.SizeBytes
             || response.Document.PageCount < 1
+            || response.Document.PageCount > options.MaximumPageCount
             || response.Pages.Count != response.Document.PageCount)
         {
             throw new InvalidDataException();
@@ -492,6 +498,11 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 pageNumbers);
         }
 
+        ValidateWarnings(
+            classification,
+            pages,
+            warnings);
+
         if (!string.Equals(
                 response.ProcessingMetadata.Method,
                 "pymupdf",
@@ -500,6 +511,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
         {
             throw new InvalidDataException();
         }
+
+        var canonicalPayloadJson = JsonSerializer.Serialize(
+            response,
+            SerializerOptions);
 
         return new DocumentProcessingResponseData(
             response.SchemaVersion!,
@@ -518,7 +533,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
             new ProcessingMetadataData(
                 response.ProcessingMetadata.Method!,
                 response.ProcessingMetadata.DurationMs),
-            payloadJson);
+            canonicalPayloadJson);
     }
 
     private static DocumentProcessingClientResult ParseErrorResponse(
@@ -760,14 +775,85 @@ public sealed class CotizadorAiDocumentProcessingClient(
                     "A valid X-Correlation-ID header is required.",
                 "EMPTY_FILE" =>
                     message == "The uploaded file is empty.",
-                "INVALID_PDF" => true,
-                "PDF_PASSWORD_REQUIRED" => true,
-                "PDF_PAGE_LIMIT_EXCEEDED" => true,
+                "INVALID_PDF" =>
+                    message == "The uploaded file is not a valid PDF.",
+                "PDF_PASSWORD_REQUIRED" =>
+                    message == "The PDF requires a password.",
+                "PDF_PAGE_LIMIT_EXCEEDED" =>
+                    message ==
+                    "The PDF exceeds the maximum allowed page count.",
                 _ => false
             },
-            500 => errorCode == "INTERNAL_SERVER_ERROR",
+            500 =>
+                errorCode == "INTERNAL_SERVER_ERROR"
+                && message == "An unexpected error occurred.",
             _ => false
         };
+    }
+
+    private static void ValidateWarnings(
+        PdfClassification classification,
+        IReadOnlyList<ProcessedPageData> pages,
+        IReadOnlyList<ProcessingWarningData> warnings)
+    {
+        switch (classification)
+        {
+            case PdfClassification.PdfText:
+                if (warnings.Count != 0)
+                {
+                    throw new InvalidDataException();
+                }
+
+                break;
+
+            case PdfClassification.PdfScanned:
+                ValidateSingleWarning(
+                    warnings,
+                    "OCR_REQUIRED",
+                    "The document does not contain extractable text.",
+                    Enumerable.Range(1, pages.Count));
+                break;
+
+            case PdfClassification.PdfMixed:
+                ValidateSingleWarning(
+                    warnings,
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    pages
+                        .Where(page => !page.HasExtractableText)
+                        .Select(page => page.PageNumber));
+                break;
+
+            default:
+                throw new InvalidDataException();
+        }
+    }
+
+    private static void ValidateSingleWarning(
+        IReadOnlyList<ProcessingWarningData> warnings,
+        string expectedCode,
+        string expectedMessage,
+        IEnumerable<int> expectedPageNumbers)
+    {
+        if (warnings.Count != 1)
+        {
+            throw new InvalidDataException();
+        }
+
+        var warning = warnings[0];
+
+        if (!string.Equals(
+                warning.Code,
+                expectedCode,
+                StringComparison.Ordinal)
+            || !string.Equals(
+                warning.Message,
+                expectedMessage,
+                StringComparison.Ordinal)
+            || !warning.PageNumbers.SequenceEqual(expectedPageNumbers))
+        {
+            throw new InvalidDataException();
+        }
     }
 
     private sealed class SuccessResponseDto

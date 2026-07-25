@@ -38,12 +38,51 @@ public sealed record CreateDocumentProcessingAttemptResult(
 {
     public bool IsSuccess =>
         Failure == CreateDocumentProcessingAttemptFailure.None
-        && Attempt is not null;
+        && Attempt is
+        {
+            Outcome: DocumentProcessingOutcome.Completed
+                or DocumentProcessingOutcome.RequiresReview
+        };
+
+    public bool IsProcessingFailure =>
+        Failure == CreateDocumentProcessingAttemptFailure.None
+        && Attempt is
+        {
+            Outcome: DocumentProcessingOutcome.Failed,
+            ErrorCode: { } errorCode
+        }
+        && !string.IsNullOrWhiteSpace(errorCode);
 
     public static CreateDocumentProcessingAttemptResult Success(
         CreatedDocumentProcessingAttemptResult attempt)
     {
         ArgumentNullException.ThrowIfNull(attempt);
+
+        if (attempt.Outcome is not DocumentProcessingOutcome.Completed
+            and not DocumentProcessingOutcome.RequiresReview)
+        {
+            throw new ArgumentException(
+                "El intento exitoso debe estar completado o requerir revisión.",
+                nameof(attempt));
+        }
+
+        return new CreateDocumentProcessingAttemptResult(
+            CreateDocumentProcessingAttemptFailure.None,
+            attempt);
+    }
+
+    public static CreateDocumentProcessingAttemptResult ProcessingFailed(
+        CreatedDocumentProcessingAttemptResult attempt)
+    {
+        ArgumentNullException.ThrowIfNull(attempt);
+
+        if (attempt.Outcome != DocumentProcessingOutcome.Failed
+            || string.IsNullOrWhiteSpace(attempt.ErrorCode))
+        {
+            throw new ArgumentException(
+                "El intento fallido debe tener outcome Failed y código de error.",
+                nameof(attempt));
+        }
 
         return new CreateDocumentProcessingAttemptResult(
             CreateDocumentProcessingAttemptFailure.None,

@@ -6,10 +6,12 @@ namespace Infrastructure.DocumentProcessing;
 public sealed record CotizadorAiOptions(
     Uri BaseUri,
     int TimeoutSeconds,
-    long MaximumResponseBytes)
+    long MaximumResponseBytes,
+    int MaximumPageCount)
 {
     private const int MaximumTimeoutSeconds = 300;
     private const long MaximumAllowedResponseBytes = 134_217_728;
+    private const int MaximumAllowedPageCount = 100;
 
     public static CotizadorAiOptions FromConfiguration(
         IConfiguration configuration)
@@ -78,9 +80,26 @@ public sealed record CotizadorAiOptions(
                 "La configuración 'CotizadorAi:MaximumResponseBytes' debe estar entre 1 y 134217728 bytes.");
         }
 
+        var maximumPageCountValue =
+            configuration["CotizadorAi:MaximumPageCount"];
+
+        if (string.IsNullOrWhiteSpace(maximumPageCountValue)
+            || !int.TryParse(
+                maximumPageCountValue,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var maximumPageCount)
+            || maximumPageCount <= 0
+            || maximumPageCount > MaximumAllowedPageCount)
+        {
+            throw new InvalidOperationException(
+                "La configuración 'CotizadorAi:MaximumPageCount' debe ser un entero entre 1 y 100.");
+        }
+
         return new CotizadorAiOptions(
             baseUri,
             timeoutSeconds,
-            maximumResponseBytes);
+            maximumResponseBytes,
+            maximumPageCount);
     }
 }
