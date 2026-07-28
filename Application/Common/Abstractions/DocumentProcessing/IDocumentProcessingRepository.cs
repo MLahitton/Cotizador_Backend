@@ -12,12 +12,41 @@ public interface IDocumentProcessingRepository
         Guid documentId,
         CancellationToken cancellationToken);
 
+    Task<Guid?> ClaimNextPendingDocumentProcessingAttemptAsync(
+        DateTimeOffset startedAtUtc,
+        CancellationToken cancellationToken);
+
+    Task<DocumentProcessingWorkItem?> FindProcessingWorkItemAsync(
+        Guid processingAttemptId,
+        CancellationToken cancellationToken);
+
+    Task<DocumentProcessingAttemptStatusSnapshot?> FindAttemptStatusAsync(
+        Guid documentId,
+        Guid processingAttemptId,
+        Guid requestedByUserId,
+        CancellationToken cancellationToken);
+
     void AddAttempt(DocumentProcessingAttempt attempt);
 
     void AddResult(DocumentExtractionResult result);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
+
+public sealed record DocumentProcessingWorkItem(
+    DocumentProcessingAttempt Attempt,
+    DocumentProcessingSource Source);
+
+public sealed record DocumentProcessingAttemptStatusSnapshot(
+    Guid ProcessingAttemptId,
+    Guid DocumentId,
+    DocumentProcessingState ProcessingState,
+    DocumentProcessingOutcome? Outcome,
+    string? ErrorCode,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset? StartedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    string? ResultPayloadJson);
 
 public sealed record DocumentProcessingSource(
     Guid DocumentId,

@@ -1,6 +1,5 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.DocumentProcessing;
-using Application.Common.Abstractions.Storage;
 using Domain.PreQuotes;
 using FluentValidation;
 
@@ -11,17 +10,10 @@ public sealed class CreateDocumentProcessingAttemptService(
     ICurrentUser currentUser,
     IIdentityRepository identityRepository,
     IDocumentProcessingRepository documentProcessingRepository,
-    IFileStorage fileStorage,
-    IDocumentProcessingClient documentProcessingClient)
+    TimeProvider timeProvider)
 {
     private const long MaximumPdfSizeBytes = 20 * 1024 * 1024;
     private const string ApplicationPdfContentType = "application/pdf";
-    private const string AiServiceUnavailableCode = "AI_SERVICE_UNAVAILABLE";
-    private const string AiServiceTimeoutCode = "AI_SERVICE_TIMEOUT";
-    private const string AiInvalidResponseCode = "AI_INVALID_RESPONSE";
-    private const string AiServiceErrorCode = "AI_SERVICE_ERROR";
-    private const string DocumentStorageErrorCode = "DOCUMENT_STORAGE_ERROR";
-    private const string RequestCancelledCode = "REQUEST_CANCELLED";
 
     public async Task<CreateDocumentProcessingAttemptResult> ExecuteAsync(
         CreateDocumentProcessingAttemptCommand command,
@@ -33,15 +25,13 @@ public sealed class CreateDocumentProcessingAttemptService(
 
         if (!validationResult.IsValid)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.InvalidRequest);
+            return Failed(CreateDocumentProcessingAttemptFailure.InvalidRequest);
         }
 
         if (!currentUser.IsAuthenticated
             || currentUser.UserId is not Guid userId)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.Unauthorized);
+            return Failed(CreateDocumentProcessingAttemptFailure.Unauthorized);
         }
 
         var user = await identityRepository.FindUserByIdAsync(
@@ -50,14 +40,12 @@ public sealed class CreateDocumentProcessingAttemptService(
 
         if (user is null)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.Unauthorized);
+            return Failed(CreateDocumentProcessingAttemptFailure.Unauthorized);
         }
 
         if (!user.IsActive)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.InactiveUser);
+            return Failed(CreateDocumentProcessingAttemptFailure.InactiveUser);
         }
 
         DocumentProcessingSource? source;
@@ -70,262 +58,87 @@ public sealed class CreateDocumentProcessingAttemptService(
         }
         catch (DocumentProcessingQueryException)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.QueryError);
+            return Failed(CreateDocumentProcessingAttemptFailure.QueryError);
         }
 
         if (source is null)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.DocumentNotFound);
+            return Failed(CreateDocumentProcessingAttemptFailure.DocumentNotFound);
         }
 
         if (!source.ProjectIsActive)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.InactiveProject);
+            return Failed(CreateDocumentProcessingAttemptFailure.InactiveProject);
         }
 
         if (!source.ClientIsActive)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.InactiveClient);
+            return Failed(CreateDocumentProcessingAttemptFailure.InactiveClient);
         }
 
         if (!HasValidPersistedMetadata(source))
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.QueryError);
+            return Failed(CreateDocumentProcessingAttemptFailure.QueryError);
         }
-
-        bool hasActiveAttempt;
 
         try
         {
-            hasActiveAttempt =
-                await documentProcessingRepository
+            if (await documentProcessingRepository
                     .HasActiveDocumentProcessingAttemptAsync(
                         source.DocumentId,
-                        cancellationToken);
+                        cancellationToken))
+            {
+                return Failed(
+                    CreateDocumentProcessingAttemptFailure
+                        .DocumentProcessingAlreadyActive);
+            }
         }
         catch (DocumentProcessingQueryException)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.QueryError);
+            return Failed(CreateDocumentProcessingAttemptFailure.QueryError);
         }
 
-        if (hasActiveAttempt)
-        {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure
-                    .DocumentProcessingAlreadyActive);
-        }
-
-        var createdAtUtc = DateTimeOffset.UtcNow;
-        var correlationId = Guid.NewGuid();
         var attempt = DocumentProcessingAttempt.Create(
             source.DocumentId,
             userId,
-            correlationId,
-            createdAtUtc);
+            Guid.NewGuid(),
+            timeProvider.GetUtcNow());
 
         try
         {
             documentProcessingRepository.AddAttempt(attempt);
-
             await documentProcessingRepository.SaveChangesAsync(
                 cancellationToken);
         }
         catch (DocumentProcessingActiveAttemptConflictException)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
+            return Failed(
                 CreateDocumentProcessingAttemptFailure
                     .DocumentProcessingAlreadyActive);
         }
         catch (DocumentProcessingPersistenceException)
         {
-            return CreateDocumentProcessingAttemptResult.Failed(
+            return Failed(
                 CreateDocumentProcessingAttemptFailure.InitialPersistenceError);
-        }
-
-        attempt.Start(DateTimeOffset.UtcNow);
-
-        try
-        {
-            await documentProcessingRepository.SaveChangesAsync(
-                cancellationToken);
-        }
-        catch (DocumentProcessingPersistenceException)
-        {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.InitialPersistenceError);
-        }
-
-        try
-        {
-            await using var content = await fileStorage.OpenReadAsync(
-                source.StorageKey,
-                cancellationToken);
-
-            var clientResult = await documentProcessingClient.ProcessAsync(
-                new DocumentProcessingClientRequest(
-                    source.DocumentId,
-                    attempt.Id,
-                    attempt.CorrelationId,
-                    source.OriginalFileName,
-                    source.SizeBytes,
-                    content),
-                cancellationToken);
-
-            if (clientResult.IsSuccess
-                && clientResult.Response is { } response)
-            {
-                return await FinalizeSuccessfulAttemptAsync(
-                    attempt,
-                    source,
-                    response);
-            }
-
-            return await FinalizeFailedAttemptAsync(
-                attempt,
-                source,
-                MapClientFailure(clientResult));
-        }
-        catch (InvalidStorageKeyException)
-        {
-            return await FinalizeFailedAttemptAsync(
-                attempt,
-                source,
-                DocumentStorageErrorCode);
-        }
-        catch (FileStorageReadException)
-        {
-            return await FinalizeFailedAttemptAsync(
-                attempt,
-                source,
-                DocumentStorageErrorCode);
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                attempt.Fail(
-                    RequestCancelledCode,
-                    DateTimeOffset.UtcNow);
-
-                await documentProcessingRepository.SaveChangesAsync(
-                    CancellationToken.None);
-            }
-            catch (DocumentProcessingPersistenceException)
-            {
-            }
-
-            throw;
-        }
-    }
-
-    private async Task<CreateDocumentProcessingAttemptResult>
-        FinalizeSuccessfulAttemptAsync(
-            DocumentProcessingAttempt attempt,
-            DocumentProcessingSource source,
-            DocumentProcessingResponseData response)
-    {
-        var completedAtUtc = DateTimeOffset.UtcNow;
-        var extractionResult = DocumentExtractionResult.Create(
-            attempt.Id,
-            response.SchemaVersion,
-            response.Document.Classification,
-            response.Document.RequiresOcr,
-            response.Document.PageCount,
-            response.ProcessingMetadata.Method,
-            response.ProcessingMetadata.DurationMs,
-            response.PayloadJson,
-            completedAtUtc);
-
-        attempt.Complete(response.Outcome, completedAtUtc);
-        documentProcessingRepository.AddResult(extractionResult);
-
-        try
-        {
-            await documentProcessingRepository.SaveChangesAsync(
-                CancellationToken.None);
-        }
-        catch (DocumentProcessingPersistenceException)
-        {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.FinalPersistenceError);
-        }
-
-        if (attempt.Outcome is not { } outcome
-            || attempt.CompletedAtUtc is not { } persistedCompletedAtUtc)
-        {
-            throw new InvalidOperationException(
-                "El intento debe encontrarse finalizado.");
         }
 
         return CreateDocumentProcessingAttemptResult.Success(
-            new CreatedDocumentProcessingAttemptResult(
+            new DocumentProcessingAttemptStatusData(
                 attempt.Id,
-                source.DocumentId,
-                attempt.CorrelationId,
-                outcome,
-                null,
-                response.SchemaVersion,
-                response.Document.Classification,
-                response.Document.RequiresOcr,
-                response.Document.PageCount,
-                response.Warnings.Count,
-                response.ProcessingMetadata.Method,
-                response.ProcessingMetadata.DurationMs,
+                attempt.PreQuoteDocumentId,
+                attempt.ProcessingState,
+                attempt.Outcome,
+                attempt.ErrorCode,
                 attempt.CreatedAtUtc,
-                persistedCompletedAtUtc));
+                attempt.StartedAtUtc,
+                attempt.CompletedAtUtc,
+                null));
     }
 
-    private async Task<CreateDocumentProcessingAttemptResult>
-        FinalizeFailedAttemptAsync(
-            DocumentProcessingAttempt attempt,
-            DocumentProcessingSource source,
-            string errorCode)
+    private static CreateDocumentProcessingAttemptResult Failed(
+        CreateDocumentProcessingAttemptFailure failure)
     {
-        var completedAtUtc = DateTimeOffset.UtcNow;
-
-        attempt.Fail(errorCode, completedAtUtc);
-
-        try
-        {
-            await documentProcessingRepository.SaveChangesAsync(
-                CancellationToken.None);
-        }
-        catch (DocumentProcessingPersistenceException)
-        {
-            return CreateDocumentProcessingAttemptResult.Failed(
-                CreateDocumentProcessingAttemptFailure.FinalPersistenceError);
-        }
-
-        if (attempt.Outcome is not { } outcome
-            || attempt.CompletedAtUtc is not { } persistedCompletedAtUtc)
-        {
-            throw new InvalidOperationException(
-                "El intento debe encontrarse finalizado.");
-        }
-
-        return CreateDocumentProcessingAttemptResult.ProcessingFailed(
-            new CreatedDocumentProcessingAttemptResult(
-                attempt.Id,
-                source.DocumentId,
-                attempt.CorrelationId,
-                outcome,
-                attempt.ErrorCode,
-                null,
-                null,
-                null,
-                null,
-                0,
-                null,
-                null,
-                attempt.CreatedAtUtc,
-                persistedCompletedAtUtc));
+        return CreateDocumentProcessingAttemptResult.Failed(failure);
     }
 
     private static bool HasValidPersistedMetadata(
@@ -348,42 +161,5 @@ public sealed class CreateDocumentProcessingAttemptService(
                 source.StorageKey,
                 source.StorageKey.Trim(),
                 StringComparison.Ordinal);
-    }
-
-    private static string MapClientFailure(
-        DocumentProcessingClientResult clientResult)
-    {
-        if (clientResult.Failure
-                == DocumentProcessingClientFailure.RemoteRejection
-            && clientResult.RemoteError is { } remoteError
-            && IsRecognizedRemoteRejectionCode(remoteError.ErrorCode))
-        {
-            return remoteError.ErrorCode;
-        }
-
-        return clientResult.Failure switch
-        {
-            DocumentProcessingClientFailure.ServiceUnavailable =>
-                AiServiceUnavailableCode,
-            DocumentProcessingClientFailure.Timeout =>
-                AiServiceTimeoutCode,
-            DocumentProcessingClientFailure.ServiceError =>
-                AiServiceErrorCode,
-            _ => AiInvalidResponseCode
-        };
-    }
-
-    private static bool IsRecognizedRemoteRejectionCode(
-        string errorCode)
-    {
-        return errorCode is
-            "INVALID_REQUEST"
-            or "INVALID_CORRELATION_ID"
-            or "EMPTY_FILE"
-            or "INVALID_PDF"
-            or "PDF_PASSWORD_REQUIRED"
-            or "PDF_PAGE_LIMIT_EXCEEDED"
-            or "FILE_TOO_LARGE"
-            or "UNSUPPORTED_FILE_TYPE";
     }
 }

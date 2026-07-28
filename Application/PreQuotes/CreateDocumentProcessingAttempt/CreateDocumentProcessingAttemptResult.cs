@@ -1,4 +1,4 @@
-using Domain.PreQuotes;
+using Application.PreQuotes;
 
 namespace Application.PreQuotes.CreateDocumentProcessingAttempt;
 
@@ -17,73 +17,18 @@ public enum CreateDocumentProcessingAttemptFailure
     DocumentProcessingAlreadyActive = 10
 }
 
-public sealed record CreatedDocumentProcessingAttemptResult(
-    Guid Id,
-    Guid DocumentId,
-    Guid CorrelationId,
-    DocumentProcessingOutcome Outcome,
-    string? ErrorCode,
-    string? SchemaVersion,
-    PdfClassification? Classification,
-    bool? RequiresOcr,
-    int? PageCount,
-    int WarningCount,
-    string? ProcessingMethod,
-    int? DurationMs,
-    DateTimeOffset CreatedAtUtc,
-    DateTimeOffset CompletedAtUtc);
-
 public sealed record CreateDocumentProcessingAttemptResult(
     CreateDocumentProcessingAttemptFailure Failure,
-    CreatedDocumentProcessingAttemptResult? Attempt)
+    DocumentProcessingAttemptStatusData? Attempt)
 {
     public bool IsSuccess =>
         Failure == CreateDocumentProcessingAttemptFailure.None
-        && Attempt is
-        {
-            Outcome: DocumentProcessingOutcome.Completed
-                or DocumentProcessingOutcome.RequiresReview
-        };
-
-    public bool IsProcessingFailure =>
-        Failure == CreateDocumentProcessingAttemptFailure.None
-        && Attempt is
-        {
-            Outcome: DocumentProcessingOutcome.Failed,
-            ErrorCode: { } errorCode
-        }
-        && !string.IsNullOrWhiteSpace(errorCode);
+        && Attempt is not null;
 
     public static CreateDocumentProcessingAttemptResult Success(
-        CreatedDocumentProcessingAttemptResult attempt)
+        DocumentProcessingAttemptStatusData attempt)
     {
         ArgumentNullException.ThrowIfNull(attempt);
-
-        if (attempt.Outcome is not DocumentProcessingOutcome.Completed
-            and not DocumentProcessingOutcome.RequiresReview)
-        {
-            throw new ArgumentException(
-                "El intento exitoso debe estar completado o requerir revisión.",
-                nameof(attempt));
-        }
-
-        return new CreateDocumentProcessingAttemptResult(
-            CreateDocumentProcessingAttemptFailure.None,
-            attempt);
-    }
-
-    public static CreateDocumentProcessingAttemptResult ProcessingFailed(
-        CreatedDocumentProcessingAttemptResult attempt)
-    {
-        ArgumentNullException.ThrowIfNull(attempt);
-
-        if (attempt.Outcome != DocumentProcessingOutcome.Failed
-            || string.IsNullOrWhiteSpace(attempt.ErrorCode))
-        {
-            throw new ArgumentException(
-                "El intento fallido debe tener outcome Failed y código de error.",
-                nameof(attempt));
-        }
 
         return new CreateDocumentProcessingAttemptResult(
             CreateDocumentProcessingAttemptFailure.None,

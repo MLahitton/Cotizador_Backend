@@ -6,6 +6,9 @@ using Application.Clients.GetClients;
 using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
+using Application.PreQuotes.ClaimDocumentProcessingAttempt;
+using Application.PreQuotes.GetDocumentProcessingAttempt;
+using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
@@ -16,6 +19,7 @@ using Application.Projects.GetProjectById;
 using Application.Projects.UpdateProject;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Application;
 
@@ -35,6 +39,13 @@ public static class DependencyInjection
         services.AddScoped<SetClientActivationService>();
         services.AddScoped<UpdateClientService>();
         services.AddScoped<CreateDocumentProcessingAttemptService>();
+        services.AddScoped<GetDocumentProcessingAttemptService>();
+        services.AddScoped<
+            IDocumentProcessingClaimService,
+            ClaimNextDocumentProcessingAttemptService>();
+        services.AddScoped<
+            IClaimedDocumentProcessingService,
+            ProcessClaimedDocumentProcessingAttemptService>();
         services.AddScoped<CreatePreQuoteService>();
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();
@@ -43,6 +54,7 @@ public static class DependencyInjection
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
         services.AddScoped<UpdateProjectService>();
+        services.TryAddSingleton(TimeProvider.System);
 
         return services;
     }

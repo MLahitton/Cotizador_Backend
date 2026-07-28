@@ -28,6 +28,8 @@ public static class DependencyInjection
 
         var cotizadorAiOptions =
             CotizadorAiOptions.FromConfiguration(configuration);
+        var documentProcessingWorkerOptions =
+            DocumentProcessingWorkerOptions.FromConfiguration(configuration);
 
         var connectionString = configuration.GetConnectionString(
             "DefaultConnection");
@@ -47,6 +49,7 @@ public static class DependencyInjection
         services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.AddSingleton(fileStorageOptions);
         services.AddSingleton(cotizadorAiOptions);
+        services.AddSingleton(documentProcessingWorkerOptions);
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddHttpClient<
             IDocumentProcessingClient,
@@ -70,6 +73,11 @@ public static class DependencyInjection
             DocumentProcessingRepository>();
         services.AddScoped<IPreQuoteRepository, PreQuoteRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+
+        if (documentProcessingWorkerOptions.Enabled)
+        {
+            services.AddHostedService<DocumentProcessingWorker>();
+        }
 
         return services;
     }
