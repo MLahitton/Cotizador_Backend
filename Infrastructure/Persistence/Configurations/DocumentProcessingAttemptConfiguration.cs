@@ -14,19 +14,28 @@ public sealed class DocumentProcessingAttemptConfiguration
             "document_processing_attempts",
             "core",
             tableBuilder => tableBuilder.HasCheckConstraint(
-                "ck_document_processing_attempts_final_state",
-                "((\"outcome\" IS NULL " +
+                "ck_document_processing_attempts_lifecycle",
+                "((\"processing_state\" = 'Pending' " +
+                "AND \"started_at_utc\" IS NULL " +
+                "AND \"outcome\" IS NULL " +
                 "AND \"completed_at_utc\" IS NULL " +
                 "AND \"error_code\" IS NULL) " +
-                "OR (\"outcome\" IS NOT NULL " +
-                "AND \"outcome\" IN ('Completed', 'RequiresReview') " +
-                "AND \"completed_at_utc\" IS NOT NULL " +
+                "OR (\"processing_state\" = 'Processing' " +
+                "AND \"started_at_utc\" IS NOT NULL " +
+                "AND \"started_at_utc\" >= \"created_at_utc\" " +
+                "AND \"outcome\" IS NULL " +
+                "AND \"completed_at_utc\" IS NULL " +
                 "AND \"error_code\" IS NULL) " +
-                "OR (\"outcome\" IS NOT NULL " +
-                "AND \"outcome\" = 'Failed' " +
+                "OR (\"processing_state\" = 'Finished' " +
+                "AND \"started_at_utc\" IS NOT NULL " +
+                "AND \"started_at_utc\" >= \"created_at_utc\" " +
                 "AND \"completed_at_utc\" IS NOT NULL " +
+                "AND \"completed_at_utc\" >= \"started_at_utc\" " +
+                "AND ((\"outcome\" IN ('Completed', 'RequiresReview') " +
+                "AND \"error_code\" IS NULL) " +
+                "OR (\"outcome\" = 'Failed' " +
                 "AND \"error_code\" IS NOT NULL " +
-                "AND \"error_code\" <> ''))"));
+                "AND \"error_code\" <> ''))))"));
 
         builder.HasKey(attempt => attempt.Id);
 
@@ -55,6 +64,18 @@ public sealed class DocumentProcessingAttemptConfiguration
             .HasColumnName("created_at_utc")
             .HasColumnType("timestamp with time zone")
             .IsRequired();
+
+        builder.Property(attempt => attempt.ProcessingState)
+            .HasColumnName("processing_state")
+            .HasConversion<string>()
+            .HasColumnType("varchar(20)")
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(attempt => attempt.StartedAtUtc)
+            .HasColumnName("started_at_utc")
+            .HasColumnType("timestamp with time zone")
+            .IsRequired(false);
 
         builder.Property(attempt => attempt.CompletedAtUtc)
             .HasColumnName("completed_at_utc")
@@ -95,6 +116,22 @@ public sealed class DocumentProcessingAttemptConfiguration
         builder.HasIndex(attempt => attempt.CreatedAtUtc)
             .HasDatabaseName(
                 "ix_document_processing_attempts_created_at_utc");
+
+        builder.HasIndex(
+                attempt => new
+                {
+                    attempt.ProcessingState,
+                    attempt.CreatedAtUtc
+                })
+            .HasDatabaseName(
+                "ix_document_processing_attempts_processing_state_created_at_utc");
+
+        builder.HasIndex(attempt => attempt.PreQuoteDocumentId)
+            .IsUnique()
+            .HasFilter(
+                "\"processing_state\" IN ('Pending', 'Processing')")
+            .HasDatabaseName(
+                "ux_document_processing_attempts_active_pre_quote_document_id");
 
         builder.HasIndex(attempt => attempt.CorrelationId)
             .IsUnique()

@@ -198,6 +198,54 @@ public sealed class DocumentProcessingAttemptsControllerTests
     }
 
     [Fact]
+    public async Task Create_WithActiveAttempt_ReturnsSafeConflict()
+    {
+        var context = new ControllerActionContext();
+        context.ConfigurePreviousFailure("active_attempt");
+
+        var actionResult = await context.Controller.Create(
+            DocumentId,
+            TestContext.Current.CancellationToken);
+
+        var objectResult = Assert.IsType<ObjectResult>(actionResult);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+        var problem = Assert.IsType<ProblemDetails>(objectResult.Value);
+        Assert.Equal(StatusCodes.Status409Conflict, problem.Status);
+        Assert.Equal("Procesamiento ya activo", problem.Title);
+        Assert.Equal(
+            "El documento ya tiene un intento de procesamiento activo.",
+            problem.Detail);
+        Assert.Null(problem.Type);
+        Assert.Null(problem.Instance);
+        Assert.Equal(2, problem.Extensions.Count);
+        Assert.Equal(
+            "DOCUMENT_PROCESSING_ALREADY_ACTIVE",
+            problem.Extensions["errorCode"]);
+        Assert.Equal(DocumentId, problem.Extensions["documentId"]);
+        Assert.False(
+            problem.Extensions.ContainsKey("processingAttemptId"));
+        Assert.False(problem.Extensions.ContainsKey("correlationId"));
+
+        var json = JsonSerializer.Serialize(problem);
+        Assert.DoesNotContain(
+            "storageKey",
+            json,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "prequotes/document.pdf",
+            json,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "SELECT ",
+            json,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "exception",
+            json,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Create_WithPersistedFailure_DoesNotExposeInternalInformation()
     {
         var context = new ControllerActionContext();
@@ -425,6 +473,10 @@ public sealed class DocumentProcessingAttemptsControllerTests
                     DocumentId,
                     Arg.Any<CancellationToken>())
                 .Returns(_ => Source);
+            Repository.HasActiveDocumentProcessingAttemptAsync(
+                    DocumentId,
+                    Arg.Any<CancellationToken>())
+                .Returns(false);
             Repository.When(repository => repository.AddAttempt(
                     Arg.Any<DocumentProcessingAttempt>()))
                 .Do(call => AddedAttempt =
@@ -434,7 +486,7 @@ public sealed class DocumentProcessingAttemptsControllerTests
                 {
                     saveCount++;
 
-                    if (saveCount == 2)
+                    if (saveCount == 3)
                     {
                         beforeFinalSave?.Invoke();
                     }
@@ -619,6 +671,12 @@ public sealed class DocumentProcessingAttemptsControllerTests
                                     new InvalidOperationException(
                                         "Query failed."))));
                     break;
+                case "active_attempt":
+                    Repository.HasActiveDocumentProcessingAttemptAsync(
+                            DocumentId,
+                            Arg.Any<CancellationToken>())
+                        .Returns(true);
+                    break;
                 case "initial_persistence":
                     Repository.SaveChangesAsync(
                             Arg.Any<CancellationToken>())
@@ -635,7 +693,7 @@ public sealed class DocumentProcessingAttemptsControllerTests
                         .Returns(_ =>
                         {
                             currentSave++;
-                            return currentSave == 1
+                            return currentSave < 3
                                 ? Task.CompletedTask
                                 : Task.FromException(
                                     new DocumentProcessingPersistenceException(

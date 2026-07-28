@@ -8,6 +8,10 @@ public interface IDocumentProcessingRepository
         Guid documentId,
         CancellationToken cancellationToken);
 
+    Task<bool> HasActiveDocumentProcessingAttemptAsync(
+        Guid documentId,
+        CancellationToken cancellationToken);
+
     void AddAttempt(DocumentProcessingAttempt attempt);
 
     void AddResult(DocumentExtractionResult result);
@@ -42,6 +46,18 @@ public sealed class DocumentProcessingPersistenceException : Exception
     public DocumentProcessingPersistenceException(Exception innerException)
         : base(
             "No fue posible guardar el intento de procesamiento.",
+            innerException)
+    {
+    }
+}
+
+public sealed class DocumentProcessingActiveAttemptConflictException
+    : Exception
+{
+    public DocumentProcessingActiveAttemptConflictException(
+        Exception innerException)
+        : base(
+            "El documento ya tiene un intento de procesamiento activo.",
             innerException)
     {
     }

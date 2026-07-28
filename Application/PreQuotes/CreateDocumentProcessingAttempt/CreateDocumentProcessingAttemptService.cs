@@ -98,6 +98,29 @@ public sealed class CreateDocumentProcessingAttemptService(
                 CreateDocumentProcessingAttemptFailure.QueryError);
         }
 
+        bool hasActiveAttempt;
+
+        try
+        {
+            hasActiveAttempt =
+                await documentProcessingRepository
+                    .HasActiveDocumentProcessingAttemptAsync(
+                        source.DocumentId,
+                        cancellationToken);
+        }
+        catch (DocumentProcessingQueryException)
+        {
+            return CreateDocumentProcessingAttemptResult.Failed(
+                CreateDocumentProcessingAttemptFailure.QueryError);
+        }
+
+        if (hasActiveAttempt)
+        {
+            return CreateDocumentProcessingAttemptResult.Failed(
+                CreateDocumentProcessingAttemptFailure
+                    .DocumentProcessingAlreadyActive);
+        }
+
         var createdAtUtc = DateTimeOffset.UtcNow;
         var correlationId = Guid.NewGuid();
         var attempt = DocumentProcessingAttempt.Create(
@@ -110,6 +133,25 @@ public sealed class CreateDocumentProcessingAttemptService(
         {
             documentProcessingRepository.AddAttempt(attempt);
 
+            await documentProcessingRepository.SaveChangesAsync(
+                cancellationToken);
+        }
+        catch (DocumentProcessingActiveAttemptConflictException)
+        {
+            return CreateDocumentProcessingAttemptResult.Failed(
+                CreateDocumentProcessingAttemptFailure
+                    .DocumentProcessingAlreadyActive);
+        }
+        catch (DocumentProcessingPersistenceException)
+        {
+            return CreateDocumentProcessingAttemptResult.Failed(
+                CreateDocumentProcessingAttemptFailure.InitialPersistenceError);
+        }
+
+        attempt.Start(DateTimeOffset.UtcNow);
+
+        try
+        {
             await documentProcessingRepository.SaveChangesAsync(
                 cancellationToken);
         }

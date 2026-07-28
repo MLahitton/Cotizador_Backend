@@ -103,6 +103,9 @@ public sealed class DocumentProcessingAttemptsController(
                 statusCode: StatusCodes.Status409Conflict,
                 title: "Cliente inactivo",
                 detail: "No se pueden procesar documentos para un cliente inactivo."),
+            CreateDocumentProcessingAttemptFailure
+                .DocumentProcessingAlreadyActive =>
+                CreateActiveAttemptResponse(documentId),
             CreateDocumentProcessingAttemptFailure.QueryError => Problem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 title: "Error al consultar el documento",
@@ -121,6 +124,26 @@ public sealed class DocumentProcessingAttemptsController(
                 statusCode: StatusCodes.Status500InternalServerError,
                 title: "Error al procesar el documento",
                 detail: "No fue posible completar el procesamiento del documento.")
+        };
+    }
+
+    private static ObjectResult CreateActiveAttemptResponse(Guid documentId)
+    {
+        var problemDetails = new ProblemDetails
+        {
+            Title = "Procesamiento ya activo",
+            Status = StatusCodes.Status409Conflict,
+            Detail =
+                "El documento ya tiene un intento de procesamiento activo."
+        };
+
+        problemDetails.Extensions["errorCode"] =
+            "DOCUMENT_PROCESSING_ALREADY_ACTIVE";
+        problemDetails.Extensions["documentId"] = documentId;
+
+        return new ObjectResult(problemDetails)
+        {
+            StatusCode = StatusCodes.Status409Conflict
         };
     }
 

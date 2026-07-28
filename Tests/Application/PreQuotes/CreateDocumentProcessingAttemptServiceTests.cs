@@ -324,6 +324,62 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         await AssertNoAttemptWorkAsync(context);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WithActiveAttempt_StopsBeforeAttemptCreation()
+    {
+        var context = new ServiceContext();
+        context.Repository.HasActiveDocumentProcessingAttemptAsync(
+                DocumentId,
+                Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var result = await context.ExecuteAsync(
+            TestContext.Current.CancellationToken);
+
+        AssertPreviousFailure(
+            result,
+            CreateDocumentProcessingAttemptFailure
+                .DocumentProcessingAlreadyActive);
+        context.Repository.DidNotReceive().AddAttempt(
+            Arg.Any<DocumentProcessingAttempt>());
+        context.Repository.DidNotReceive().AddResult(
+            Arg.Any<DocumentExtractionResult>());
+        await context.Repository.DidNotReceive().SaveChangesAsync(
+            Arg.Any<CancellationToken>());
+        await context.Storage.DidNotReceive().OpenReadAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+        await context.Client.DidNotReceive().ProcessAsync(
+            Arg.Any<DocumentProcessingClientRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithConcurrentActiveAttemptConflict_StopsBeforeStorage()
+    {
+        var context = new ServiceContext();
+        context.Repository.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(
+                new DocumentProcessingActiveAttemptConflictException(
+                    new InvalidOperationException("Concurrent insert."))));
+
+        var result = await context.ExecuteAsync(
+            TestContext.Current.CancellationToken);
+
+        AssertPreviousFailure(
+            result,
+            CreateDocumentProcessingAttemptFailure
+                .DocumentProcessingAlreadyActive);
+        await context.Storage.DidNotReceive().OpenReadAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+        await context.Client.DidNotReceive().ProcessAsync(
+            Arg.Any<DocumentProcessingClientRequest>(),
+            Arg.Any<CancellationToken>());
+        context.Repository.DidNotReceive().AddResult(
+            Arg.Any<DocumentExtractionResult>());
+    }
+
     [Theory]
     [InlineData(DocumentProcessingOutcome.Completed)]
     [InlineData(DocumentProcessingOutcome.RequiresReview)]
@@ -343,9 +399,22 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         Assert.Equal(outcome, result.Attempt.Outcome);
         Assert.NotNull(context.AddedAttempt);
         Assert.NotNull(context.AddedResult);
+        Assert.Equal(
+            DocumentProcessingState.Finished,
+            context.AddedAttempt.ProcessingState);
+        Assert.NotNull(context.AddedAttempt.StartedAtUtc);
         Assert.Null(context.AddedAttempt.ErrorCode);
+        Assert.Equal(
+            [
+                DocumentProcessingState.Pending,
+                DocumentProcessingState.Processing,
+                DocumentProcessingState.Finished
+            ],
+            context.PersistedStates);
         context.Repository.Received(1).AddResult(
             Arg.Any<DocumentExtractionResult>());
+        await context.Repository.Received(2).SaveChangesAsync(
+            cancellationSource.Token);
         await context.Repository.Received(1).SaveChangesAsync(
             CancellationToken.None);
     }
@@ -379,6 +448,9 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         Assert.False(result.IsSuccess);
         Assert.Equal(errorCode, result.Attempt?.ErrorCode);
         Assert.Equal(DocumentProcessingOutcome.Failed, result.Attempt?.Outcome);
+        Assert.Equal(
+            DocumentProcessingState.Finished,
+            context.AddedAttempt?.ProcessingState);
         Assert.Null(context.AddedResult);
         context.Repository.DidNotReceive().AddResult(
             Arg.Any<DocumentExtractionResult>());
@@ -422,6 +494,9 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         Assert.True(result.IsProcessingFailure);
         Assert.Equal(expectedErrorCode, result.Attempt?.ErrorCode);
         Assert.NotNull(result.Attempt?.CompletedAtUtc);
+        Assert.Equal(
+            DocumentProcessingState.Finished,
+            context.AddedAttempt?.ProcessingState);
         Assert.Null(context.AddedResult);
     }
 
@@ -461,6 +536,13 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
 
         Assert.True(result.IsProcessingFailure);
         Assert.Equal("DOCUMENT_STORAGE_ERROR", result.Attempt?.ErrorCode);
+        Assert.Equal(
+            [
+                DocumentProcessingState.Pending,
+                DocumentProcessingState.Processing,
+                DocumentProcessingState.Finished
+            ],
+            context.PersistedStates);
         Assert.Null(context.AddedResult);
     }
 
@@ -488,6 +570,80 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenProcessingPersistenceFails_StopsBeforeStorage()
+    {
+        var context = new ServiceContext();
+        var saveCallCount = 0;
+        var snapshots = new List<(
+            DocumentProcessingState ProcessingState,
+            DateTimeOffset? StartedAtUtc,
+            DocumentProcessingOutcome? Outcome,
+            DateTimeOffset? CompletedAtUtc,
+            string? ErrorCode)>();
+        context.Repository.SaveChangesAsync(Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                saveCallCount++;
+                var attempt = Assert.IsType<DocumentProcessingAttempt>(
+                    context.AddedAttempt);
+                snapshots.Add((
+                    attempt.ProcessingState,
+                    attempt.StartedAtUtc,
+                    attempt.Outcome,
+                    attempt.CompletedAtUtc,
+                    attempt.ErrorCode));
+
+                return saveCallCount == 2
+                    ? Task.FromException(
+                        new DocumentProcessingPersistenceException(
+                            new InvalidOperationException(
+                                "Processing write failed.")))
+                    : Task.CompletedTask;
+            });
+        using var cancellationSource = new CancellationTokenSource();
+
+        var result = await context.ExecuteAsync(cancellationSource.Token);
+
+        Assert.False(result.IsSuccess);
+        Assert.False(result.IsProcessingFailure);
+        Assert.Equal(
+            CreateDocumentProcessingAttemptFailure.InitialPersistenceError,
+            result.Failure);
+        Assert.Null(result.Attempt);
+        context.Repository.Received(1).AddAttempt(
+            Arg.Any<DocumentProcessingAttempt>());
+        await context.Repository.Received(2).SaveChangesAsync(
+            cancellationSource.Token);
+        Assert.Equal(2, saveCallCount);
+        Assert.Equal(2, snapshots.Count);
+        Assert.Equal(DocumentProcessingState.Pending, snapshots[0].ProcessingState);
+        Assert.Null(snapshots[0].StartedAtUtc);
+        Assert.Null(snapshots[0].Outcome);
+        Assert.Null(snapshots[0].CompletedAtUtc);
+        Assert.Null(snapshots[0].ErrorCode);
+        Assert.Equal(
+            DocumentProcessingState.Processing,
+            snapshots[1].ProcessingState);
+        Assert.NotNull(snapshots[1].StartedAtUtc);
+        Assert.Null(snapshots[1].Outcome);
+        Assert.Null(snapshots[1].CompletedAtUtc);
+        Assert.Null(snapshots[1].ErrorCode);
+        Assert.Equal(
+            DocumentProcessingState.Processing,
+            context.AddedAttempt?.ProcessingState);
+        await context.Storage.DidNotReceive().OpenReadAsync(
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+        await context.Client.DidNotReceive().ProcessAsync(
+            Arg.Any<DocumentProcessingClientRequest>(),
+            Arg.Any<CancellationToken>());
+        context.Repository.DidNotReceive().AddResult(
+            Arg.Any<DocumentExtractionResult>());
+        await context.Repository.DidNotReceive().SaveChangesAsync(
+            CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithFinalPersistenceFailure_ReturnsApplicationFailure()
     {
         var context = new ServiceContext();
@@ -496,8 +652,8 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
             .Returns(_ =>
             {
                 saveCall++;
-                return saveCall == 1
-                    ? Task.CompletedTask
+            return saveCall < 3
+                ? Task.CompletedTask
                     : Task.FromException(
                         new DocumentProcessingPersistenceException(
                             new InvalidOperationException("Write failed.")));
@@ -537,6 +693,9 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         Assert.Equal(
             DocumentProcessingOutcome.Failed,
             context.AddedAttempt.Outcome);
+        Assert.Equal(
+            DocumentProcessingState.Finished,
+            context.AddedAttempt.ProcessingState);
         await context.Repository.Received(1).SaveChangesAsync(
             CancellationToken.None);
     }
@@ -667,8 +826,22 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
                     DocumentId,
                     Arg.Any<CancellationToken>())
                 .Returns(_ => Source);
+            Repository.HasActiveDocumentProcessingAttemptAsync(
+                    DocumentId,
+                    Arg.Any<CancellationToken>())
+                .Returns(false);
             Repository.SaveChangesAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.CompletedTask);
+            Repository.When(repository => repository.SaveChangesAsync(
+                    Arg.Any<CancellationToken>()))
+                .Do(_ =>
+                {
+                    if (AddedAttempt is not null)
+                    {
+                        PersistedStates.Add(
+                            AddedAttempt.ProcessingState);
+                    }
+                });
             Repository.When(repository => repository.AddAttempt(
                     Arg.Any<DocumentProcessingAttempt>()))
                 .Do(call => AddedAttempt =
@@ -680,8 +853,17 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
             Storage.OpenReadAsync(
                     Arg.Any<string>(),
                     Arg.Any<CancellationToken>())
-                .Returns(_ => Task.FromResult<Stream>(
-                    new MemoryStream([1, 2, 3, 4])));
+                .Returns(_ =>
+                {
+                    Assert.Equal(
+                        [
+                            DocumentProcessingState.Pending,
+                            DocumentProcessingState.Processing
+                        ],
+                        PersistedStates);
+                    return Task.FromResult<Stream>(
+                        new MemoryStream([1, 2, 3, 4]));
+                });
 
             ClientResult = CreateSuccessfulClientResult(
                 DocumentProcessingOutcome.Completed);
@@ -719,6 +901,8 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
 
         public DocumentExtractionResult? AddedResult { get; private set; }
 
+        public List<DocumentProcessingState> PersistedStates { get; } = [];
+
         public DocumentProcessingSource Source { get; set; } = CreateSource();
 
         public static DocumentProcessingSource CreateSource(
@@ -747,7 +931,16 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
             Client.ProcessAsync(
                     Arg.Any<DocumentProcessingClientRequest>(),
                     Arg.Any<CancellationToken>())
-                .Returns(_ => Task.FromResult(ClientResult));
+                .Returns(_ =>
+                {
+                    Assert.Equal(
+                        [
+                            DocumentProcessingState.Pending,
+                            DocumentProcessingState.Processing
+                        ],
+                        PersistedStates);
+                    return Task.FromResult(ClientResult);
+                });
         }
 
         public Task<CreateDocumentProcessingAttemptResult> ExecuteAsync(

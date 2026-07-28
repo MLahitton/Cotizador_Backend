@@ -13,7 +13,8 @@ public enum CreateDocumentProcessingAttemptFailure
     InactiveClient = 6,
     QueryError = 7,
     InitialPersistenceError = 8,
-    FinalPersistenceError = 9
+    FinalPersistenceError = 9,
+    DocumentProcessingAlreadyActive = 10
 }
 
 public sealed record CreatedDocumentProcessingAttemptResult(
