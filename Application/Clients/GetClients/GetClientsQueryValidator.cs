@@ -20,6 +20,17 @@ public sealed class GetClientsQueryValidator
 
         RuleFor(query => query.Status)
             .Must(BeValidStatus);
+
+        RuleFor(query => query.ClientType)
+            .Must(BeValidClientType);
+
+        RuleFor(query => query.DocumentType)
+            .Must(BeValidDocumentType);
+
+        RuleFor(query => query.DocumentNumber)
+            .Must(value =>
+                string.IsNullOrWhiteSpace(value)
+                || value.Trim().Length <= 100);
     }
 
     private static bool BeValidStatus(string? value)
@@ -40,5 +51,25 @@ public sealed class GetClientsQueryValidator
             || normalizedValue.Equals(
                 "all",
                 StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool BeValidClientType(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || Enum.TryParse<Domain.Clients.ClientType>(
+                value.Trim(),
+                true,
+                out var parsed)
+            && Enum.IsDefined(parsed);
+    }
+
+    private static bool BeValidDocumentType(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            || Enum.TryParse<Domain.Clients.ClientDocumentType>(
+                value.Trim(),
+                true,
+                out var parsed)
+            && Enum.IsDefined(parsed);
     }
 }

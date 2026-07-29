@@ -13,10 +13,7 @@ public interface IClientRepository
         CancellationToken cancellationToken);
 
     Task<ClientSearchPage> SearchAsync(
-        string? search,
-        bool? isActive,
-        int page,
-        int pageSize,
+        ClientSearchCriteria criteria,
         CancellationToken cancellationToken);
 
     Task<bool> ExistsByDocumentAsync(
@@ -34,6 +31,15 @@ public interface IClientRepository
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
+
+public sealed record ClientSearchCriteria(
+    string? Search,
+    bool? IsActive,
+    ClientType? ClientType,
+    ClientDocumentType? DocumentType,
+    string? NormalizedDocumentNumber,
+    int Page,
+    int PageSize);
 
 public sealed record ClientSearchPage(
     IReadOnlyList<Client> Items,

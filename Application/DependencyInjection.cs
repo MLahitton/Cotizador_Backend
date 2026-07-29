@@ -16,6 +16,8 @@ using Application.PreQuotes.GetProjectPreQuotes;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
+using Application.Projects.GetProjects;
+using Application.Projects.SetProjectActivation;
 using Application.Projects.UpdateProject;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +55,8 @@ public static class DependencyInjection
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
+        services.AddScoped<GetProjectsService>();
+        services.AddScoped<SetProjectActivationService>();
         services.AddScoped<UpdateProjectService>();
         services.TryAddSingleton(TimeProvider.System);
 

@@ -1,4 +1,5 @@
 using Domain.Projects;
+using Domain.Clients;
 
 namespace Application.Common.Abstractions.Projects;
 
@@ -19,6 +20,10 @@ public interface IProjectRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    Task<AdministrativeProjectSearchPage> SearchAsync(
+        ProjectSearchCriteria criteria,
+        CancellationToken cancellationToken);
+
     Task<bool> ExistsByCodeAsync(
         string normalizedCode,
         CancellationToken cancellationToken);
@@ -35,6 +40,35 @@ public interface IProjectRepository
 
 public sealed record ProjectSearchPage(
     IReadOnlyList<Project> Items,
+    int TotalCount);
+
+public sealed record ProjectSearchCriteria(
+    string? Search,
+    bool? IsActive,
+    Guid? ClientId,
+    ClientType? ClientType,
+    ClientDocumentType? DocumentType,
+    int Page,
+    int PageSize);
+
+public sealed record AdministrativeProjectSearchItem(
+    Guid Id,
+    Guid ClientId,
+    string Code,
+    string Name,
+    string? Description,
+    string? Location,
+    bool IsActive,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    ClientType ClientType,
+    string ClientLegalName,
+    string? ClientTradeName,
+    ClientDocumentType? ClientDocumentType,
+    string? ClientDocumentNumber);
+
+public sealed record AdministrativeProjectSearchPage(
+    IReadOnlyList<AdministrativeProjectSearchItem> Items,
     int TotalCount);
 
 public sealed class ProjectQueryException : Exception

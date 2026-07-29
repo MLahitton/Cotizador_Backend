@@ -1,5 +1,6 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
+using Domain.Clients;
 using FluentValidation;
 
 namespace Application.Clients.GetClients;
@@ -64,15 +65,25 @@ public sealed class GetClientsService(
                 "El estado de cliente validado no es reconocido.")
         };
 
+        var clientType = ParseOptional<ClientType>(query.ClientType);
+        var documentType =
+            ParseOptional<ClientDocumentType>(query.DocumentType);
+        var documentNumber = NormalizeDocumentNumber(
+            query.DocumentNumber);
+
         ClientSearchPage clientsPage;
 
         try
         {
             clientsPage = await clientRepository.SearchAsync(
-                search,
-                isActive,
-                query.Page,
-                query.PageSize,
+                new ClientSearchCriteria(
+                    search,
+                    isActive,
+                    clientType,
+                    documentType,
+                    documentNumber,
+                    query.Page,
+                    query.PageSize),
                 cancellationToken);
         }
         catch (ClientQueryException)
@@ -110,5 +121,28 @@ public sealed class GetClientsService(
                 query.PageSize,
                 clientsPage.TotalCount,
                 totalPages));
+    }
+
+    private static TEnum? ParseOptional<TEnum>(string? value)
+        where TEnum : struct, Enum
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : Enum.Parse<TEnum>(value.Trim(), true);
+    }
+
+    private static string? NormalizeDocumentNumber(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value
+            .Trim()
+            .Replace(" ", "", StringComparison.Ordinal)
+            .Replace(".", "", StringComparison.Ordinal)
+            .Replace("-", "", StringComparison.Ordinal)
+            .Replace("/", "", StringComparison.Ordinal);
     }
 }

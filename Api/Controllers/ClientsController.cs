@@ -30,12 +30,22 @@ public sealed class ClientsController(
     public async Task<ActionResult<GetClientsResponse>> Get(
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
+        [FromQuery] string? clientType = null,
+        [FromQuery] string? documentType = null,
+        [FromQuery] string? documentNumber = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
         var result = await getClientsService.ExecuteAsync(
-            new GetClientsQuery(search, status, page, pageSize),
+            new GetClientsQuery(
+                search,
+                status,
+                clientType,
+                documentType,
+                documentNumber,
+                page,
+                pageSize),
             cancellationToken);
 
         if (!result.IsSuccess)

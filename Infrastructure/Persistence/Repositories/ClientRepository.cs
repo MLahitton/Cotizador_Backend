@@ -45,10 +45,7 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
     }
 
     public async Task<ClientSearchPage> SearchAsync(
-        string? search,
-        bool? isActive,
-        int page,
-        int pageSize,
+        ClientSearchCriteria criteria,
         CancellationToken cancellationToken)
     {
         try
@@ -57,16 +54,42 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
                 .AsNoTracking()
                 .AsQueryable();
 
-            if (isActive is bool activeState)
+            if (criteria.IsActive is bool activeState)
             {
                 query = query.Where(
                     client => client.IsActive == activeState);
             }
 
-            if (search is not null)
+            if (criteria.ClientType is { } clientType)
+            {
+                query = query.Where(client =>
+                    client.ClientType == clientType);
+            }
+
+            if (criteria.DocumentType is { } documentType)
+            {
+                query = query.Where(client =>
+                    client.DocumentType == documentType);
+            }
+
+            if (criteria.NormalizedDocumentNumber is { } documentNumber)
+            {
+                query = query.Where(client =>
+                    client.DocumentNumber != null
+                    && client.DocumentNumber
+                        .Replace(" ", "")
+                        .Replace(".", "")
+                        .Replace("-", "")
+                        .Replace("/", "") == documentNumber);
+            }
+
+            if (criteria.Search is { } search)
             {
                 var escapedSearch = EscapeLikePattern(search);
                 var pattern = $"%{escapedSearch}%";
+                var normalizedSearch = NormalizeDocumentNumber(search);
+                var documentPattern =
+                    $"%{EscapeLikePattern(normalizedSearch)}%";
 
                 query = query.Where(client =>
                     EF.Functions.ILike(
@@ -79,19 +102,40 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
                             pattern,
                             "\\"))
                     || (client.DocumentNumber != null
+                        && normalizedSearch.Length > 0
                         && EF.Functions.ILike(
-                            client.DocumentNumber,
-                            pattern,
+                            client.DocumentNumber
+                                .Replace(" ", "")
+                                .Replace(".", "")
+                                .Replace("-", "")
+                                .Replace("/", ""),
+                            documentPattern,
                             "\\"))
                     || (client.Email != null
                         && EF.Functions.ILike(
                             client.Email,
                             pattern,
+                            "\\"))
+                    || (client.Phone != null
+                        && EF.Functions.ILike(
+                            client.Phone,
+                            pattern,
+                            "\\"))
+                    || (client.Address != null
+                        && EF.Functions.ILike(
+                            client.Address,
+                            pattern,
+                            "\\"))
+                    || (client.City != null
+                        && EF.Functions.ILike(
+                            client.City,
+                            pattern,
                             "\\")));
             }
 
             var totalCount = await query.CountAsync(cancellationToken);
-            var skip = ((long)page - 1L) * pageSize;
+            var skip = ((long)criteria.Page - 1L)
+                * criteria.PageSize;
 
             if (totalCount == 0
                 || skip >= totalCount
@@ -106,7 +150,7 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
                 .OrderBy(client => client.LegalName)
                 .ThenBy(client => client.Id)
                 .Skip((int)skip)
-                .Take(pageSize)
+                .Take(criteria.PageSize)
                 .ToListAsync(cancellationToken);
 
             return new ClientSearchPage(items, totalCount);
@@ -184,5 +228,15 @@ public sealed class ClientRepository(ApplicationDbContext dbContext)
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("%", "\\%", StringComparison.Ordinal)
             .Replace("_", "\\_", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeDocumentNumber(string value)
+    {
+        return value
+            .Trim()
+            .Replace(" ", "", StringComparison.Ordinal)
+            .Replace(".", "", StringComparison.Ordinal)
+            .Replace("-", "", StringComparison.Ordinal)
+            .Replace("/", "", StringComparison.Ordinal);
     }
 }

@@ -1,5 +1,7 @@
 using Application.Projects.CreateProject;
 using Application.Projects.GetProjectById;
+using Application.Projects.GetProjects;
+using Application.Projects.SetProjectActivation;
 using Application.Projects.UpdateProject;
 using Contracts.Projects;
 using Microsoft.AspNetCore.Authorization;
@@ -12,10 +14,75 @@ namespace Api.Controllers;
 [Route("api/v1/projects")]
 public sealed class ProjectsController(
     CreateProjectService createProjectService,
+    GetProjectsService getProjectsService,
     GetProjectByIdService getProjectByIdService,
-    UpdateProjectService updateProjectService)
+    UpdateProjectService updateProjectService,
+    SetProjectActivationService setProjectActivationService)
     : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType<GetProjectsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<GetProjectsResponse>> Get(
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] Guid? clientId = null,
+        [FromQuery] string? clientType = null,
+        [FromQuery] string? documentType = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await getProjectsService.ExecuteAsync(
+            new GetProjectsQuery(
+                search,
+                status,
+                clientId,
+                clientType,
+                documentType,
+                page,
+                pageSize),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return MapGetProjectsFailure(result.Failure);
+        }
+
+        var projects = result.Page!;
+        var items = projects.Items
+            .Select(project =>
+                new AdministrativeProjectListItemResponse(
+                    project.Id,
+                    project.ClientId,
+                    project.Code,
+                    project.Name,
+                    project.Description,
+                    project.Location,
+                    project.IsActive,
+                    project.CreatedAtUtc,
+                    project.UpdatedAtUtc,
+                    new ProjectClientSummaryResponse(
+                        project.Client.Id,
+                        project.Client.ClientType.ToString(),
+                        project.Client.LegalName,
+                        project.Client.TradeName,
+                        project.Client.DocumentType?.ToString(),
+                        project.Client.DocumentNumber)))
+            .ToArray();
+
+        return Ok(new GetProjectsResponse(
+            items,
+            projects.Page,
+            projects.PageSize,
+            projects.TotalCount,
+            projects.TotalPages));
+    }
+
     [HttpPost]
     [ProducesResponseType<CreateProjectResponse>(
         StatusCodes.Status201Created)]
@@ -142,6 +209,102 @@ public sealed class ProjectsController(
             project.CreatedAtUtc,
             project.UpdatedAtUtc));
     }
+
+    [HttpPatch("{projectId:guid}/activation")]
+    [ProducesResponseType<ProjectDetailsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ProjectDetailsResponse>> SetActivation(
+        Guid projectId,
+        [FromBody] SetProjectActivationRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await setProjectActivationService.ExecuteAsync(
+            new SetProjectActivationCommand(
+                projectId,
+                request.IsActive),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return MapSetProjectActivationFailure(result.Failure);
+        }
+
+        var project = result.Project!;
+
+        return Ok(new ProjectDetailsResponse(
+            project.Id,
+            project.ClientId,
+            project.Code,
+            project.Name,
+            project.Description,
+            project.Location,
+            project.IsActive,
+            project.CreatedAtUtc,
+            project.UpdatedAtUtc));
+    }
+
+    private ActionResult<GetProjectsResponse> MapGetProjectsFailure(
+        GetProjectsFailure failure)
+    {
+        return failure switch
+        {
+            GetProjectsFailure.InvalidRequest => ProjectProblem(
+                StatusCodes.Status400BadRequest,
+                "Solicitud inválida",
+                "Los parámetros de consulta de proyectos no son válidos."),
+            GetProjectsFailure.Unauthorized => ProjectProblem(
+                StatusCodes.Status401Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            GetProjectsFailure.InactiveUser => ProjectProblem(
+                StatusCodes.Status403Forbidden,
+                "Usuario inactivo",
+                "El usuario no tiene acceso para consultar proyectos."),
+            _ => ProjectProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al consultar proyectos",
+                "No fue posible consultar los proyectos.")
+        };
+    }
+
+    private ActionResult<ProjectDetailsResponse>
+        MapSetProjectActivationFailure(
+            SetProjectActivationFailure failure)
+    {
+        return failure switch
+        {
+            SetProjectActivationFailure.InvalidRequest => ProjectProblem(
+                StatusCodes.Status400BadRequest,
+                "Solicitud inválida",
+                "Los datos para cambiar el estado no son válidos."),
+            SetProjectActivationFailure.Unauthorized => ProjectProblem(
+                StatusCodes.Status401Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            SetProjectActivationFailure.InactiveUser => ProjectProblem(
+                StatusCodes.Status403Forbidden,
+                "Usuario inactivo",
+                "El usuario no puede cambiar el estado de proyectos."),
+            SetProjectActivationFailure.NotFound => ProjectProblem(
+                StatusCodes.Status404NotFound,
+                "Proyecto no encontrado",
+                "No existe un proyecto con el identificador indicado."),
+            SetProjectActivationFailure.QueryError => ProjectProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al consultar el proyecto",
+                "No fue posible consultar el proyecto."),
+            _ => ProjectProblem(
+                StatusCodes.Status500InternalServerError,
+                "Error al cambiar el estado",
+                "No fue posible guardar el nuevo estado del proyecto.")
+        };
+    }
+
 
     private ActionResult<ProjectDetailsResponse> MapGetProjectByIdFailure(
         GetProjectByIdFailure failure)

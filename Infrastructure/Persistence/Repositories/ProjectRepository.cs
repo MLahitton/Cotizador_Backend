@@ -112,6 +112,143 @@ public sealed class ProjectRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<AdministrativeProjectSearchPage> SearchAsync(
+        ProjectSearchCriteria criteria,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var query = dbContext.Projects
+                .AsNoTracking()
+                .AsQueryable();
+
+            if (criteria.IsActive is { } isActive)
+            {
+                query = query.Where(project =>
+                    project.IsActive == isActive);
+            }
+
+            if (criteria.ClientId is { } clientId)
+            {
+                query = query.Where(project =>
+                    project.ClientId == clientId);
+            }
+
+            if (criteria.ClientType is { } clientType)
+            {
+                query = query.Where(project =>
+                    project.Client.ClientType == clientType);
+            }
+
+            if (criteria.DocumentType is { } documentType)
+            {
+                query = query.Where(project =>
+                    project.Client.DocumentType == documentType);
+            }
+
+            if (criteria.Search is { } search)
+            {
+                var pattern = $"%{EscapeLikePattern(search)}%";
+                var normalizedSearch = NormalizeDocumentNumber(search);
+                var documentPattern =
+                    $"%{EscapeLikePattern(normalizedSearch)}%";
+
+                query = query.Where(project =>
+                    EF.Functions.ILike(project.Code, pattern, "\\")
+                    || EF.Functions.ILike(project.Name, pattern, "\\")
+                    || (project.Description != null
+                        && EF.Functions.ILike(
+                            project.Description,
+                            pattern,
+                            "\\"))
+                    || (project.Location != null
+                        && EF.Functions.ILike(
+                            project.Location,
+                            pattern,
+                            "\\"))
+                    || EF.Functions.ILike(
+                        project.Client.LegalName,
+                        pattern,
+                        "\\")
+                    || (project.Client.TradeName != null
+                        && EF.Functions.ILike(
+                            project.Client.TradeName,
+                            pattern,
+                            "\\"))
+                    || (project.Client.DocumentNumber != null
+                        && normalizedSearch.Length > 0
+                        && EF.Functions.ILike(
+                            project.Client.DocumentNumber
+                                .Replace(" ", "")
+                                .Replace(".", "")
+                                .Replace("-", "")
+                                .Replace("/", ""),
+                            documentPattern,
+                            "\\"))
+                    || (project.Client.Email != null
+                        && EF.Functions.ILike(
+                            project.Client.Email,
+                            pattern,
+                            "\\"))
+                    || (project.Client.Phone != null
+                        && EF.Functions.ILike(
+                            project.Client.Phone,
+                            pattern,
+                            "\\"))
+                    || (project.Client.City != null
+                        && EF.Functions.ILike(
+                            project.Client.City,
+                            pattern,
+                            "\\")));
+            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+            var skip = ((long)criteria.Page - 1L)
+                * criteria.PageSize;
+
+            if (totalCount == 0
+                || skip >= totalCount
+                || skip > int.MaxValue)
+            {
+                return new AdministrativeProjectSearchPage(
+                    Array.Empty<AdministrativeProjectSearchItem>(),
+                    totalCount);
+            }
+
+            var items = await query
+                .OrderBy(project => project.Name)
+                .ThenBy(project => project.Code)
+                .ThenBy(project => project.Id)
+                .Skip((int)skip)
+                .Take(criteria.PageSize)
+                .Select(project =>
+                    new AdministrativeProjectSearchItem(
+                        project.Id,
+                        project.ClientId,
+                        project.Code,
+                        project.Name,
+                        project.Description,
+                        project.Location,
+                        project.IsActive,
+                        project.CreatedAtUtc,
+                        project.UpdatedAtUtc,
+                        project.Client.ClientType,
+                        project.Client.LegalName,
+                        project.Client.TradeName,
+                        project.Client.DocumentType,
+                        project.Client.DocumentNumber))
+                .ToListAsync(cancellationToken);
+
+            return new AdministrativeProjectSearchPage(
+                items,
+                totalCount);
+        }
+        catch (DbException exception)
+        {
+            throw new ProjectQueryException(exception);
+        }
+    }
+
     public async Task<bool> ExistsByCodeAsync(
         string normalizedCode,
         CancellationToken cancellationToken)
@@ -182,5 +319,15 @@ public sealed class ProjectRepository(ApplicationDbContext dbContext)
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("%", "\\%", StringComparison.Ordinal)
             .Replace("_", "\\_", StringComparison.Ordinal);
+    }
+
+    private static string NormalizeDocumentNumber(string value)
+    {
+        return value
+            .Trim()
+            .Replace(" ", "", StringComparison.Ordinal)
+            .Replace(".", "", StringComparison.Ordinal)
+            .Replace("-", "", StringComparison.Ordinal)
+            .Replace("/", "", StringComparison.Ordinal);
     }
 }
