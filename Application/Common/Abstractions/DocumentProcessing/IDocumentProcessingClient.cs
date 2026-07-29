@@ -56,6 +56,72 @@ public sealed record ProcessingMetadataData(
     string Method,
     int DurationMs);
 
+public sealed record SourceEvidenceData(
+    int PageNumber,
+    EvidenceSourceType SourceType,
+    string Text);
+
+public sealed record StructuredRequirementData(
+    RequirementCategory Category,
+    string Value,
+    IReadOnlyList<SourceEvidenceData> Evidence);
+
+public sealed record StructuredItemData(
+    int Sequence,
+    string? Reference,
+    string Description,
+    StructuredElementType ElementType,
+    string? RawMeasurements,
+    int? WidthMillimeters,
+    int? HeightMillimeters,
+    int? Quantity,
+    bool RequiresReview,
+    IReadOnlyList<StructuredIssueCode> ReviewReasons,
+    IReadOnlyList<int> SourcePages,
+    IReadOnlyList<SourceEvidenceData> Evidence);
+
+public sealed record StructuredDocumentReferenceData(
+    int Sequence,
+    string? Reference,
+    string Description,
+    string? Detail,
+    int? Quantity,
+    IReadOnlyList<int> SourcePages,
+    IReadOnlyList<SourceEvidenceData> Evidence);
+
+public sealed record StructuredIssueData(
+    int Sequence,
+    StructuredIssueCode Code,
+    string Message,
+    int? ItemSequence,
+    IReadOnlyList<int> PageNumbers);
+
+public sealed record StructuredConflictData(
+    int Sequence,
+    StructuredConflictCode Code,
+    string Message,
+    IReadOnlyList<int> ItemSequences,
+    IReadOnlyList<int> PageNumbers);
+
+public sealed record StructuredExtractionData(
+    StructuredExtractionStatus Status,
+    string? ProjectName,
+    string? ClientName,
+    string? Location,
+    IReadOnlyList<int> ProjectSourcePages,
+    IReadOnlyList<SourceEvidenceData> ProjectEvidence,
+    IReadOnlyList<StructuredRequirementData> Requirements,
+    IReadOnlyList<StructuredItemData> Items,
+    IReadOnlyList<StructuredDocumentReferenceData> DocumentReferences,
+    IReadOnlyList<StructuredIssueData> Issues,
+    IReadOnlyList<StructuredConflictData> Conflicts,
+    int ItemCount,
+    int DocumentReferenceCount,
+    int ItemsRequiringReview,
+    int KnownQuoteableUnitCount,
+    string ProcessingMethod,
+    int DurationMs);
+
 public sealed record DocumentProcessingResponseData(
     string SchemaVersion,
     Guid DocumentId,
@@ -65,7 +131,8 @@ public sealed record DocumentProcessingResponseData(
     IReadOnlyList<ProcessedPageData> Pages,
     IReadOnlyList<ProcessingWarningData> Warnings,
     ProcessingMetadataData ProcessingMetadata,
-    string PayloadJson);
+    string PayloadJson,
+    StructuredExtractionData? StructuredExtraction = null);
 
 public sealed record DocumentProcessingClientResult(
     DocumentProcessingClientFailure Failure,

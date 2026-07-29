@@ -118,6 +118,14 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             DocumentProcessingResponseData response,
             CancellationToken cancellationToken)
     {
+        if (response.StructuredExtraction is not { } structured)
+        {
+            return await FailAsync(
+                attempt,
+                AiInvalidResponseCode,
+                cancellationToken);
+        }
+
         var completedAtUtc = timeProvider.GetUtcNow();
         var extractionResult = DocumentExtractionResult.Create(
             attempt.Id,
@@ -132,6 +140,37 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
 
         attempt.Complete(response.Outcome, completedAtUtc);
         repository.AddResult(extractionResult);
+        var structuredExtraction = StructuredDocumentExtraction.Create(
+            extractionResult.Id,
+            structured.Status,
+            structured.ProjectName,
+            structured.ClientName,
+            structured.Location,
+            structured.ItemCount,
+            structured.DocumentReferenceCount,
+            structured.ItemsRequiringReview,
+            structured.KnownQuoteableUnitCount,
+            structured.ProcessingMethod,
+            structured.DurationMs,
+            structured.Items.Select(x => new StructuredItemInput(
+                x.Sequence, x.Reference, x.Description, x.ElementType,
+                x.RawMeasurements, x.WidthMillimeters,
+                x.HeightMillimeters, x.Quantity, x.RequiresReview)).ToArray(),
+            structured.Requirements.Select((x, index) =>
+                new StructuredRequirementInput(
+                    index + 1, x.Category, x.Value)).ToArray(),
+            structured.DocumentReferences.Select(x =>
+                new StructuredDocumentReferenceInput(
+                    x.Sequence, x.Reference, x.Description,
+                    x.Detail, x.Quantity)).ToArray(),
+            structured.Issues.Select(x => new StructuredIssueInput(
+                x.Sequence, x.Code, x.Message, x.ItemSequence,
+                [.. x.PageNumbers])).ToArray(),
+            structured.Conflicts.Select(x => new StructuredConflictInput(
+                x.Sequence, x.Code, x.Message,
+                [.. x.ItemSequences], [.. x.PageNumbers])).ToArray(),
+            completedAtUtc);
+        repository.AddStructuredExtraction(structuredExtraction);
 
         return await SaveTerminalAsync(
             cancellationToken,

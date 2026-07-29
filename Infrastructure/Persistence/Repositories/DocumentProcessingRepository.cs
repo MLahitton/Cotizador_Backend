@@ -183,6 +183,12 @@ public sealed class DocumentProcessingRepository(
         dbContext.DocumentExtractionResults.Add(result);
     }
 
+    public void AddStructuredExtraction(
+        StructuredDocumentExtraction extraction)
+    {
+        dbContext.StructuredDocumentExtractions.Add(extraction);
+    }
+
     public async Task SaveChangesAsync(
         CancellationToken cancellationToken)
     {

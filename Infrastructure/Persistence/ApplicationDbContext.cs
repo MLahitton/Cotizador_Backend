@@ -30,6 +30,9 @@ public sealed class ApplicationDbContext(
     public DbSet<DocumentExtractionResult> DocumentExtractionResults =>
         Set<DocumentExtractionResult>();
 
+    public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
+        Set<StructuredDocumentExtraction>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

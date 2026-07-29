@@ -18,7 +18,7 @@ public static class DocumentProcessingPayloadFactory
         int pageCount = 1,
         IReadOnlyList<PayloadPage>? pages = null,
         IReadOnlyList<PayloadWarning>? warnings = null,
-        string schemaVersion = "1.0",
+        string schemaVersion = "2.0",
         string? status = null,
         bool? requiresOcr = null,
         string fileName = "document.pdf",
@@ -53,7 +53,8 @@ public static class DocumentProcessingPayloadFactory
                 resolvedRequiresOcr),
             resolvedPages,
             resolvedWarnings,
-            new MetadataPayload(method, durationMs));
+            new MetadataPayload(method, durationMs),
+            CreateStructuredExtraction(resolvedStatus));
 
         return JsonSerializer.Serialize(
             payload,
@@ -61,6 +62,67 @@ public static class DocumentProcessingPayloadFactory
             {
                 WriteIndented = writeIndented
             });
+    }
+
+    private static StructuredExtractionPayload CreateStructuredExtraction(
+        string status)
+    {
+        var evidence = new[]
+        {
+            new EvidencePayload(1, "NATIVE", "Synthetic evidence")
+        };
+        var requiresReview = status == "REQUIRES_REVIEW";
+        return new StructuredExtractionPayload(
+            status,
+            new ProjectPayload(
+                "Synthetic project",
+                "Synthetic client",
+                "Bogota",
+                [1],
+                evidence),
+            new RequirementsPayload(
+                [new RequirementPayload("Tempered glass", evidence)],
+                [],
+                [],
+                [],
+                []),
+            [
+                new ItemPayload(
+                    1,
+                    "W-01",
+                    "Synthetic window",
+                    "WINDOW",
+                    "1200 x 1000 mm",
+                    1200,
+                    1000,
+                    2,
+                    requiresReview,
+                    requiresReview
+                        ? ["OCR_REVIEW_REQUIRED"]
+                        : [],
+                    [1],
+                    evidence)
+            ],
+            [
+                new DocumentReferencePayload(
+                    1,
+                    "PLAN-01",
+                    "Synthetic drawing",
+                    "Reference only",
+                    99,
+                    [1],
+                    evidence)
+            ],
+            requiresReview
+                ? [new IssuePayload(
+                    "OCR_REVIEW_REQUIRED",
+                    "Review synthetic OCR evidence.",
+                    1,
+                    [1])]
+                : [],
+            [],
+            new SummaryPayload(1, 1, requiresReview ? 1 : 0, 2),
+            new MetadataPayload("rule_based_v1", 5));
     }
 
     public static string CreateError(
@@ -134,7 +196,8 @@ public static class DocumentProcessingPayloadFactory
         DocumentPayload Document,
         IReadOnlyList<PayloadPage> Pages,
         IReadOnlyList<PayloadWarning> Warnings,
-        MetadataPayload ProcessingMetadata);
+        MetadataPayload ProcessingMetadata,
+        StructuredExtractionPayload StructuredExtraction);
 
     private sealed record DocumentPayload(
         string FileName,
@@ -152,6 +215,51 @@ public static class DocumentProcessingPayloadFactory
         string SchemaVersion,
         string ErrorCode,
         string Message);
+
+    private sealed record StructuredExtractionPayload(
+        string Status,
+        ProjectPayload Project,
+        RequirementsPayload Requirements,
+        IReadOnlyList<ItemPayload> Items,
+        IReadOnlyList<DocumentReferencePayload> DocumentReferences,
+        IReadOnlyList<IssuePayload> Issues,
+        IReadOnlyList<ConflictPayload> Conflicts,
+        SummaryPayload Summary,
+        MetadataPayload ProcessingMetadata);
+    private sealed record ProjectPayload(
+        string? Name, string? ClientName, string? Location,
+        IReadOnlyList<int> SourcePages,
+        IReadOnlyList<EvidencePayload> Evidence);
+    private sealed record RequirementsPayload(
+        IReadOnlyList<RequirementPayload> GlassSpecifications,
+        IReadOnlyList<RequirementPayload> ProfileSpecifications,
+        IReadOnlyList<RequirementPayload> Finishes,
+        IReadOnlyList<RequirementPayload> AccessoriesAndSealants,
+        IReadOnlyList<RequirementPayload> GeneralNotes);
+    private sealed record RequirementPayload(
+        string Value, IReadOnlyList<EvidencePayload> Evidence);
+    private sealed record EvidencePayload(
+        int PageNumber, string SourceType, string Text);
+    private sealed record ItemPayload(
+        int Sequence, string? Reference, string Description,
+        string ElementType, string? RawMeasurements,
+        int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
+        bool RequiresReview, IReadOnlyList<string> ReviewReasons,
+        IReadOnlyList<int> SourcePages,
+        IReadOnlyList<EvidencePayload> Evidence);
+    private sealed record DocumentReferencePayload(
+        int Sequence, string? Reference, string Description,
+        string? Detail, int? Quantity, IReadOnlyList<int> SourcePages,
+        IReadOnlyList<EvidencePayload> Evidence);
+    private sealed record IssuePayload(
+        string Code, string Message, int? ItemSequence,
+        IReadOnlyList<int> PageNumbers);
+    private sealed record ConflictPayload(
+        string Code, string Message, IReadOnlyList<int> ItemSequences,
+        IReadOnlyList<int> PageNumbers);
+    private sealed record SummaryPayload(
+        int ItemCount, int DocumentReferenceCount,
+        int ItemsRequiringReview, int KnownQuoteableUnitCount);
 }
 
 public sealed record PayloadPage(

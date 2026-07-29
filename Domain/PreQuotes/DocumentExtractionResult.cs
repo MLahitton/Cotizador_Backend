@@ -55,6 +55,8 @@ public sealed class DocumentExtractionResult
     public DocumentProcessingAttempt ProcessingAttempt { get; private set; } =
         null!;
 
+    public StructuredDocumentExtraction? StructuredExtraction { get; private set; }
+
     public static DocumentExtractionResult Create(
         Guid documentProcessingAttemptId,
         string schemaVersion,

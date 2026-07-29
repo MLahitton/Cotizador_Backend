@@ -14,7 +14,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
     : IDocumentProcessingClient
 {
     private const string DocumentExtractionPath =
-        "api/v1/prequotes/document-extractions";
+        "api/v2/prequotes/document-extractions";
 
     private const string CorrelationHeaderName = "X-Correlation-ID";
     private const long MaximumPdfSizeBytes = 20_971_520;
@@ -381,7 +381,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         if (!string.Equals(
                 response.SchemaVersion,
-                "1.0",
+                "2.0",
                 StringComparison.Ordinal)
             || response.DocumentId == Guid.Empty
             || response.DocumentId != request.DocumentId
@@ -390,7 +390,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
             || response.Document is null
             || response.Pages is null
             || response.Warnings is null
-            || response.ProcessingMetadata is null)
+            || response.ProcessingMetadata is null
+            || response.StructuredExtraction is null)
         {
             throw new InvalidDataException();
         }
@@ -515,6 +516,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
         var canonicalPayloadJson = JsonSerializer.Serialize(
             response,
             SerializerOptions);
+        var structuredExtraction = ValidateStructuredExtraction(
+            response.StructuredExtraction,
+            response.Document.PageCount,
+            response.Document.RequiresOcr);
 
         return new DocumentProcessingResponseData(
             response.SchemaVersion!,
@@ -533,7 +538,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
             new ProcessingMetadataData(
                 response.ProcessingMetadata.Method!,
                 response.ProcessingMetadata.DurationMs),
-            canonicalPayloadJson);
+            canonicalPayloadJson,
+            structuredExtraction);
     }
 
     private static DocumentProcessingClientResult ParseErrorResponse(
@@ -609,7 +615,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
             "document",
             "pages",
             "warnings",
-            "processingMetadata");
+            "processingMetadata",
+            "structuredExtraction");
 
         ValidateExactObjectProperties(
             root.GetProperty("document"),
@@ -657,6 +664,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
             root.GetProperty("processingMetadata"),
             "method",
             "durationMs");
+
+        ValidateStructuredJsonShape(
+            root.GetProperty("structuredExtraction"));
     }
 
     private static void ValidateExactObjectProperties(
@@ -688,6 +698,229 @@ public sealed class CotizadorAiDocumentProcessingClient(
             throw new InvalidDataException();
         }
     }
+
+    private static void ValidateStructuredJsonShape(JsonElement root)
+    {
+        ValidateExactObjectProperties(root, "status", "project",
+            "requirements", "items", "documentReferences", "issues",
+            "conflicts", "summary", "processingMetadata");
+        ValidateExactObjectProperties(root.GetProperty("project"),
+            "name", "clientName", "location", "sourcePages", "evidence");
+        ValidateExactObjectProperties(root.GetProperty("requirements"),
+            "glassSpecifications", "profileSpecifications", "finishes",
+            "accessoriesAndSealants", "generalNotes");
+        ValidateExactObjectProperties(root.GetProperty("summary"),
+            "itemCount", "documentReferenceCount", "itemsRequiringReview",
+            "knownQuoteableUnitCount");
+        ValidateExactObjectProperties(root.GetProperty("processingMetadata"),
+            "method", "durationMs");
+        foreach (var item in root.GetProperty("items").EnumerateArray())
+            ValidateExactObjectProperties(item, "sequence", "reference",
+                "description", "elementType", "rawMeasurements",
+                "widthMillimeters", "heightMillimeters", "quantity",
+                "requiresReview", "reviewReasons", "sourcePages", "evidence");
+        foreach (var item in root.GetProperty("documentReferences").EnumerateArray())
+            ValidateExactObjectProperties(item, "sequence", "reference",
+                "description", "detail", "quantity", "sourcePages", "evidence");
+        foreach (var item in root.GetProperty("issues").EnumerateArray())
+            ValidateExactObjectProperties(item, "code", "message",
+                "itemSequence", "pageNumbers");
+        foreach (var item in root.GetProperty("conflicts").EnumerateArray())
+            ValidateExactObjectProperties(item, "code", "message",
+                "itemSequences", "pageNumbers");
+    }
+
+    private static StructuredExtractionData ValidateStructuredExtraction(
+        StructuredExtractionDto dto,
+        int pageCount,
+        bool requiresOcr)
+    {
+        var status = dto.Status switch
+        {
+            "COMPLETED" => StructuredExtractionStatus.Completed,
+            "REQUIRES_REVIEW" => StructuredExtractionStatus.RequiresReview,
+            _ => throw new InvalidDataException()
+        };
+        if (dto.Project is null || dto.Requirements is null || dto.Items is null
+            || dto.DocumentReferences is null || dto.Issues is null
+            || dto.Conflicts is null || dto.Summary is null
+            || dto.ProcessingMetadata is null
+            || dto.ProcessingMetadata.Method != "rule_based_v1"
+            || dto.ProcessingMetadata.DurationMs < 0)
+            throw new InvalidDataException();
+
+        ValidateNumbers(dto.Project.SourcePages, pageCount);
+        var requirements = new List<StructuredRequirementData>();
+        AddRequirements(requirements, dto.Requirements.GlassSpecifications,
+            RequirementCategory.GlassSpecification, pageCount);
+        AddRequirements(requirements, dto.Requirements.ProfileSpecifications,
+            RequirementCategory.ProfileSpecification, pageCount);
+        AddRequirements(requirements, dto.Requirements.Finishes,
+            RequirementCategory.Finish, pageCount);
+        AddRequirements(requirements, dto.Requirements.AccessoriesAndSealants,
+            RequirementCategory.AccessoriesAndSealants, pageCount);
+        AddRequirements(requirements, dto.Requirements.GeneralNotes,
+            RequirementCategory.GeneralNote, pageCount);
+        var projectEvidence = MapEvidence(dto.Project.Evidence, pageCount);
+
+        var items = new List<StructuredItemData>();
+        for (var index = 0; index < dto.Items.Count; index++)
+        {
+            var x = dto.Items[index] ?? throw new InvalidDataException();
+            if (x.Sequence != index + 1 || string.IsNullOrWhiteSpace(x.Description)
+                || (x.WidthMillimeters is null) != (x.HeightMillimeters is null)
+                || x.WidthMillimeters is <= 0 || x.HeightMillimeters is <= 0
+                || x.Quantity is <= 0 || x.ReviewReasons is null)
+                throw new InvalidDataException();
+            ValidateNumbers(x.SourcePages, pageCount);
+            items.Add(new StructuredItemData(x.Sequence, x.Reference,
+                x.Description, MapElementType(x.ElementType), x.RawMeasurements,
+                x.WidthMillimeters, x.HeightMillimeters, x.Quantity,
+                x.RequiresReview, x.ReviewReasons.Select(MapIssueCode).ToArray(),
+                x.SourcePages!, MapEvidence(x.Evidence, pageCount)));
+        }
+
+        var references = new List<StructuredDocumentReferenceData>();
+        for (var index = 0; index < dto.DocumentReferences.Count; index++)
+        {
+            var x = dto.DocumentReferences[index] ?? throw new InvalidDataException();
+            if (x.Sequence != index + 1 || string.IsNullOrWhiteSpace(x.Description)
+                || x.Quantity is <= 0) throw new InvalidDataException();
+            ValidateNumbers(x.SourcePages, pageCount);
+            references.Add(new(x.Sequence, x.Reference, x.Description,
+                x.Detail, x.Quantity, x.SourcePages!,
+                MapEvidence(x.Evidence, pageCount)));
+        }
+
+        var issues = dto.Issues.Select((x, index) =>
+        {
+            if (x is null || string.IsNullOrWhiteSpace(x.Message)
+                || x.ItemSequence is <= 0) throw new InvalidDataException();
+            ValidateNumbers(x.PageNumbers, pageCount);
+            return new StructuredIssueData(index + 1, MapIssueCode(x.Code),
+                x.Message, x.ItemSequence, x.PageNumbers!);
+        }).ToArray();
+        var conflicts = dto.Conflicts.Select((x, index) =>
+        {
+            if (x is null || string.IsNullOrWhiteSpace(x.Message))
+                throw new InvalidDataException();
+            ValidateNumbers(x.PageNumbers, pageCount);
+            ValidateNumbers(x.ItemSequences, items.Count);
+            return new StructuredConflictData(index + 1,
+                MapConflictCode(x.Code), x.Message, x.ItemSequences!,
+                x.PageNumbers!);
+        }).ToArray();
+        var summary = dto.Summary;
+        if (summary.ItemCount != items.Count
+            || summary.DocumentReferenceCount != references.Count
+            || summary.ItemsRequiringReview != items.Count(x => x.RequiresReview)
+            || summary.KnownQuoteableUnitCount != items.Sum(x => x.Quantity ?? 0))
+            throw new InvalidDataException();
+
+        var requiresReview = requiresOcr
+            || string.IsNullOrWhiteSpace(dto.Project.Name)
+            || items.Count == 0
+            || issues.Length > 0
+            || conflicts.Length > 0
+            || items.Any(x => x.RequiresReview)
+            || summary.ItemsRequiringReview > 0;
+
+        if ((status == StructuredExtractionStatus.RequiresReview)
+                != requiresReview
+            || status == StructuredExtractionStatus.Completed
+                && items.Any(x =>
+                    string.IsNullOrWhiteSpace(x.Reference)
+                    || x.WidthMillimeters is null
+                    || x.HeightMillimeters is null
+                    || x.Quantity is null
+                    || x.ElementType == StructuredElementType.Other
+                    || x.ReviewReasons.Count != 0))
+        {
+            throw new InvalidDataException();
+        }
+
+        return new(status, dto.Project.Name, dto.Project.ClientName,
+            dto.Project.Location, dto.Project.SourcePages!, projectEvidence,
+            requirements, items, references, issues, conflicts,
+            summary.ItemCount, summary.DocumentReferenceCount,
+            summary.ItemsRequiringReview, summary.KnownQuoteableUnitCount,
+            dto.ProcessingMetadata.Method!, dto.ProcessingMetadata.DurationMs);
+    }
+
+    private static void AddRequirements(List<StructuredRequirementData> target,
+        List<RequirementDto?>? values, RequirementCategory category, int pages)
+    {
+        if (values is null) throw new InvalidDataException();
+        foreach (var value in values)
+        {
+            if (value is null || string.IsNullOrWhiteSpace(value.Value))
+                throw new InvalidDataException();
+            target.Add(new(category, value.Value,
+                MapEvidence(value.Evidence, pages)));
+        }
+    }
+
+    private static SourceEvidenceData[] MapEvidence(
+        List<EvidenceDto?>? values, int pageCount)
+    {
+        if (values is null) throw new InvalidDataException();
+        var result = new SourceEvidenceData[values.Count];
+        var seen = new HashSet<(int, string, string)>();
+        for (var i = 0; i < values.Count; i++)
+        {
+            var x = values[i] ?? throw new InvalidDataException();
+            if (x.PageNumber < 1 || x.PageNumber > pageCount
+                || string.IsNullOrWhiteSpace(x.Text) || x.Text.Length > 500
+                || !seen.Add((x.PageNumber, x.SourceType ?? "", x.Text)))
+                throw new InvalidDataException();
+            if (i > 0 && x.PageNumber < result[i - 1].PageNumber)
+                throw new InvalidDataException();
+            result[i] = new(x.PageNumber, x.SourceType switch
+            {
+                "NATIVE" => EvidenceSourceType.Native,
+                "OCR" => EvidenceSourceType.Ocr,
+                _ => throw new InvalidDataException()
+            }, x.Text);
+        }
+        return result;
+    }
+
+    private static void ValidateNumbers(List<int>? values, int maximum)
+    {
+        if (values is null) throw new InvalidDataException();
+        for (var i = 0; i < values.Count; i++)
+            if (values[i] < 1 || values[i] > maximum
+                || i > 0 && values[i] <= values[i - 1])
+                throw new InvalidDataException();
+    }
+
+    private static StructuredElementType MapElementType(string? value) => value switch
+    {
+        "WINDOW" => StructuredElementType.Window, "DOOR" => StructuredElementType.Door,
+        "FACADE" => StructuredElementType.Facade, "PARTITION" => StructuredElementType.Partition,
+        "RAILING" => StructuredElementType.Railing, "SKYLIGHT" => StructuredElementType.Skylight,
+        "OTHER" => StructuredElementType.Other, _ => throw new InvalidDataException()
+    };
+    private static StructuredIssueCode MapIssueCode(string? value) => value switch
+    {
+        "PROJECT_NAME_NOT_FOUND" => StructuredIssueCode.ProjectNameNotFound,
+        "NO_QUOTEABLE_ITEMS_FOUND" => StructuredIssueCode.NoQuoteableItemsFound,
+        "INCOMPLETE_TABLE_ROW" => StructuredIssueCode.IncompleteTableRow,
+        "MISSING_ITEM_REFERENCE" => StructuredIssueCode.MissingItemReference,
+        "MISSING_OR_INVALID_MEASUREMENTS" => StructuredIssueCode.MissingOrInvalidMeasurements,
+        "MISSING_OR_INVALID_QUANTITY" => StructuredIssueCode.MissingOrInvalidQuantity,
+        "UNKNOWN_ELEMENT_TYPE" => StructuredIssueCode.UnknownElementType,
+        "OCR_REVIEW_REQUIRED" => StructuredIssueCode.OcrReviewRequired,
+        _ => throw new InvalidDataException()
+    };
+    private static StructuredConflictCode MapConflictCode(string? value) => value switch
+    {
+        "CONFLICTING_PROJECT_NAME" => StructuredConflictCode.ConflictingProjectName,
+        "CONFLICTING_CLIENT_NAME" => StructuredConflictCode.ConflictingClientName,
+        "CONFLICTING_LOCATION" => StructuredConflictCode.ConflictingLocation,
+        "DUPLICATE_ITEM_REFERENCE" => StructuredConflictCode.DuplicateItemReference,
+        _ => throw new InvalidDataException()
+    };
 
     private static DocumentProcessingOutcome MapOutcome(
         string? status)
@@ -873,6 +1106,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
         public List<WarningDto?>? Warnings { get; init; }
 
         public ProcessingMetadataDto? ProcessingMetadata { get; init; }
+
+        public StructuredExtractionDto? StructuredExtraction { get; init; }
     }
 
     private sealed class DocumentDto
@@ -925,6 +1160,28 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         public string? Message { get; init; }
     }
+
+    private sealed class StructuredExtractionDto
+    {
+        public string? Status { get; init; }
+        public ProjectDto? Project { get; init; }
+        public RequirementsDto? Requirements { get; init; }
+        public List<ItemDto?>? Items { get; init; }
+        public List<DocumentReferenceDto?>? DocumentReferences { get; init; }
+        public List<IssueDto?>? Issues { get; init; }
+        public List<ConflictDto?>? Conflicts { get; init; }
+        public SummaryDto? Summary { get; init; }
+        public ProcessingMetadataDto? ProcessingMetadata { get; init; }
+    }
+    private sealed class ProjectDto { public string? Name { get; init; } public string? ClientName { get; init; } public string? Location { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class RequirementsDto { public List<RequirementDto?>? GlassSpecifications { get; init; } public List<RequirementDto?>? ProfileSpecifications { get; init; } public List<RequirementDto?>? Finishes { get; init; } public List<RequirementDto?>? AccessoriesAndSealants { get; init; } public List<RequirementDto?>? GeneralNotes { get; init; } }
+    private sealed class EvidenceDto { public int PageNumber { get; init; } public string? SourceType { get; init; } public string? Text { get; init; } }
+    private sealed class RequirementDto { public string? Value { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class DocumentReferenceDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? Detail { get; init; } public int? Quantity { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class IssueDto { public string? Code { get; init; } public string? Message { get; init; } public int? ItemSequence { get; init; } public List<int>? PageNumbers { get; init; } }
+    private sealed class ConflictDto { public string? Code { get; init; } public string? Message { get; init; } public List<int>? ItemSequences { get; init; } public List<int>? PageNumbers { get; init; } }
+    private sealed class SummaryDto { public int ItemCount { get; init; } public int DocumentReferenceCount { get; init; } public int ItemsRequiringReview { get; init; } public int KnownQuoteableUnitCount { get; init; } }
 
     private sealed class NonDisposingStream(Stream innerStream) : Stream
     {

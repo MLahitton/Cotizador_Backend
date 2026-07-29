@@ -45,6 +45,48 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
         Assert.Null(context.Attempt.ErrorCode);
         context.Repository.Received(1).AddResult(
             Arg.Any<DocumentExtractionResult>());
+        context.Repository.Received(1).AddStructuredExtraction(
+            Arg.Is<StructuredDocumentExtraction>(extraction =>
+                extraction != null
+                && extraction.ProjectName == "Synthetic project"
+                && extraction.Items.Single().WidthMillimeters == 1200
+                && extraction.Items.Single().HeightMillimeters == 1000
+                && extraction.Items.Single().Quantity == 2
+                && extraction.Requirements.Count == 1
+                && extraction.DocumentReferences.Count == 1));
+        await context.Repository.Received(1).SaveChangesAsync(
+            TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithSuccessfulResponseWithoutStructuredExtraction_FailsWithoutResults()
+    {
+        var context = new Context();
+        var clientResult = CreateSuccess(
+            DocumentProcessingOutcome.Completed);
+        var response = Assert.IsType<DocumentProcessingResponseData>(
+            clientResult.Response);
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(DocumentProcessingClientResult.Success(
+                response with { StructuredExtraction = null }));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ProcessClaimedDocumentProcessingAttemptResult.Failed,
+            result);
+        Assert.Equal(
+            DocumentProcessingOutcome.Failed,
+            context.Attempt.Outcome);
+        Assert.Equal("AI_INVALID_RESPONSE", context.Attempt.ErrorCode);
+        context.Repository.DidNotReceive().AddResult(
+            Arg.Any<DocumentExtractionResult>());
+        context.Repository.DidNotReceive().AddStructuredExtraction(
+            Arg.Any<StructuredDocumentExtraction>());
         await context.Repository.Received(1).SaveChangesAsync(
             TestContext.Current.CancellationToken);
     }
@@ -262,7 +304,7 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
         var requiresOcr = outcome == DocumentProcessingOutcome.RequiresReview;
         return DocumentProcessingClientResult.Success(
             new DocumentProcessingResponseData(
-                "1.0",
+                "2.0",
                 DocumentId,
                 AttemptId,
                 outcome,
@@ -278,7 +320,71 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                 [new ProcessedPageData(1, requiresOcr ? "" : "Text", requiresOcr ? 0 : 4, !requiresOcr)],
                 [],
                 new ProcessingMetadataData("pymupdf", 10),
-                """{"schemaVersion":"1.0","status":"COMPLETED","document":{},"pages":[],"warnings":[],"processingMetadata":{}}"""));
+                """{"schemaVersion":"2.0","status":"COMPLETED","document":{},"pages":[],"warnings":[],"processingMetadata":{},"structuredExtraction":{}}""",
+                CreateStructuredExtraction(outcome)));
+    }
+
+    private static StructuredExtractionData CreateStructuredExtraction(
+        DocumentProcessingOutcome outcome)
+    {
+        var requiresReview =
+            outcome == DocumentProcessingOutcome.RequiresReview;
+        return new StructuredExtractionData(
+            requiresReview
+                ? StructuredExtractionStatus.RequiresReview
+                : StructuredExtractionStatus.Completed,
+            "Synthetic project",
+            "Synthetic client",
+            "Bogota",
+            [1],
+            [new SourceEvidenceData(
+                1,
+                requiresReview
+                    ? EvidenceSourceType.Ocr
+                    : EvidenceSourceType.Native,
+                "Evidence")],
+            [new StructuredRequirementData(
+                RequirementCategory.GlassSpecification,
+                "Tempered glass",
+                [])],
+            [new StructuredItemData(
+                1,
+                "W-01",
+                "Window",
+                StructuredElementType.Window,
+                "1200 x 1000 mm",
+                1200,
+                1000,
+                2,
+                requiresReview,
+                requiresReview
+                    ? [StructuredIssueCode.OcrReviewRequired]
+                    : [],
+                [1],
+                [])],
+            [new StructuredDocumentReferenceData(
+                1,
+                "PLAN-01",
+                "Drawing",
+                null,
+                99,
+                [1],
+                [])],
+            requiresReview
+                ? [new StructuredIssueData(
+                    1,
+                    StructuredIssueCode.OcrReviewRequired,
+                    "Review OCR.",
+                    1,
+                    [1])]
+                : [],
+            [],
+            1,
+            1,
+            requiresReview ? 1 : 0,
+            2,
+            "rule_based_v1",
+            5);
     }
 
     private sealed class Context

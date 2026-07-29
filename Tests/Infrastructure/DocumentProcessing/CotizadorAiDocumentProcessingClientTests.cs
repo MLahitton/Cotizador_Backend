@@ -38,7 +38,7 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         Assert.True(execution.Result.IsSuccess);
         Assert.Equal(HttpMethod.Post, execution.Request.Method);
         Assert.Equal(
-            "/api/v1/prequotes/document-extractions",
+            "/api/v2/prequotes/document-extractions",
             execution.Request.RequestUri?.AbsolutePath);
         Assert.Equal(["application/json"], execution.Request.Accept);
         Assert.Equal(
@@ -266,7 +266,7 @@ public sealed class CotizadorAiDocumentProcessingClientTests
                             "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
                         break;
                     case "schema":
-                        root["schemaVersion"] = "2.0";
+                        root["schemaVersion"] = "1.0";
                         break;
                     case "content_type":
                         document["contentType"] = "text/plain";
@@ -733,7 +733,8 @@ public sealed class CotizadorAiDocumentProcessingClientTests
                 "document",
                 "pages",
                 "warnings",
-                "processingMetadata"
+                "processingMetadata",
+                "structuredExtraction"
             ],
             document.RootElement
                 .EnumerateObject()

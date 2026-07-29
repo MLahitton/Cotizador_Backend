@@ -30,6 +30,8 @@ public interface IDocumentProcessingRepository
 
     void AddResult(DocumentExtractionResult result);
 
+    void AddStructuredExtraction(StructuredDocumentExtraction extraction);
+
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }
 
