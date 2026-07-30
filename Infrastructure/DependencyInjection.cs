@@ -75,6 +75,7 @@ public static class DependencyInjection
         services.AddScoped<
             IPreQuoteDocumentQueryRepository,
             PreQuoteDocumentQueryRepository>();
+        services.AddScoped<IPreQuoteDraftRepository, PreQuoteDraftRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
 
         if (documentProcessingWorkerOptions.Enabled)

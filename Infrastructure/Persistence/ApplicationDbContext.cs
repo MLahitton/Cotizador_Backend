@@ -33,6 +33,18 @@ public sealed class ApplicationDbContext(
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();
 
+    public DbSet<PreQuoteDraft> PreQuoteDrafts => Set<PreQuoteDraft>();
+    public DbSet<PreQuoteDraftItem> PreQuoteDraftItems =>
+        Set<PreQuoteDraftItem>();
+    public DbSet<PreQuoteDraftRequirement> PreQuoteDraftRequirements =>
+        Set<PreQuoteDraftRequirement>();
+    public DbSet<PreQuoteDraftDocumentReference> PreQuoteDraftDocumentReferences =>
+        Set<PreQuoteDraftDocumentReference>();
+    public DbSet<PreQuoteDraftIssue> PreQuoteDraftIssues =>
+        Set<PreQuoteDraftIssue>();
+    public DbSet<PreQuoteDraftConflict> PreQuoteDraftConflicts =>
+        Set<PreQuoteDraftConflict>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
