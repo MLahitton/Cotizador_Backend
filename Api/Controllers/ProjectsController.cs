@@ -171,12 +171,17 @@ public sealed class ProjectsController(
 
     [HttpPut("{projectId:guid}")]
     [ProducesResponseType<ProjectDetailsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ProjectDetailsResponse>> Update(
         Guid projectId,
@@ -342,30 +347,37 @@ public sealed class ProjectsController(
         {
             UpdateProjectFailure.InvalidRequest => ProjectProblem(
                 StatusCodes.Status400BadRequest,
+                ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
                 "Los datos enviados para actualizar el proyecto no son válidos."),
             UpdateProjectFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
+                ProjectErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             UpdateProjectFailure.InactiveUser => ProjectProblem(
                 StatusCodes.Status403Forbidden,
+                ProjectErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no tiene acceso para actualizar proyectos."),
             UpdateProjectFailure.NotFound => ProjectProblem(
                 StatusCodes.Status404NotFound,
+                ProjectErrorCodes.ProjectNotFound,
                 "Proyecto no encontrado",
                 "No existe un proyecto con el identificador indicado."),
             UpdateProjectFailure.DuplicateCode => ProjectProblem(
                 StatusCodes.Status409Conflict,
+                ProjectErrorCodes.DuplicateCode,
                 "Código de proyecto duplicado",
                 "Ya existe otro proyecto con el código indicado."),
             UpdateProjectFailure.QueryError => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.QueryError,
                 "Error al consultar el proyecto",
                 "No fue posible consultar el proyecto para actualizarlo."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.PersistenceError,
                 "Error al actualizar el proyecto",
                 "No fue posible guardar los cambios del proyecto.")
         };

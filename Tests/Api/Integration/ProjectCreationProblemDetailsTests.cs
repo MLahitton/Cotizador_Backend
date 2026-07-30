@@ -26,6 +26,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Xunit;
+using ProjectEntity = global::Domain.Projects.Project;
 
 namespace CotizadorBackend.Tests.Api.Integration;
 
@@ -158,6 +159,129 @@ public sealed class ProjectCreationProblemDetailsTests
             Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData(
+        "invalid",
+        400,
+        "PROJECT_INVALID_REQUEST",
+        "Solicitud inv\u00e1lida")]
+    [InlineData(
+        "unauthorized",
+        401,
+        "AUTH_UNAUTHORIZED",
+        "No autorizado")]
+    [InlineData(
+        "inactive_user",
+        403,
+        "AUTH_USER_INACTIVE",
+        "Usuario inactivo")]
+    [InlineData(
+        "not_found",
+        404,
+        "PROJECT_NOT_FOUND",
+        "Proyecto no encontrado")]
+    [InlineData(
+        "duplicate",
+        409,
+        "PROJECT_CODE_DUPLICATE",
+        "C\u00f3digo de proyecto duplicado")]
+    [InlineData(
+        "query",
+        500,
+        "PROJECT_QUERY_ERROR",
+        "Error al consultar el proyecto")]
+    [InlineData(
+        "persistence",
+        500,
+        "PROJECT_PERSISTENCE_ERROR",
+        "Error al actualizar el proyecto")]
+    public async Task Put_Failure_ReturnsStableProblemDetails(
+        string scenario,
+        int expectedStatus,
+        string expectedCode,
+        string expectedTitle)
+    {
+        await using var host = await ControlledHost.StartAsync(scenario);
+        var projectId = scenario == "invalid"
+            ? Guid.Empty
+            : host.ProjectId;
+
+        using var response = await host.Client.PutAsJsonAsync(
+            $"/api/v1/projects/{projectId}",
+            new UpdateProjectRequest(
+                "PR-002",
+                "Proyecto Dos",
+                "Descripcion actualizada",
+                "Medellin"),
+            TestContext.Current.CancellationToken);
+
+        await AssertProblemAsync(
+            response,
+            expectedStatus,
+            expectedCode,
+            expectedTitle);
+    }
+
+    [Fact]
+    public async Task Put_ValidRequest_PreservesSuccessfulUpdate()
+    {
+        await using var host = await ControlledHost.StartAsync("success");
+
+        using var response = await host.Client.PutAsJsonAsync(
+            $"/api/v1/projects/{host.ProjectId}",
+            new UpdateProjectRequest(
+                "PR-002",
+                "Proyecto Dos",
+                "Descripcion actualizada",
+                "Medellin"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<
+            ProjectDetailsResponse>(
+                TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(host.ProjectId, body.Id);
+        Assert.Equal("PR-002", body.Code);
+        Assert.Equal("Proyecto Dos", body.Name);
+        await host.ProjectRepository.Received(1).SaveChangesAsync(
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Update_DocumentsStableProblemDetailsSchema()
+    {
+        var method = typeof(ProjectsController).GetMethod(
+            nameof(ProjectsController.Update));
+        Assert.NotNull(method);
+        var responses = method.GetCustomAttributes<
+            ProducesResponseTypeAttribute>().ToArray();
+
+        Assert.Contains(
+            responses,
+            response => response.StatusCode == 200
+                && response.Type == typeof(ProjectDetailsResponse));
+        foreach (var status in new[] { 400, 401, 403, 404, 409, 500 })
+        {
+            Assert.Contains(
+                responses,
+                response => response.StatusCode == status
+                    && response.Type
+                        == typeof(ApiProblemDetailsResponse));
+        }
+    }
+
+    [Fact]
+    public void Update_ErrorCodesRemainDistinct()
+    {
+        Assert.NotEqual(
+            ProjectErrorCodes.ProjectNotFound,
+            ProjectErrorCodes.DuplicateCode);
+        Assert.NotEqual(
+            ProjectErrorCodes.QueryError,
+            ProjectErrorCodes.PersistenceError);
+    }
+
     [Fact]
     public void Create_DocumentsStableProblemDetailsSchema()
     {
@@ -177,24 +301,71 @@ public sealed class ProjectCreationProblemDetailsTests
         }
     }
 
+    private static async Task AssertProblemAsync(
+        HttpResponseMessage response,
+        int expectedStatus,
+        string expectedCode,
+        string expectedTitle)
+    {
+        Assert.Equal((HttpStatusCode)expectedStatus, response.StatusCode);
+        var raw = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(raw);
+        var root = json.RootElement;
+        Assert.Equal(JsonValueKind.String, root.GetProperty("type").ValueKind);
+        Assert.Equal(expectedTitle, root.GetProperty("title").GetString());
+        Assert.Equal(expectedStatus, root.GetProperty("status").GetInt32());
+        Assert.Equal(JsonValueKind.String, root.GetProperty("detail").ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(
+            root.GetProperty("detail").GetString()));
+        Assert.Equal(JsonValueKind.String, root.GetProperty("code").ValueKind);
+        Assert.Equal(expectedCode, root.GetProperty("code").GetString());
+        Assert.Equal(
+            JsonValueKind.String,
+            root.GetProperty("traceId").ValueKind);
+        Assert.False(string.IsNullOrWhiteSpace(
+            root.GetProperty("traceId").GetString()));
+        foreach (var forbidden in new[]
+        {
+            "sql",
+            "constraint",
+            "stackTrace",
+            "exception",
+            "ProjectQueryException",
+            "ProjectPersistenceException",
+            "IProjectRepository",
+            ".cs:",
+            "C:\\"
+        })
+        {
+            Assert.DoesNotContain(
+                forbidden,
+                raw,
+                StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private sealed class ControlledHost : IAsyncDisposable
     {
         private ControlledHost(
             WebApplication application,
             HttpClient client,
             IClientRepository clientRepository,
-            IProjectRepository projectRepository)
+            IProjectRepository projectRepository,
+            Guid projectId)
         {
             Application = application;
             Client = client;
             ClientRepository = clientRepository;
             ProjectRepository = projectRepository;
+            ProjectId = projectId;
         }
 
         public WebApplication Application { get; }
         public HttpClient Client { get; }
         public IClientRepository ClientRepository { get; }
         public IProjectRepository ProjectRepository { get; }
+        public Guid ProjectId { get; }
 
         public static async Task<ControlledHost> StartAsync(string scenario)
         {
@@ -213,6 +384,7 @@ public sealed class ProjectCreationProblemDetailsTests
             var projectRepository = Substitute.For<IProjectRepository>();
             var user = CreateUser();
             var client = CreateClient();
+            var project = CreateProject(client.Id);
             currentUser.IsAuthenticated.Returns(scenario != "unauthorized");
             currentUser.UserId.Returns(UserId);
             if (scenario == "inactive_user")
@@ -238,6 +410,32 @@ public sealed class ProjectCreationProblemDetailsTests
                     "PR-001",
                     Arg.Any<CancellationToken>())
                 .Returns(scenario == "duplicate");
+            projectRepository.FindForUpdateByIdAsync(
+                    project.Id,
+                    Arg.Any<CancellationToken>())
+                .Returns(project);
+            projectRepository.ExistsByCodeForOtherProjectAsync(
+                    project.Id,
+                    "PR-002",
+                    Arg.Any<CancellationToken>())
+                .Returns(scenario == "duplicate");
+            if (scenario == "not_found")
+            {
+                projectRepository.FindForUpdateByIdAsync(
+                        project.Id,
+                        Arg.Any<CancellationToken>())
+                    .Returns((ProjectEntity?)null);
+            }
+            if (scenario == "query")
+            {
+                projectRepository.FindForUpdateByIdAsync(
+                        project.Id,
+                        Arg.Any<CancellationToken>())
+                    .Returns(Task.FromException<ProjectEntity?>(
+                        new ProjectQueryException(
+                            new InvalidOperationException(
+                                "sensitive query detail"))));
+            }
             projectRepository.SaveChangesAsync(
                     Arg.Any<CancellationToken>())
                 .Returns(
@@ -310,7 +508,8 @@ public sealed class ProjectCreationProblemDetailsTests
                     application,
                     clientInstance,
                     clientRepository,
-                    projectRepository);
+                    projectRepository,
+                    project.Id);
             }
             catch (Exception originalException)
             {
@@ -360,5 +559,15 @@ public sealed class ProjectCreationProblemDetailsTests
             "Bogota",
             UserId,
             At);
+
+        private static ProjectEntity CreateProject(Guid clientId) =>
+            ProjectEntity.Create(
+                clientId,
+                "PR-001",
+                "Proyecto Uno",
+                "Descripcion",
+                "Bogota",
+                UserId,
+                At);
     }
 }
