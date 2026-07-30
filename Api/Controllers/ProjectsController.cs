@@ -3,6 +3,7 @@ using Application.Projects.GetProjectById;
 using Application.Projects.GetProjects;
 using Application.Projects.SetProjectActivation;
 using Application.Projects.UpdateProject;
+using Contracts.Common;
 using Contracts.Projects;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -86,17 +87,17 @@ public sealed class ProjectsController(
     [HttpPost]
     [ProducesResponseType<CreateProjectResponse>(
         StatusCodes.Status201Created)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status409Conflict)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<CreateProjectResponse>> Create(
         [FromBody] CreateProjectRequest request,
@@ -377,33 +378,66 @@ public sealed class ProjectsController(
         {
             CreateProjectFailure.InvalidRequest => ProjectProblem(
                 StatusCodes.Status400BadRequest,
+                ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
                 "Los datos enviados para crear el proyecto no son válidos."),
             CreateProjectFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
+                ProjectErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             CreateProjectFailure.InactiveUser => ProjectProblem(
                 StatusCodes.Status403Forbidden,
+                ProjectErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no tiene acceso para crear proyectos."),
             CreateProjectFailure.ClientNotFound => ProjectProblem(
                 StatusCodes.Status404NotFound,
+                ProjectErrorCodes.ClientNotFound,
                 "Cliente no encontrado",
                 "No existe el cliente indicado."),
             CreateProjectFailure.InactiveClient => ProjectProblem(
                 StatusCodes.Status409Conflict,
+                ProjectErrorCodes.ClientInactive,
                 "Cliente inactivo",
                 "No se puede crear un proyecto para un cliente inactivo."),
             CreateProjectFailure.DuplicateCode => ProjectProblem(
                 StatusCodes.Status409Conflict,
+                ProjectErrorCodes.DuplicateCode,
                 "Código de proyecto duplicado",
                 "Ya existe un proyecto con el código indicado."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.PersistenceError,
                 "Error al crear el proyecto",
                 "No fue posible guardar el proyecto.")
         };
+    }
+
+    private ObjectResult ProjectProblem(
+        int statusCode,
+        string code,
+        string title,
+        string detail)
+    {
+        var result = ProjectProblem(statusCode, title, detail);
+
+        if (result.Value is ProblemDetails problemDetails)
+        {
+            problemDetails.Extensions["code"] = code;
+
+            if (!problemDetails.Extensions.TryGetValue(
+                    "traceId",
+                    out var existingTraceId)
+                || existingTraceId is not string traceId
+                || string.IsNullOrWhiteSpace(traceId))
+            {
+                problemDetails.Extensions["traceId"] =
+                    HttpContext.TraceIdentifier;
+            }
+        }
+
+        return result;
     }
 
     private ObjectResult ProjectProblem(
