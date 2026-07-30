@@ -113,6 +113,266 @@ public sealed class CotizadorAiDocumentProcessingClientTests
             execution.Result.Response.Document.RequiresOcr);
     }
 
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfAndSuccessfulOcr_ReturnsSuccess()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "Native page", 11, true),
+                new PayloadPage(2, "OCR page", 8, true)
+            ],
+            warnings:
+            [
+                new PayloadWarning(
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    [2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfAndEmptyOcrPage_ReturnsSuccess()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "Native page", 11, true),
+                new PayloadPage(2, string.Empty, 0, false)
+            ],
+            warnings:
+            [
+                new PayloadWarning(
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    [2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithScannedPdfAndSuccessfulOcr_ReturnsSuccess()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_SCANNED",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "OCR page 1", 10, true),
+                new PayloadPage(2, "OCR page 2", 10, true)
+            ],
+            warnings:
+            [
+                new PayloadWarning(
+                    "OCR_REQUIRED",
+                    "The document does not contain extractable text.",
+                    [1, 2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithScannedPdfAndOneEmptyOcrPage_ReturnsSuccess()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_SCANNED",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "OCR page", 8, true),
+                new PayloadPage(2, string.Empty, 0, false)
+            ],
+            warnings:
+            [
+                new PayloadWarning(
+                    "OCR_REQUIRED",
+                    "The document does not contain extractable text.",
+                    [1, 2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithTextPdfAndExtractableText_ReturnsSuccess()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_TEXT",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "Native page 1", 13, true),
+                new PayloadPage(2, "Native page 2", 13, true)
+            ],
+            warnings: []);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithTextPdfAndEmptyPage_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_TEXT",
+            pageCount: 2,
+            pages:
+            [
+                new PayloadPage(1, "Native page", 11, true),
+                new PayloadPage(2, string.Empty, 0, false)
+            ],
+            warnings: []);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfAndNoWarning_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 2,
+            warnings: []);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfAndEmptyWarning_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 2,
+            warnings:
+            [
+                new PayloadWarning(
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    [])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfWarningForAllPages_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 2,
+            warnings:
+            [
+                new PayloadWarning(
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    [1, 2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMixedPdfAndEmptyUnwarnedPage_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_MIXED",
+            pageCount: 3,
+            pages:
+            [
+                new PayloadPage(1, string.Empty, 0, false),
+                new PayloadPage(2, "OCR page", 8, true),
+                new PayloadPage(3, "Native page", 11, true)
+            ],
+            warnings:
+            [
+                new PayloadWarning(
+                    "PARTIAL_OCR_REQUIRED",
+                    "Some pages do not contain extractable text and require OCR.",
+                    [2])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithScannedPdfWarningMissingPage_ReturnsInvalidResponse()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "PDF_SCANNED",
+            pageCount: 2,
+            warnings:
+            [
+                new PayloadWarning(
+                    "OCR_REQUIRED",
+                    "The document does not contain extractable text.",
+                    [1])
+            ]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
     [Theory]
     [InlineData(100, true)]
     [InlineData(101, false)]

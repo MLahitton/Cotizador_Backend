@@ -417,7 +417,6 @@ public sealed class CotizadorAiDocumentProcessingClient(
         }
 
         var pages = new ProcessedPageData[response.Pages.Count];
-        var pagesWithExtractableText = 0;
 
         for (var index = 0; index < response.Pages.Count; index++)
         {
@@ -442,11 +441,6 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 throw new InvalidDataException();
             }
 
-            if (page.HasExtractableText)
-            {
-                pagesWithExtractableText++;
-            }
-
             pages[index] = new ProcessedPageData(
                 page.PageNumber,
                 page.Text,
@@ -458,8 +452,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
             outcome,
             classification,
             response.Document.RequiresOcr,
-            pagesWithExtractableText,
-            response.Document.PageCount);
+            pages);
 
         var warnings =
             new ProcessingWarningData[response.Warnings.Count];
@@ -950,35 +943,25 @@ public sealed class CotizadorAiDocumentProcessingClient(
         DocumentProcessingOutcome outcome,
         PdfClassification classification,
         bool requiresOcr,
-        int pagesWithExtractableText,
-        int pageCount)
+        IReadOnlyList<ProcessedPageData> pages)
     {
-        DocumentProcessingOutcome expectedOutcome;
-        PdfClassification expectedClassification;
-        bool expectedRequiresOcr;
+        var isValid = classification switch
+        {
+            PdfClassification.PdfText =>
+                outcome == DocumentProcessingOutcome.Completed
+                && !requiresOcr
+                && pages.All(page => page.HasExtractableText),
+            PdfClassification.PdfScanned =>
+                outcome == DocumentProcessingOutcome.RequiresReview
+                && requiresOcr,
+            PdfClassification.PdfMixed =>
+                outcome == DocumentProcessingOutcome.RequiresReview
+                && requiresOcr
+                && pages.Count >= 2,
+            _ => false
+        };
 
-        if (pagesWithExtractableText == pageCount)
-        {
-            expectedOutcome = DocumentProcessingOutcome.Completed;
-            expectedClassification = PdfClassification.PdfText;
-            expectedRequiresOcr = false;
-        }
-        else if (pagesWithExtractableText == 0)
-        {
-            expectedOutcome = DocumentProcessingOutcome.RequiresReview;
-            expectedClassification = PdfClassification.PdfScanned;
-            expectedRequiresOcr = true;
-        }
-        else
-        {
-            expectedOutcome = DocumentProcessingOutcome.RequiresReview;
-            expectedClassification = PdfClassification.PdfMixed;
-            expectedRequiresOcr = true;
-        }
-
-        if (outcome != expectedOutcome
-            || classification != expectedClassification
-            || requiresOcr != expectedRequiresOcr)
+        if (!isValid)
         {
             throw new InvalidDataException();
         }
@@ -1040,21 +1023,37 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 break;
 
             case PdfClassification.PdfScanned:
-                ValidateSingleWarning(
+                var scannedWarning = ValidateSingleWarning(
                     warnings,
                     "OCR_REQUIRED",
-                    "The document does not contain extractable text.",
-                    Enumerable.Range(1, pages.Count));
+                    "The document does not contain extractable text.");
+
+                if (!scannedWarning.PageNumbers.SequenceEqual(
+                        Enumerable.Range(1, pages.Count)))
+                {
+                    throw new InvalidDataException();
+                }
+
                 break;
 
             case PdfClassification.PdfMixed:
-                ValidateSingleWarning(
+                var mixedWarning = ValidateSingleWarning(
                     warnings,
                     "PARTIAL_OCR_REQUIRED",
-                    "Some pages do not contain extractable text and require OCR.",
-                    pages
-                        .Where(page => !page.HasExtractableText)
-                        .Select(page => page.PageNumber));
+                    "Some pages do not contain extractable text and require OCR.");
+                var warnedPageNumbers =
+                    mixedWarning.PageNumbers.ToHashSet();
+
+                if (warnedPageNumbers.Count == 0
+                    || warnedPageNumbers.Count >= pages.Count
+                    || pages.Any(
+                        page =>
+                            !warnedPageNumbers.Contains(page.PageNumber)
+                            && !page.HasExtractableText))
+                {
+                    throw new InvalidDataException();
+                }
+
                 break;
 
             default:
@@ -1062,11 +1061,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
         }
     }
 
-    private static void ValidateSingleWarning(
+    private static ProcessingWarningData ValidateSingleWarning(
         IReadOnlyList<ProcessingWarningData> warnings,
         string expectedCode,
-        string expectedMessage,
-        IEnumerable<int> expectedPageNumbers)
+        string expectedMessage)
     {
         if (warnings.Count != 1)
         {
@@ -1082,11 +1080,12 @@ public sealed class CotizadorAiDocumentProcessingClient(
             || !string.Equals(
                 warning.Message,
                 expectedMessage,
-                StringComparison.Ordinal)
-            || !warning.PageNumbers.SequenceEqual(expectedPageNumbers))
+                StringComparison.Ordinal))
         {
             throw new InvalidDataException();
         }
+
+        return warning;
     }
 
     private sealed class SuccessResponseDto
