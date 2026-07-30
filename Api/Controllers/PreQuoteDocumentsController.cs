@@ -1,4 +1,5 @@
 using Application.PreQuotes.CreatePreQuoteDocument;
+using Application.PreQuotes.GetPreQuoteDocuments;
 using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -9,8 +10,92 @@ namespace Api.Controllers;
 [Authorize]
 [Route("api/v1/prequotes/{preQuoteId:guid}/documents")]
 public sealed class PreQuoteDocumentsController(
-    CreatePreQuoteDocumentService createPreQuoteDocumentService) : ControllerBase
+    CreatePreQuoteDocumentService createPreQuoteDocumentService,
+    GetPreQuoteDocumentsService getPreQuoteDocumentsService) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType<GetPreQuoteDocumentsResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(
+        StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Get(
+        [FromRoute] Guid preQuoteId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await getPreQuoteDocumentsService.ExecuteAsync(
+            new GetPreQuoteDocumentsQuery(preQuoteId, page, pageSize),
+            cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            return result.Failure switch
+            {
+                GetPreQuoteDocumentsFailure.InvalidRequest =>
+                    Problem(statusCode: 400, title: "Solicitud inválida",
+                        detail: "Los parámetros de consulta no son válidos."),
+                GetPreQuoteDocumentsFailure.Unauthorized =>
+                    Problem(statusCode: 401, title: "No autorizado",
+                        detail: "No fue posible identificar al usuario autenticado."),
+                GetPreQuoteDocumentsFailure.InactiveUser =>
+                    Problem(statusCode: 403, title: "Usuario inactivo",
+                        detail: "El usuario no tiene acceso para consultar documentos."),
+                GetPreQuoteDocumentsFailure.NotFound =>
+                    Problem(statusCode: 404,
+                        title: "Precotización no encontrada",
+                        detail: "No existe la precotización indicada."),
+                _ => Problem(statusCode: 500,
+                    title: "Error al consultar los documentos",
+                    detail: "No fue posible consultar los documentos de la precotización.")
+            };
+        }
+
+        var documents = result.Documents!;
+        var totalPages = documents.TotalCount == 0
+            ? 0
+            : (int)Math.Ceiling(documents.TotalCount / (double)pageSize);
+        var items = documents.Items.Select(item =>
+            new PreQuoteDocumentListItemResponse(
+                item.DocumentId,
+                item.PreQuoteId,
+                item.OriginalFileName,
+                item.ContentType,
+                item.SizeBytes,
+                item.CreatedAtUtc,
+                PreQuoteDocumentResponseMapper.Map(
+                    item.ProcessingAvailability),
+                PreQuoteDocumentResponseMapper.Map(item.LatestAttempt),
+                item.StructuredExtractionSummary is null
+                    ? null
+                    : new StructuredExtractionSummaryResponse(
+                        item.StructuredExtractionSummary.StructuredExtractionId,
+                        item.StructuredExtractionSummary.SourceProcessingAttemptId,
+                        item.StructuredExtractionSummary.IsFromLatestAttempt,
+                        PreQuoteDocumentResponseMapper.Map(
+                            item.StructuredExtractionSummary.Status),
+                        item.StructuredExtractionSummary.ProjectName,
+                        item.StructuredExtractionSummary.ClientName,
+                        item.StructuredExtractionSummary.Location,
+                        item.StructuredExtractionSummary.ItemCount,
+                        item.StructuredExtractionSummary.DocumentReferenceCount,
+                        item.StructuredExtractionSummary.ItemsRequiringReview,
+                        item.StructuredExtractionSummary.KnownQuoteableUnitCount,
+                        item.StructuredExtractionSummary.IssueCount,
+                        item.StructuredExtractionSummary.ConflictCount,
+                        item.StructuredExtractionSummary.ProcessingMethod,
+                        item.StructuredExtractionSummary.DurationMs,
+                        item.StructuredExtractionSummary.CreatedAtUtc)))
+            .ToArray();
+
+        return Ok(new GetPreQuoteDocumentsResponse(
+            items, page, pageSize, documents.TotalCount, totalPages));
+    }
+
     [HttpPost]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(

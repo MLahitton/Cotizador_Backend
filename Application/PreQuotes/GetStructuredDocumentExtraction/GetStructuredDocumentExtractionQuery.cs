@@ -1,0 +1,3 @@
+namespace Application.PreQuotes.GetStructuredDocumentExtraction;
+
+public sealed record GetStructuredDocumentExtractionQuery(Guid DocumentId);

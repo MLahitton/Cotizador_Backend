@@ -13,6 +13,8 @@ using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
 using Application.PreQuotes.GetProjectPreQuotes;
+using Application.PreQuotes.GetPreQuoteDocuments;
+using Application.PreQuotes.GetStructuredDocumentExtraction;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -52,6 +54,8 @@ public static class DependencyInjection
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();
         services.AddScoped<GetProjectPreQuotesService>();
+        services.AddScoped<GetPreQuoteDocumentsService>();
+        services.AddScoped<GetStructuredDocumentExtractionService>();
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
