@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.PreQuotes;
@@ -68,6 +69,9 @@ public static class DependencyInjection
             });
         services.AddScoped<IIdentityRepository, IdentityRepository>();
         services.AddScoped<IClientRepository, ClientRepository>();
+        services.AddScoped<
+            IGlassTypeCatalogRepository,
+            GlassTypeCatalogRepository>();
         services.AddScoped<
             IDocumentProcessingRepository,
             DocumentProcessingRepository>();

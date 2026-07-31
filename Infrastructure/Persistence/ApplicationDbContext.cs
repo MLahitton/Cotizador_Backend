@@ -1,3 +1,4 @@
+using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -16,6 +17,10 @@ public sealed class ApplicationDbContext(
         Set<ExternalIdentity>();
 
     public DbSet<Client> Clients => Set<Client>();
+
+    public DbSet<GlassType> GlassTypes => Set<GlassType>();
+    public DbSet<GlassPriceRangeVersion> GlassPriceRangeVersions =>
+        Set<GlassPriceRangeVersion>();
 
     public DbSet<Project> Projects => Set<Project>();
 
