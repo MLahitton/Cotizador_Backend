@@ -187,7 +187,8 @@ public sealed class StructuredExtractionPayloadReaderTests
             fixture.Requirements,
             fixture.References,
             fixture.Issues,
-            fixture.Conflicts);
+            fixture.Conflicts,
+            []);
 
     private static Fixture CreateFixture()
     {
@@ -298,9 +299,10 @@ public sealed class StructuredExtractionPayloadReaderTests
             documentId,
             JsonSerializer.Serialize(payload),
             new AvailableExtractionProjection(
-                attemptId, Guid.NewGuid(), 2, string.Empty, extractionId,
+                attemptId, Guid.NewGuid(), "2.0", 2, string.Empty, extractionId,
                 StructuredExtractionStatus.RequiresReview,
                 "Project", "Client", "Bogota", 1, 1, 1, 2,
+                null, null,
                 "rule_based_v1", 5, CreatedAt),
             [
                 new PersistedItem(

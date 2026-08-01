@@ -51,6 +51,9 @@ public static class DependencyInjection
         services.AddSingleton(fileStorageOptions);
         services.AddSingleton(cotizadorAiOptions);
         services.AddSingleton(documentProcessingWorkerOptions);
+        services.AddSingleton<
+            IDocumentProcessingDiagnostics,
+            DocumentProcessingDiagnostics>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddHttpClient<
             IDocumentProcessingClient,

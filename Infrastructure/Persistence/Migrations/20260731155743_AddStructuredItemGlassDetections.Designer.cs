@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731155743_AddStructuredItemGlassDetections")]
+    partial class AddStructuredItemGlassDetections
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1639,104 +1642,6 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemGlassValuation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CalculatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("calculated_at_utc");
-
-                    b.Property<string>("Currency")
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
-                        .HasColumnName("currency");
-
-                    b.Property<Guid?>("GlassPriceRangeVersionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("glass_price_range_version_id");
-
-                    b.Property<Guid?>("GlassTypeId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("glass_type_id");
-
-                    b.Property<decimal?>("MaximumAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("maximum_amount");
-
-                    b.Property<decimal?>("MaximumPricePerSquareMeter")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("maximum_price_per_square_meter");
-
-                    b.Property<decimal?>("MinimumAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("minimum_amount");
-
-                    b.Property<decimal?>("MinimumPricePerSquareMeter")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)")
-                        .HasColumnName("minimum_price_per_square_meter");
-
-                    b.Property<string>("PriceRangeStatus")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("price_range_status");
-
-                    b.Property<int?>("PriceRangeVersion")
-                        .HasColumnType("integer")
-                        .HasColumnName("price_range_version");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("reason");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("status");
-
-                    b.Property<Guid>("StructuredExtractionItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("structured_extraction_item_id");
-
-                    b.Property<decimal?>("TotalAreaSquareMeters")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
-                        .HasColumnName("total_area_square_meters");
-
-                    b.Property<decimal?>("UnitAreaSquareMeters")
-                        .HasPrecision(18, 6)
-                        .HasColumnType("numeric(18,6)")
-                        .HasColumnName("unit_area_square_meters");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GlassPriceRangeVersionId");
-
-                    b.HasIndex("GlassTypeId");
-
-                    b.HasIndex("StructuredExtractionItemId")
-                        .IsUnique();
-
-                    b.ToTable("structured_extraction_item_glass_valuations", "core", t =>
-                        {
-                            t.HasCheckConstraint("ck_structured_glass_valuation_amounts", "\"minimum_amount\" IS NULL OR \"minimum_amount\" >= 0 AND \"maximum_amount\" >= \"minimum_amount\"");
-
-                            t.HasCheckConstraint("ck_structured_glass_valuation_areas", "\"unit_area_square_meters\" IS NULL OR \"unit_area_square_meters\" >= 0 AND \"total_area_square_meters\" >= 0");
-
-                            t.HasCheckConstraint("ck_structured_glass_valuation_currency", "\"currency\" IS NULL OR char_length(\"currency\") = 3");
-
-                            t.HasCheckConstraint("ck_structured_glass_valuation_prices", "\"minimum_price_per_square_meter\" IS NULL OR \"minimum_price_per_square_meter\" > 0 AND \"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
-                        });
-                });
-
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionRequirement", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2212,31 +2117,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("GlassDetection");
                 });
 
-            modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemGlassValuation", b =>
-                {
-                    b.HasOne("Domain.Catalogs.GlassPriceRangeVersion", "GlassPriceRangeVersion")
-                        .WithMany()
-                        .HasForeignKey("GlassPriceRangeVersionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Catalogs.GlassType", "GlassType")
-                        .WithMany()
-                        .HasForeignKey("GlassTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.PreQuotes.StructuredExtractionItem", "StructuredExtractionItem")
-                        .WithOne("GlassValuation")
-                        .HasForeignKey("Domain.PreQuotes.StructuredExtractionItemGlassValuation", "StructuredExtractionItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("GlassPriceRangeVersion");
-
-                    b.Navigation("GlassType");
-
-                    b.Navigation("StructuredExtractionItem");
-                });
-
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionRequirement", b =>
                 {
                     b.HasOne("Domain.PreQuotes.StructuredDocumentExtraction", "StructuredDocumentExtraction")
@@ -2326,8 +2206,6 @@ namespace Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItem", b =>
                 {
                     b.Navigation("GlassDetection");
-
-                    b.Navigation("GlassValuation");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemGlassDetection", b =>

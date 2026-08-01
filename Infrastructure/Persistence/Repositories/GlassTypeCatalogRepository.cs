@@ -14,7 +14,6 @@ public sealed class GlassTypeCatalogRepository(ApplicationDbContext dbContext)
         try
         {
             return await Query()
-                .OrderBy(value => value.Code)
                 .ToArrayAsync(cancellationToken);
         }
         catch (DbException exception)
@@ -43,9 +42,8 @@ public sealed class GlassTypeCatalogRepository(ApplicationDbContext dbContext)
     private IQueryable<GlassTypeCatalogReadModel> Query() =>
         dbContext.GlassTypes
             .AsNoTracking()
-            .Where(value => value.IsActive
-                && value.PriceRangeVersions.Any(range =>
-                    range.ValidToUtc == null))
+            .Where(value => value.IsActive)
+            .OrderBy(value => value.Code)
             .Select(value => new GlassTypeCatalogReadModel(
                 value.Id,
                 value.Code,
@@ -63,5 +61,5 @@ public sealed class GlassTypeCatalogRepository(ApplicationDbContext dbContext)
                         range.Status,
                         range.ValidFromUtc,
                         range.ValidToUtc))
-                    .Single()));
+                    .SingleOrDefault()));
 }

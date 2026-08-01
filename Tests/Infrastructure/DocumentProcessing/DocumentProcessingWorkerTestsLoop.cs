@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Application.PreQuotes.ClaimDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
+using Application.PreQuotes.RecoverClaimedDocumentProcessingAttempt;
 using Infrastructure.DocumentProcessing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -183,9 +184,15 @@ public sealed class DocumentProcessingWorkerTestsLoop
                     call.Arg<CancellationToken>());
                 return null;
             });
+        var recovery = Substitute.For<
+            IClaimedDocumentProcessingRecoveryService>();
+        recovery.RecoverAsync(attemptId, CancellationToken.None)
+            .Returns(
+                RecoverClaimedDocumentProcessingAttemptResult.Recovered);
         var factory = new QueueScopeFactory(
             ScopeFor(ClaimReturning(attemptId)),
             ScopeFor(processor),
+            ScopeFor(recovery),
             ScopeFor(retryClaim));
         using var worker = CreateWorker(factory, ErrorPollInterval);
 
@@ -213,9 +220,12 @@ public sealed class DocumentProcessingWorkerTestsLoop
         await processor.Received(1).ProcessAsync(
             attemptId,
             Arg.Any<CancellationToken>());
+        await recovery.Received(1).RecoverAsync(
+            attemptId,
+            CancellationToken.None);
         await retryClaim.Received(1).ClaimNextAsync(
             Arg.Any<CancellationToken>());
-        Assert.Equal(3, factory.CreatedScopeCount);
+        Assert.Equal(4, factory.CreatedScopeCount);
     }
 
     [Fact]

@@ -79,7 +79,8 @@ public sealed class PreQuoteDocumentQueryRepository(
                                 || attempt.Outcome
                                     == DocumentProcessingOutcome.RequiresReview)
                             && attempt.ExtractionResult != null
-                            && attempt.ExtractionResult.SchemaVersion == "2.0"
+                            && (attempt.ExtractionResult.SchemaVersion == "2.0"
+                                || attempt.ExtractionResult.SchemaVersion == "3.0")
                             && attempt.ExtractionResult.StructuredExtraction
                                 != null)
                         .OrderByDescending(attempt => attempt.CompletedAtUtc)
@@ -118,13 +119,15 @@ public sealed class PreQuoteDocumentQueryRepository(
     public async Task<StructuredDocumentExtractionQueryReadModel?>
         GetStructuredExtractionAsync(
             Guid documentId,
+            Guid userId,
             CancellationToken cancellationToken)
     {
         try
         {
             var document = await dbContext.PreQuoteDocuments
                 .AsNoTracking()
-                .Where(entity => entity.Id == documentId)
+                .Where(entity => entity.Id == documentId
+                    && entity.PreQuote.Project.CreatedByUserId == userId)
                 .Select(entity => new PreQuoteDocumentReadModel(
                     entity.Id,
                     entity.PreQuoteId,
@@ -208,7 +211,8 @@ public sealed class PreQuoteDocumentQueryRepository(
                     || attempt.Outcome
                         == DocumentProcessingOutcome.RequiresReview)
                 && attempt.ExtractionResult != null
-                && attempt.ExtractionResult.SchemaVersion == "2.0"
+                && (attempt.ExtractionResult.SchemaVersion == "2.0"
+                    || attempt.ExtractionResult.SchemaVersion == "3.0")
                 && attempt.ExtractionResult.StructuredExtraction != null)
             .OrderByDescending(attempt => attempt.CompletedAtUtc)
             .ThenByDescending(attempt => attempt.CreatedAtUtc)
@@ -216,6 +220,7 @@ public sealed class PreQuoteDocumentQueryRepository(
             .Select(attempt => new AvailableExtractionProjection(
                 attempt.Id,
                 attempt.ExtractionResult!.Id,
+                attempt.ExtractionResult.SchemaVersion,
                 attempt.ExtractionResult.PageCount,
                 attempt.ExtractionResult.PayloadJson,
                 attempt.ExtractionResult.StructuredExtraction!.Id,
@@ -227,6 +232,8 @@ public sealed class PreQuoteDocumentQueryRepository(
                 attempt.ExtractionResult.StructuredExtraction.DocumentReferenceCount,
                 attempt.ExtractionResult.StructuredExtraction.ItemsRequiringReview,
                 attempt.ExtractionResult.StructuredExtraction.KnownQuoteableUnitCount,
+                attempt.ExtractionResult.StructuredExtraction.IdentifiedGlassItemCount,
+                attempt.ExtractionResult.StructuredExtraction.GlassItemsRequiringReview,
                 attempt.ExtractionResult.StructuredExtraction.ProcessingMethod,
                 attempt.ExtractionResult.StructuredExtraction.DurationMs,
                 attempt.ExtractionResult.StructuredExtraction.CreatedAtUtc));
@@ -284,8 +291,47 @@ public sealed class PreQuoteDocumentQueryRepository(
                 item.Sequence, item.Code, item.Message,
                 item.ItemSequences, item.PageNumbers))
             .ToArrayAsync(cancellationToken);
+        var glasses = await dbContext.StructuredExtractionItemGlassDetections
+            .AsNoTracking()
+            .Where(value => value.StructuredExtractionItem
+                .StructuredDocumentExtractionId == extraction.ExtractionId)
+            .OrderBy(value => value.StructuredExtractionItem.Sequence)
+            .Select(value => new PersistedGlass(
+                value.StructuredExtractionItem.Sequence,
+                value.GlassTypeId,
+                value.RawSpecification,
+                value.NormalizedCodeSnapshot,
+                value.AssignmentScope,
+                value.RequiresReview,
+                value.ReviewReasons.OrderBy(reason => reason.Sequence)
+                    .Select(reason => reason.Code).ToArray(),
+                value.SourcePages.OrderBy(page => page.Sequence)
+                    .Select(page => page.PageNumber).ToArray(),
+                value.Evidence.OrderBy(evidence => evidence.Sequence)
+                    .Select(evidence => new PersistedGlassEvidence(
+                        evidence.PageNumber,
+                        evidence.SourceType,
+                        evidence.Text)).ToArray()))
+            .ToArrayAsync(cancellationToken);
 
-        return StructuredExtractionPayloadReader.Read(
+        var valuations = await dbContext.StructuredExtractionItemGlassValuations
+            .AsNoTracking()
+            .Where(value => value.StructuredExtractionItem
+                .StructuredDocumentExtractionId == extraction.ExtractionId)
+            .OrderBy(value => value.StructuredExtractionItem.Sequence)
+            .Select(value => new PersistedValuation(
+                value.StructuredExtractionItem.Sequence,
+                value.Status, value.Reason, value.GlassTypeId,
+                value.GlassPriceRangeVersionId, value.PriceRangeVersion,
+                value.PriceRangeStatus, value.Currency,
+                value.UnitAreaSquareMeters, value.TotalAreaSquareMeters,
+                value.MinimumPricePerSquareMeter,
+                value.MaximumPricePerSquareMeter,
+                value.MinimumAmount, value.MaximumAmount,
+                value.CalculatedAtUtc))
+            .ToArrayAsync(cancellationToken);
+
+        var details = StructuredExtractionPayloadReader.Read(
             expectedDocumentId,
             extraction,
             latestAttemptId,
@@ -293,7 +339,48 @@ public sealed class PreQuoteDocumentQueryRepository(
             requirements,
             references,
             issues,
-            conflicts);
+            conflicts,
+            glasses);
+        var valuationBySequence = valuations.ToDictionary(x => x.ItemSequence);
+        var mappedItems = details.Items.Select(item => item with
+        {
+            Valuation = valuationBySequence.TryGetValue(
+                item.Sequence, out var value)
+                ? new StructuredItemGlassValuationReadModel(
+                    value.Status, value.Reason, value.GlassTypeId,
+                    value.GlassPriceRangeVersionId, value.PriceRangeVersion,
+                    value.PriceRangeStatus, value.Currency,
+                    value.UnitAreaSquareMeters, value.TotalAreaSquareMeters,
+                    value.MinimumPricePerSquareMeter,
+                    value.MaximumPricePerSquareMeter,
+                    value.MinimumAmount, value.MaximumAmount,
+                    value.CalculatedAtUtc)
+                : null
+        }).ToArray();
+        var valued = mappedItems.Where(x =>
+            x.Valuation?.Status == GlassValuationStatus.Valued).ToArray();
+        var currencies = valued.Select(x => x.Valuation!.Currency)
+            .Distinct(StringComparer.Ordinal).ToArray();
+        var aggregateable = currencies.Length <= 1;
+        return details with
+        {
+            Items = mappedItems,
+            Summary = details.Summary with
+            {
+                ValuedItemCount = valued.Length,
+                NotValuedItemCount = mappedItems.Count(x =>
+                    x.Valuation?.Status == GlassValuationStatus.NotValued),
+                TotalGlassAreaSquareMeters = valued.Sum(x =>
+                    x.Valuation!.TotalAreaSquareMeters ?? 0),
+                MinimumGlassAmount = aggregateable
+                    ? valued.Sum(x => x.Valuation!.MinimumAmount ?? 0) : null,
+                MaximumGlassAmount = aggregateable
+                    ? valued.Sum(x => x.Valuation!.MaximumAmount ?? 0) : null,
+                Currency = aggregateable ? currencies.SingleOrDefault() : null,
+                IsAggregable = aggregateable,
+                AggregationIssue = aggregateable ? null : "CURRENCY_MISMATCH"
+            }
+        };
     }
 
     private static PreQuoteDocumentListReadModel MapListItem(
@@ -416,6 +503,7 @@ public sealed class PreQuoteDocumentQueryRepository(
 internal sealed record AvailableExtractionProjection(
     Guid ProcessingAttemptId,
     Guid ResultId,
+    string SchemaVersion,
     int PageCount,
     string PayloadJson,
     Guid ExtractionId,
@@ -427,6 +515,8 @@ internal sealed record AvailableExtractionProjection(
     int DocumentReferenceCount,
     int ItemsRequiringReview,
     int KnownQuoteableUnitCount,
+    int? IdentifiedGlassItemCount,
+    int? GlassItemsRequiringReview,
     string ProcessingMethod,
     int DurationMs,
     DateTimeOffset CreatedAtUtc);
@@ -446,3 +536,15 @@ internal sealed record PersistedIssue(
 internal sealed record PersistedConflict(
     int Sequence, StructuredConflictCode Code, string Message,
     int[] ItemSequences, int[] PageNumbers);
+internal sealed record PersistedGlass(
+    int ItemSequence,
+    Guid? GlassTypeId,
+    string? RawSpecification,
+    string? NormalizedCode,
+    GlassAssignmentScope AssignmentScope,
+    bool RequiresReview,
+    GlassReviewReason[] ReviewReasons,
+    int[] SourcePages,
+    PersistedGlassEvidence[] Evidence);
+internal sealed record PersistedGlassEvidence(
+    int PageNumber, EvidenceSourceType SourceType, string Text);

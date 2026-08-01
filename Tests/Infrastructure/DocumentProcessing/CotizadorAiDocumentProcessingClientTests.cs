@@ -38,7 +38,7 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         Assert.True(execution.Result.IsSuccess);
         Assert.Equal(HttpMethod.Post, execution.Request.Method);
         Assert.Equal(
-            "/api/v2/prequotes/document-extractions",
+            "/api/v3/prequotes/document-extractions",
             execution.Request.RequestUri?.AbsolutePath);
         Assert.Equal(["application/json"], execution.Request.Accept);
         Assert.Equal(

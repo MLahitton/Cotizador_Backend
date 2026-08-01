@@ -47,6 +47,7 @@ public sealed class GetStructuredDocumentExtractionService(
         {
             var details = await repository.GetStructuredExtractionAsync(
                 query.DocumentId,
+                userId,
                 cancellationToken);
 
             return details is null

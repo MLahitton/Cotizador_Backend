@@ -27,7 +27,7 @@ public sealed class CotizadorAiV2ContractTests
         var requestUri = Assert.IsType<Uri>(
             execution.Request.RequestUri);
         Assert.Equal(
-            "/api/v2/prequotes/document-extractions",
+            "/api/v3/prequotes/document-extractions",
             requestUri.AbsolutePath);
         var structured = execution.Result.Response!.StructuredExtraction!;
         Assert.Single(structured.Items);

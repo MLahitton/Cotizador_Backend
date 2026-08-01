@@ -102,6 +102,34 @@ public sealed record StructuredItemReadModel(
     bool RequiresReview,
     IReadOnlyList<StructuredIssueCode> ReviewReasons,
     IReadOnlyList<int> SourcePages,
+    IReadOnlyList<StructuredEvidenceReadModel> Evidence,
+    StructuredItemGlassReadModel? Glass,
+    StructuredItemGlassValuationReadModel? Valuation = null);
+
+public sealed record StructuredItemGlassValuationReadModel(
+    GlassValuationStatus Status,
+    GlassValuationReason? Reason,
+    Guid? GlassTypeId,
+    Guid? GlassPriceRangeVersionId,
+    int? PriceRangeVersion,
+    Domain.Catalogs.GlassPriceRangeStatus? PriceRangeStatus,
+    string? Currency,
+    decimal? UnitAreaSquareMeters,
+    decimal? TotalAreaSquareMeters,
+    decimal? MinimumPricePerSquareMeter,
+    decimal? MaximumPricePerSquareMeter,
+    decimal? MinimumAmount,
+    decimal? MaximumAmount,
+    DateTimeOffset CalculatedAtUtc);
+
+public sealed record StructuredItemGlassReadModel(
+    Guid? GlassTypeId,
+    string? RawSpecification,
+    string? NormalizedCode,
+    GlassAssignmentScope AssignmentScope,
+    bool RequiresReview,
+    IReadOnlyList<GlassReviewReason> ReviewReasons,
+    IReadOnlyList<int> SourcePages,
     IReadOnlyList<StructuredEvidenceReadModel> Evidence);
 
 public sealed record StructuredDocumentReferenceReadModel(
@@ -133,7 +161,17 @@ public sealed record StructuredSummaryReadModel(
     int ItemsRequiringReview,
     int KnownQuoteableUnitCount,
     int IssueCount,
-    int ConflictCount);
+    int ConflictCount,
+    int? IdentifiedGlassItemCount,
+    int? GlassItemsRequiringReview,
+    int ValuedItemCount = 0,
+    int NotValuedItemCount = 0,
+    decimal TotalGlassAreaSquareMeters = 0,
+    decimal? MinimumGlassAmount = null,
+    decimal? MaximumGlassAmount = null,
+    string? Currency = null,
+    bool IsAggregable = true,
+    string? AggregationIssue = null);
 
 public sealed record StructuredProcessingMetadataReadModel(
     string Method,
@@ -170,6 +208,7 @@ public interface IPreQuoteDocumentQueryRepository
 
     Task<StructuredDocumentExtractionQueryReadModel?> GetStructuredExtractionAsync(
         Guid documentId,
+        Guid userId,
         CancellationToken cancellationToken);
 }
 

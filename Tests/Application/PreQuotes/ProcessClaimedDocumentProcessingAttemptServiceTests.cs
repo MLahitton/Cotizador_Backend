@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.DocumentProcessing;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Storage;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
 using CotizadorBackend.Tests.TestDoubles;
@@ -298,6 +299,270 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ProcessAsync_WithV3Glass_ResolvesFourCodesAndPersistsAtomically()
+    {
+        var context = new Context();
+        var codes = new[]
+        {
+            "LAM_4_4",
+            "LAM_4_4_GRAY",
+            "LAM_5_5",
+            "LAM_5_5_GRAY"
+        };
+        var glassTypeIds = codes.ToDictionary(
+            code => code,
+            _ => Guid.NewGuid(),
+            StringComparer.Ordinal);
+        var rangeIds = codes.ToDictionary(
+            code => code, _ => Guid.NewGuid(), StringComparer.Ordinal);
+        var prices = new (decimal Minimum, decimal Maximum)[]
+        {
+            (90000m, 110000m), (95000m, 95000m),
+            (120000m, 140000m), (125000m, 145000m)
+        };
+        context.GlassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(codes.Select((code, index) => new GlassTypeCatalogReadModel(
+                glassTypeIds[code], code, code, null, true,
+                new GlassPriceRangeCatalogReadModel(
+                    rangeIds[code], 1, prices[index].Minimum,
+                    prices[index].Maximum, "COP",
+                    global::Domain.Catalogs.GlassPriceRangeStatus.Preliminary,
+                    CreatedAt, null))).ToArray());
+        var baseline = CreateSuccess(DocumentProcessingOutcome.Completed)
+            .Response!;
+        var structured = baseline.StructuredExtraction!;
+        var items = codes.Select((code, index) =>
+            structured.Items[0] with
+            {
+                Sequence = index + 1,
+                Reference = $"W-{index + 1:00}",
+                Description = $"Window {index + 1}",
+                WidthMillimeters = new[] { 1500, 2100, 6200, 3800 }[index],
+                HeightMillimeters = new[] { 1000, 1400, 3300, 1100 }[index],
+                Quantity = new[] { 3, 4, 1, 2 }[index],
+                Glass = new StructuredItemGlassData(
+                    code,
+                    code,
+                    GlassAssignmentScope.Item,
+                    false,
+                    [],
+                    [1],
+                    [new SourceEvidenceData(
+                        1,
+                        EvidenceSourceType.Native,
+                        $"Vidrio {code}")])
+            }).ToArray();
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(DocumentProcessingClientResult.Success(baseline with
+            {
+                SchemaVersion = "3.0",
+                StructuredExtraction = structured with
+                {
+                    Items = items,
+                    ItemCount = 4,
+                    KnownQuoteableUnitCount = 10,
+                    IdentifiedGlassItemCount = 4,
+                    GlassItemsRequiringReview = 0
+                }
+            }));
+        StructuredDocumentExtraction? persisted = null;
+        context.Repository.When(value => value.AddStructuredExtraction(
+                Arg.Any<StructuredDocumentExtraction>()))
+            .Do(call => persisted = call.Arg<StructuredDocumentExtraction>());
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ProcessClaimedDocumentProcessingAttemptResult.Completed,
+            result);
+        Assert.NotNull(persisted);
+        Assert.Equal(DocumentProcessingState.Finished,
+            context.Attempt.ProcessingState);
+        Assert.Equal(DocumentProcessingOutcome.Completed,
+            context.Attempt.Outcome);
+        Assert.Null(context.Attempt.ErrorCode);
+        Assert.NotNull(context.Attempt.CompletedAtUtc);
+        Assert.Equal(4, persisted.Items.Count);
+        Assert.All(persisted.Items, item =>
+        {
+            var glass = Assert.IsType<
+                StructuredExtractionItemGlassDetection>(
+                    item.GlassDetection);
+            var code = Assert.IsType<string>(glass.NormalizedCodeSnapshot);
+            Assert.Equal(glassTypeIds[code], glass.GlassTypeId);
+            var valuation = Assert.IsType<
+                StructuredExtractionItemGlassValuation>(item.GlassValuation);
+            Assert.Equal(rangeIds[code], valuation.GlassPriceRangeVersionId);
+            Assert.Equal(1, valuation.PriceRangeVersion);
+            Assert.Equal(global::Domain.Catalogs.GlassPriceRangeStatus.Preliminary,
+                valuation.PriceRangeStatus);
+            Assert.Equal("COP", valuation.Currency);
+            Assert.Equal(TimeSpan.Zero, valuation.CalculatedAtUtc.Offset);
+        });
+        Assert.Equal(
+            new decimal?[] { 1.5m, 2.94m, 20.46m, 4.18m },
+            persisted.Items.Select(item =>
+                item.GlassValuation!.UnitAreaSquareMeters));
+        Assert.Equal(
+            new decimal?[] { 4.5m, 11.76m, 20.46m, 8.36m },
+            persisted.Items.Select(item =>
+                item.GlassValuation!.TotalAreaSquareMeters));
+        Assert.Equal(
+            new decimal?[] { 405000m, 1117200m, 2455200m, 1045000m },
+            persisted.Items.Select(item =>
+                item.GlassValuation!.MinimumAmount));
+        Assert.Equal(
+            new decimal?[] { 495000m, 1117200m, 2864400m, 1212200m },
+            persisted.Items.Select(item =>
+                item.GlassValuation!.MaximumAmount));
+        context.Repository.Received(1).AddResult(
+            Arg.Any<DocumentExtractionResult>());
+        context.Repository.Received(1).AddStructuredExtraction(persisted);
+        await context.GlassCatalog.Received(1)
+            .GetActiveWithCurrentPriceRangesAsync(
+                TestContext.Current.CancellationToken);
+        await context.Repository.Received(1).SaveChangesAsync(
+            TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithAssignedUnnormalizedGlass_PersistsWithoutGlassType()
+    {
+        var context = new Context();
+        context.GlassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                Arg.Any<CancellationToken>())
+            .Returns([]);
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateV3Success(new StructuredItemGlassData(
+                "Vidrio laminado de seguridad 12 mm",
+                null,
+                GlassAssignmentScope.Item,
+                true,
+                [GlassReviewReason.GlassTypeNotIdentified],
+                [1],
+                [new SourceEvidenceData(
+                    1, EvidenceSourceType.Native,
+                    "Vidrio laminado de seguridad 12 mm")] )));
+        StructuredDocumentExtraction? persisted = null;
+        context.Repository.When(value => value.AddStructuredExtraction(
+                Arg.Any<StructuredDocumentExtraction>()))
+            .Do(call => persisted = call.Arg<StructuredDocumentExtraction>());
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ProcessClaimedDocumentProcessingAttemptResult.Completed,
+            result);
+        var glass = Assert.Single(persisted!.Items).GlassDetection!;
+        Assert.Null(glass.GlassTypeId);
+        Assert.Equal(GlassAssignmentScope.Item, glass.AssignmentScope);
+        Assert.Equal("Vidrio laminado de seguridad 12 mm",
+            glass.RawSpecification);
+        Assert.Single(glass.ReviewReasons);
+        Assert.Single(glass.Evidence);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithUnknownNormalizedCode_ReportsCatalogCategory()
+    {
+        var context = new Context();
+        context.GlassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                Arg.Any<CancellationToken>())
+            .Returns([]);
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateV3Success(new StructuredItemGlassData(
+                "Unknown glass", "UNKNOWN", GlassAssignmentScope.Item,
+                false, [], [1],
+                [new SourceEvidenceData(
+                    1, EvidenceSourceType.Native, "Unknown glass")] )));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ProcessClaimedDocumentProcessingAttemptResult.Failed,
+            result);
+        context.Diagnostics.Received(1).CatalogResolutionFailed(
+            DocumentId, AttemptId, context.Attempt.CorrelationId,
+            "unknown_code", "UNKNOWN");
+        context.Repository.DidNotReceive().AddStructuredExtraction(
+            Arg.Any<StructuredDocumentExtraction>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithCatalogQueryError_ReportsTechnicalCategory()
+    {
+        var context = new Context();
+        context.GlassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<IReadOnlyList<GlassTypeCatalogReadModel>>(
+                new GlassTypeCatalogQueryException(
+                    new InvalidOperationException())));
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateV3Success(new StructuredItemGlassData(
+                "Laminado 4+4", "LAM_4_4", GlassAssignmentScope.Item,
+                false, [], [1],
+                [new SourceEvidenceData(
+                    1, EvidenceSourceType.Native, "Laminado 4+4")] )));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(ProcessClaimedDocumentProcessingAttemptResult.Failed,
+            result);
+        context.Diagnostics.Received(1).CatalogResolutionFailed(
+            DocumentId, AttemptId, context.Attempt.CorrelationId,
+            "query_error", null);
+    }
+
+    private static DocumentProcessingClientResult CreateV3Success(
+        StructuredItemGlassData glass)
+    {
+        var baseline = CreateSuccess(DocumentProcessingOutcome.Completed)
+            .Response!;
+        var structured = baseline.StructuredExtraction!;
+        var item = structured.Items[0] with
+        {
+            RequiresReview = glass.RequiresReview,
+            ReviewReasons = glass.RequiresReview
+                ? [StructuredIssueCode.GlassTypeNotIdentified]
+                : [],
+            Glass = glass
+        };
+        return DocumentProcessingClientResult.Success(baseline with
+        {
+            SchemaVersion = "3.0",
+            Outcome = glass.RequiresReview
+                ? DocumentProcessingOutcome.RequiresReview
+                : DocumentProcessingOutcome.Completed,
+            StructuredExtraction = structured with
+            {
+                Status = glass.RequiresReview
+                    ? StructuredExtractionStatus.RequiresReview
+                    : StructuredExtractionStatus.Completed,
+                Items = [item],
+                ItemsRequiringReview = glass.RequiresReview ? 1 : 0,
+                IdentifiedGlassItemCount =
+                    glass.NormalizedCode is null ? 0 : 1,
+                GlassItemsRequiringReview = glass.RequiresReview ? 1 : 0,
+                ProcessingMethod = "rule_based_v2"
+            }
+        });
+    }
+
     private static DocumentProcessingClientResult CreateSuccess(
         DocumentProcessingOutcome outcome)
     {
@@ -394,6 +659,8 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             Repository = Substitute.For<IDocumentProcessingRepository>();
             Storage = Substitute.For<IFileStorage>();
             Client = Substitute.For<IDocumentProcessingClient>();
+            GlassCatalog = Substitute.For<IGlassTypeCatalogRepository>();
+            Diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
             Attempt = DocumentProcessingAttempt.Create(
                 DocumentId,
                 Guid.Parse("33333333-3333-3333-3333-333333333333"),
@@ -435,12 +702,16 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                 Repository,
                 Storage,
                 Client,
-                new FixedTimeProvider(CompletedAt));
+                GlassCatalog,
+                new FixedTimeProvider(CompletedAt),
+                Diagnostics);
         }
 
         public IDocumentProcessingRepository Repository { get; }
         public IFileStorage Storage { get; }
         public IDocumentProcessingClient Client { get; }
+        public IGlassTypeCatalogRepository GlassCatalog { get; }
+        public IDocumentProcessingDiagnostics Diagnostics { get; }
         public DocumentProcessingAttempt Attempt { get; }
         public DocumentProcessingSource Source { get; }
         public ProcessClaimedDocumentProcessingAttemptService Service { get; }

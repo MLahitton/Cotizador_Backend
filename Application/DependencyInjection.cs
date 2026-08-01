@@ -10,6 +10,7 @@ using Application.PreQuotes.CreateDocumentProcessingAttempt;
 using Application.PreQuotes.ClaimDocumentProcessingAttempt;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
+using Application.PreQuotes.RecoverClaimedDocumentProcessingAttempt;
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
@@ -56,6 +57,9 @@ public static class DependencyInjection
         services.AddScoped<
             IClaimedDocumentProcessingService,
             ProcessClaimedDocumentProcessingAttemptService>();
+        services.AddScoped<
+            IClaimedDocumentProcessingRecoveryService,
+            RecoverClaimedDocumentProcessingAttemptService>();
         services.AddScoped<CreatePreQuoteService>();
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();

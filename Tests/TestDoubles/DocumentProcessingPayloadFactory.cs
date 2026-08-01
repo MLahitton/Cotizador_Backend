@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace CotizadorBackend.Tests.TestDoubles;
 
@@ -18,7 +19,7 @@ public static class DocumentProcessingPayloadFactory
         int pageCount = 1,
         IReadOnlyList<PayloadPage>? pages = null,
         IReadOnlyList<PayloadWarning>? warnings = null,
-        string schemaVersion = "2.0",
+        string schemaVersion = "3.0",
         string? status = null,
         bool? requiresOcr = null,
         string fileName = "document.pdf",
@@ -26,6 +27,7 @@ public static class DocumentProcessingPayloadFactory
         long sizeBytes = 4,
         string method = "pymupdf",
         int durationMs = 15,
+        string? structuredMethod = null,
         bool writeIndented = false)
     {
         var resolvedPages = pages?.ToArray()
@@ -54,18 +56,43 @@ public static class DocumentProcessingPayloadFactory
             resolvedPages,
             resolvedWarnings,
             new MetadataPayload(method, durationMs),
-            CreateStructuredExtraction(resolvedStatus));
+            CreateStructuredExtraction(
+                resolvedStatus,
+                structuredMethod ?? schemaVersion switch
+                {
+                    "2.0" => "rule_based_v1",
+                    "3.0" => "rule_based_v2",
+                    _ => "unknown"
+                }));
 
-        return JsonSerializer.Serialize(
+        var json = JsonSerializer.Serialize(
             payload,
             new JsonSerializerOptions(SerializerOptions)
             {
                 WriteIndented = writeIndented
             });
+        if (schemaVersion != "2.0")
+        {
+            return json;
+        }
+        var root = JsonNode.Parse(json)!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var summary = structured["summary"]!.AsObject();
+        summary.Remove("identifiedGlassItemCount");
+        summary.Remove("glassItemsRequiringReview");
+        foreach (var item in structured["items"]!.AsArray())
+        {
+            item!.AsObject().Remove("glass");
+        }
+        return root.ToJsonString(new JsonSerializerOptions(SerializerOptions)
+        {
+            WriteIndented = writeIndented
+        });
     }
 
     private static StructuredExtractionPayload CreateStructuredExtraction(
-        string status)
+        string status,
+        string structuredMethod)
     {
         var evidence = new[]
         {
@@ -101,7 +128,15 @@ public static class DocumentProcessingPayloadFactory
                         ? ["OCR_REVIEW_REQUIRED"]
                         : [],
                     [1],
-                    evidence)
+                    evidence,
+                    new GlassPayload(
+                        "Laminado 4+4",
+                        "LAM_4_4",
+                        "ITEM",
+                        false,
+                        [],
+                        [1],
+                        evidence))
             ],
             [
                 new DocumentReferencePayload(
@@ -121,8 +156,8 @@ public static class DocumentProcessingPayloadFactory
                     [1])]
                 : [],
             [],
-            new SummaryPayload(1, 1, requiresReview ? 1 : 0, 2),
-            new MetadataPayload("rule_based_v1", 5));
+            new SummaryPayload(1, 1, requiresReview ? 1 : 0, 2, 1, 0),
+            new MetadataPayload(structuredMethod, 5));
     }
 
     public static string CreateError(
@@ -230,6 +265,14 @@ public static class DocumentProcessingPayloadFactory
         string? Name, string? ClientName, string? Location,
         IReadOnlyList<int> SourcePages,
         IReadOnlyList<EvidencePayload> Evidence);
+    private sealed record GlassPayload(
+        string? RawSpecification,
+        string? NormalizedCode,
+        string AssignmentScope,
+        bool RequiresReview,
+        IReadOnlyList<string> ReviewReasons,
+        IReadOnlyList<int> SourcePages,
+        IReadOnlyList<EvidencePayload> Evidence);
     private sealed record RequirementsPayload(
         IReadOnlyList<RequirementPayload> GlassSpecifications,
         IReadOnlyList<RequirementPayload> ProfileSpecifications,
@@ -246,7 +289,8 @@ public static class DocumentProcessingPayloadFactory
         int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
         bool RequiresReview, IReadOnlyList<string> ReviewReasons,
         IReadOnlyList<int> SourcePages,
-        IReadOnlyList<EvidencePayload> Evidence);
+        IReadOnlyList<EvidencePayload> Evidence,
+        GlassPayload Glass);
     private sealed record DocumentReferencePayload(
         int Sequence, string? Reference, string Description,
         string? Detail, int? Quantity, IReadOnlyList<int> SourcePages,
@@ -259,7 +303,8 @@ public static class DocumentProcessingPayloadFactory
         IReadOnlyList<int> PageNumbers);
     private sealed record SummaryPayload(
         int ItemCount, int DocumentReferenceCount,
-        int ItemsRequiringReview, int KnownQuoteableUnitCount);
+        int ItemsRequiringReview, int KnownQuoteableUnitCount,
+        int IdentifiedGlassItemCount, int GlassItemsRequiringReview);
 }
 
 public sealed record PayloadPage(

@@ -37,6 +37,12 @@ public sealed class ApplicationDbContext(
 
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();
+    public DbSet<StructuredExtractionItemGlassDetection>
+        StructuredExtractionItemGlassDetections =>
+            Set<StructuredExtractionItemGlassDetection>();
+    public DbSet<StructuredExtractionItemGlassValuation>
+        StructuredExtractionItemGlassValuations =>
+            Set<StructuredExtractionItemGlassValuation>();
 
     public DbSet<PreQuoteDraft> PreQuoteDrafts => Set<PreQuoteDraft>();
     public DbSet<PreQuoteDraftItem> PreQuoteDraftItems =>

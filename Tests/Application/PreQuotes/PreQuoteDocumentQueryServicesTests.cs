@@ -151,7 +151,7 @@ public sealed class PreQuoteDocumentQueryServicesTests
     {
         var context = CreateContext();
         context.Repository.GetStructuredExtractionAsync(
-                EntityId, Arg.Any<CancellationToken>())
+                EntityId, UserId, Arg.Any<CancellationToken>())
             .Returns(new StructuredDocumentExtractionQueryReadModel(
                 new PreQuoteDocumentReadModel(
                     EntityId, Guid.NewGuid(), "a.pdf", "application/pdf",
@@ -212,7 +212,8 @@ public sealed class PreQuoteDocumentQueryServicesTests
                     _ => throw new PreQuoteDocumentQueryException(
                         new InvalidOperationException()));
             context.Repository.GetStructuredExtractionAsync(
-                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<Guid>(),
+                    Arg.Any<CancellationToken>())
                 .Returns<Task<StructuredDocumentExtractionQueryReadModel?>>(
                     _ => throw new PreQuoteDocumentQueryException(
                         new InvalidOperationException()));

@@ -9,6 +9,24 @@ public interface IDocumentProcessingClient
         CancellationToken cancellationToken);
 }
 
+public interface IDocumentProcessingDiagnostics
+{
+    void ContractRejected(
+        Guid documentId,
+        Guid processingAttemptId,
+        Guid correlationId,
+        int? httpStatusCode,
+        string stage,
+        string category);
+
+    void CatalogResolutionFailed(
+        Guid documentId,
+        Guid processingAttemptId,
+        Guid correlationId,
+        string category,
+        string? normalizedCode);
+}
+
 public sealed record DocumentProcessingClientRequest(
     Guid DocumentId,
     Guid ProcessingAttemptId,
@@ -78,6 +96,16 @@ public sealed record StructuredItemData(
     bool RequiresReview,
     IReadOnlyList<StructuredIssueCode> ReviewReasons,
     IReadOnlyList<int> SourcePages,
+    IReadOnlyList<SourceEvidenceData> Evidence,
+    StructuredItemGlassData? Glass = null);
+
+public sealed record StructuredItemGlassData(
+    string? RawSpecification,
+    string? NormalizedCode,
+    GlassAssignmentScope AssignmentScope,
+    bool RequiresReview,
+    IReadOnlyList<GlassReviewReason> ReviewReasons,
+    IReadOnlyList<int> SourcePages,
     IReadOnlyList<SourceEvidenceData> Evidence);
 
 public sealed record StructuredDocumentReferenceData(
@@ -120,7 +148,9 @@ public sealed record StructuredExtractionData(
     int ItemsRequiringReview,
     int KnownQuoteableUnitCount,
     string ProcessingMethod,
-    int DurationMs);
+    int DurationMs,
+    int? IdentifiedGlassItemCount = null,
+    int? GlassItemsRequiringReview = null);
 
 public sealed record DocumentProcessingResponseData(
     string SchemaVersion,

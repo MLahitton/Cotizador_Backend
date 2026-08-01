@@ -22,7 +22,8 @@ internal static class StructuredExtractionPayloadReader
         IReadOnlyList<PersistedRequirement> requirements,
         IReadOnlyList<PersistedReference> references,
         IReadOnlyList<PersistedIssue> issues,
-        IReadOnlyList<PersistedConflict> conflicts)
+        IReadOnlyList<PersistedConflict> conflicts,
+        IReadOnlyList<PersistedGlass> glasses)
     {
         try
         {
@@ -34,7 +35,8 @@ internal static class StructuredExtractionPayloadReader
                 requirements,
                 references,
                 issues,
-                conflicts);
+                conflicts,
+                glasses);
         }
         catch (PreQuoteDocumentQueryException)
         {
@@ -55,13 +57,15 @@ internal static class StructuredExtractionPayloadReader
         IReadOnlyList<PersistedRequirement> requirements,
         IReadOnlyList<PersistedReference> references,
         IReadOnlyList<PersistedIssue> issues,
-        IReadOnlyList<PersistedConflict> conflicts)
+        IReadOnlyList<PersistedConflict> conflicts,
+        IReadOnlyList<PersistedGlass> glasses)
     {
         var payload = JsonSerializer.Deserialize<Payload>(persisted.PayloadJson, Options)
             ?? throw Invalid();
         var structured = payload.StructuredExtraction ?? throw Invalid();
 
-        if (payload.SchemaVersion != "2.0"
+        if (payload.SchemaVersion != persisted.SchemaVersion
+            || payload.SchemaVersion is not ("2.0" or "3.0")
             || expectedDocumentId == Guid.Empty
             || payload.DocumentId == Guid.Empty
             || payload.DocumentId != expectedDocumentId
@@ -90,6 +94,10 @@ internal static class StructuredExtractionPayloadReader
                 != persisted.ItemsRequiringReview
             || structured.Summary.KnownQuoteableUnitCount
                 != persisted.KnownQuoteableUnitCount
+            || structured.Summary.IdentifiedGlassItemCount
+                != persisted.IdentifiedGlassItemCount
+            || structured.Summary.GlassItemsRequiringReview
+                != persisted.GlassItemsRequiringReview
             || structured.ProcessingMetadata.Method != persisted.ProcessingMethod
             || structured.ProcessingMetadata.DurationMs != persisted.DurationMs)
         {
@@ -113,8 +121,14 @@ internal static class StructuredExtractionPayloadReader
             throw Invalid();
         }
 
+        if (payload.SchemaVersion == "2.0" && glasses.Count != 0
+            || payload.SchemaVersion == "3.0" && glasses.Count != items.Count)
+            throw Invalid();
+        var glassByItem = glasses.ToDictionary(value => value.ItemSequence);
         var mappedItems = items.Select((row, index) =>
-            MapItem(row, structured.Items[index], persisted.PageCount)).ToArray();
+            MapItem(row, structured.Items[index], persisted.PageCount,
+                glassByItem.GetValueOrDefault(row.Sequence),
+                payload.SchemaVersion)).ToArray();
         var mappedRequirements = requirements.Select((row, index) =>
             MapRequirement(row, payloadRequirements[index], persisted.PageCount))
             .ToArray();
@@ -146,7 +160,9 @@ internal static class StructuredExtractionPayloadReader
                 persisted.ItemsRequiringReview,
                 persisted.KnownQuoteableUnitCount,
                 issues.Count,
-                conflicts.Count),
+                conflicts.Count,
+                persisted.IdentifiedGlassItemCount,
+                persisted.GlassItemsRequiringReview),
             new StructuredProcessingMetadataReadModel(
                 persisted.ProcessingMethod,
                 persisted.DurationMs),
@@ -156,7 +172,9 @@ internal static class StructuredExtractionPayloadReader
     private static StructuredItemReadModel MapItem(
         PersistedItem row,
         ItemDto dto,
-        int pageCount)
+        int pageCount,
+        PersistedGlass? glass,
+        string schemaVersion)
     {
         var reasons = dto.ReviewReasons?.Select(MapIssueCode).ToArray()
             ?? throw Invalid();
@@ -179,7 +197,55 @@ internal static class StructuredExtractionPayloadReader
             row.RawMeasurements, row.WidthMillimeters, row.HeightMillimeters,
             row.Quantity, row.RequiresReview, reasons,
             ValidatePages(dto.SourcePages, pageCount),
-            MapEvidence(dto.Evidence, pageCount));
+            MapEvidence(dto.Evidence, pageCount),
+            schemaVersion == "2.0"
+                ? dto.Glass is null && glass is null
+                    ? null
+                    : throw Invalid()
+                : MapGlass(dto.Glass, glass, pageCount),
+            null);
+    }
+
+    private static StructuredItemGlassReadModel MapGlass(
+        GlassDto? dto,
+        PersistedGlass? persisted,
+        int pageCount)
+    {
+        if (dto is null || persisted is null)
+            throw Invalid();
+        var scope = dto.AssignmentScope switch
+        {
+            "ITEM" => GlassAssignmentScope.Item,
+            "SECTION" => GlassAssignmentScope.Section,
+            "GENERAL" => GlassAssignmentScope.General,
+            "UNASSIGNED" => GlassAssignmentScope.Unassigned,
+            _ => throw Invalid()
+        };
+        var reasons = dto.ReviewReasons?.Select(value => value switch
+        {
+            "GLASS_TYPE_NOT_IDENTIFIED" => GlassReviewReason.GlassTypeNotIdentified,
+            "GLASS_TYPE_AMBIGUOUS" => GlassReviewReason.GlassTypeAmbiguous,
+            "GLASS_TYPE_CONFLICT" => GlassReviewReason.GlassTypeConflict,
+            _ => throw Invalid()
+        }).ToArray() ?? throw Invalid();
+        var pages = ValidatePages(dto.SourcePages, pageCount);
+        var evidence = MapEvidence(dto.Evidence, pageCount);
+        if (dto.RawSpecification != persisted.RawSpecification
+            || dto.NormalizedCode != persisted.NormalizedCode
+            || scope != persisted.AssignmentScope
+            || dto.RequiresReview != persisted.RequiresReview
+            || !reasons.SequenceEqual(persisted.ReviewReasons)
+            || !pages.SequenceEqual(persisted.SourcePages)
+            || evidence.Length != persisted.Evidence.Length
+            || evidence.Where((value, index) =>
+                value.PageNumber != persisted.Evidence[index].PageNumber
+                || value.SourceType != persisted.Evidence[index].SourceType
+                || value.Text != persisted.Evidence[index].Text).Any())
+            throw Invalid();
+        return new(persisted.GlassTypeId, persisted.RawSpecification,
+            persisted.NormalizedCode, persisted.AssignmentScope,
+            persisted.RequiresReview, persisted.ReviewReasons,
+            persisted.SourcePages, evidence);
     }
 
     private static StructuredRequirementReadModel MapRequirement(
@@ -382,6 +448,9 @@ internal static class StructuredExtractionPayloadReader
             "MISSING_OR_INVALID_QUANTITY" => StructuredIssueCode.MissingOrInvalidQuantity,
             "UNKNOWN_ELEMENT_TYPE" => StructuredIssueCode.UnknownElementType,
             "OCR_REVIEW_REQUIRED" => StructuredIssueCode.OcrReviewRequired,
+            "GLASS_TYPE_NOT_IDENTIFIED" => StructuredIssueCode.GlassTypeNotIdentified,
+            "GLASS_TYPE_AMBIGUOUS" => StructuredIssueCode.GlassTypeAmbiguous,
+            "GLASS_TYPE_CONFLICT" => StructuredIssueCode.GlassTypeConflict,
             _ => throw Invalid()
         };
     private static StructuredConflictCode MapConflictCode(string? value) =>
@@ -428,6 +497,16 @@ internal static class StructuredExtractionPayloadReader
         public int[]? SourcePages { get; init; }
         public EvidenceDto[]? Evidence { get; init; }
     }
+    private sealed class GlassDto
+    {
+        public string? RawSpecification { get; init; }
+        public string? NormalizedCode { get; init; }
+        public string? AssignmentScope { get; init; }
+        public bool RequiresReview { get; init; }
+        public string[]? ReviewReasons { get; init; }
+        public int[]? SourcePages { get; init; }
+        public EvidenceDto[]? Evidence { get; init; }
+    }
     private sealed class RequirementsDto
     {
         public List<RequirementDto>? GlassSpecifications { get; init; }
@@ -455,6 +534,7 @@ internal static class StructuredExtractionPayloadReader
         public string[]? ReviewReasons { get; init; }
         public int[]? SourcePages { get; init; }
         public EvidenceDto[]? Evidence { get; init; }
+        public GlassDto? Glass { get; init; }
     }
     private sealed class ReferenceDto
     {
@@ -492,6 +572,8 @@ internal static class StructuredExtractionPayloadReader
         public int DocumentReferenceCount { get; init; }
         public int ItemsRequiringReview { get; init; }
         public int KnownQuoteableUnitCount { get; init; }
+        public int? IdentifiedGlassItemCount { get; init; }
+        public int? GlassItemsRequiringReview { get; init; }
     }
     private sealed class MetadataDto
     {

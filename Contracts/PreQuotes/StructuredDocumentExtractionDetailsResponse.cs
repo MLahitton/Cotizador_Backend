@@ -30,7 +30,40 @@ public sealed record StructuredItemResponse(
     bool RequiresReview,
     IReadOnlyList<string> ReviewReasons,
     IReadOnlyList<int> SourcePages,
-    IReadOnlyList<StructuredEvidenceResponse> Evidence);
+    IReadOnlyList<StructuredEvidenceResponse> Evidence,
+    StructuredExtractionItemGlassResponse? Glass,
+    StructuredExtractionItemGlassValuationResponse? Valuation = null);
+
+public sealed record StructuredExtractionItemGlassValuationResponse(
+    string Status,
+    string? Reason,
+    Guid? GlassTypeId,
+    Guid? GlassPriceRangeVersionId,
+    int? PriceRangeVersion,
+    string? PriceRangeStatus,
+    string? Currency,
+    decimal? UnitAreaSquareMeters,
+    decimal? TotalAreaSquareMeters,
+    decimal? MinimumPricePerSquareMeter,
+    decimal? MaximumPricePerSquareMeter,
+    decimal? MinimumAmount,
+    decimal? MaximumAmount,
+    DateTimeOffset CalculatedAtUtc);
+
+public sealed record StructuredExtractionItemGlassEvidenceResponse(
+    int PageNumber,
+    string SourceType,
+    string Text);
+
+public sealed record StructuredExtractionItemGlassResponse(
+    Guid? GlassTypeId,
+    string? RawSpecification,
+    string? NormalizedCode,
+    string AssignmentScope,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<int> SourcePages,
+    IReadOnlyList<StructuredExtractionItemGlassEvidenceResponse> Evidence);
 
 public sealed record StructuredDocumentReferenceResponse(
     int Sequence,
@@ -61,7 +94,17 @@ public sealed record StructuredSummaryResponse(
     int ItemsRequiringReview,
     int KnownQuoteableUnitCount,
     int IssueCount,
-    int ConflictCount);
+    int ConflictCount,
+    int? IdentifiedGlassItemCount,
+    int? GlassItemsRequiringReview,
+    int ValuedItemCount = 0,
+    int NotValuedItemCount = 0,
+    decimal TotalGlassAreaSquareMeters = 0,
+    decimal? MinimumGlassAmount = null,
+    decimal? MaximumGlassAmount = null,
+    string? Currency = null,
+    bool IsAggregable = true,
+    string? AggregationIssue = null);
 
 public sealed record StructuredProcessingMetadataResponse(
     string Method,

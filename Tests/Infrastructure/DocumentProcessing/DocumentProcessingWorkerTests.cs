@@ -1,5 +1,6 @@
 using Application.PreQuotes.ClaimDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
+using Application.PreQuotes.RecoverClaimedDocumentProcessingAttempt;
 using Infrastructure.DocumentProcessing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -98,22 +99,75 @@ public sealed class DocumentProcessingWorkerTests
     }
 
     [Fact]
-    public async Task ExecuteIterationAsync_WhenProcessingFails_PropagatesAndDisposesBothScopes()
+    public async Task ExecuteIterationAsync_WhenProcessingFails_RecoversAndRethrowsOriginal()
     {
         var attemptId = Guid.NewGuid();
         var context = new Context(attemptId);
+        var originalException =
+            new InvalidOperationException("processing failed");
         context.Processor.ProcessAsync(
                 attemptId,
                 Arg.Any<CancellationToken>())
             .Returns(Task.FromException<ProcessClaimedDocumentProcessingAttemptResult>(
-                new InvalidOperationException("processing failed")));
+                originalException));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             context.Worker.ExecuteIterationAsync(
                 TestContext.Current.CancellationToken));
 
+        Assert.Same(originalException, thrown);
+        await context.Recovery.Received(1).RecoverAsync(
+            attemptId,
+            CancellationToken.None);
         context.ClaimScope.Received(1).Dispose();
         context.ProcessingScope.Received(1).Dispose();
+        context.RecoveryScope.Received(1).Dispose();
+        var log = Assert.Single(
+            context.Logger.Entries,
+            entry => entry.Level == LogLevel.Error);
+        Assert.Same(originalException, log.Exception);
+        Assert.Contains(attemptId.ToString(), log.Message);
+        Assert.Contains("processing_pipeline", log.Message);
+        Assert.Contains(nameof(InvalidOperationException), log.Message);
+        Assert.DoesNotContain("payload", log.Message,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ExecuteIterationAsync_WhenRecoveryFails_LogsBothAndRethrowsOriginal()
+    {
+        var attemptId = Guid.NewGuid();
+        var context = new Context(attemptId);
+        var originalException =
+            new InvalidOperationException("processing failed");
+        var recoveryException =
+            new InvalidOperationException("terminal save failed");
+        context.Processor.ProcessAsync(
+                attemptId,
+                Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<
+                ProcessClaimedDocumentProcessingAttemptResult>(
+                    originalException));
+        context.Recovery.RecoverAsync(
+                attemptId,
+                CancellationToken.None)
+            .Returns(Task.FromException<
+                RecoverClaimedDocumentProcessingAttemptResult>(
+                    recoveryException));
+
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            context.Worker.ExecuteIterationAsync(
+                TestContext.Current.CancellationToken));
+
+        Assert.Same(originalException, thrown);
+        Assert.Contains(context.Logger.Entries, entry =>
+            entry.Level == LogLevel.Error
+            && ReferenceEquals(entry.Exception, originalException)
+            && entry.Message.Contains("processing_pipeline"));
+        Assert.Contains(context.Logger.Entries, entry =>
+            entry.Level == LogLevel.Error
+            && ReferenceEquals(entry.Exception, recoveryException)
+            && entry.Message.Contains("terminal_recovery"));
     }
 
     [Fact]
@@ -163,19 +217,30 @@ public sealed class DocumentProcessingWorkerTests
         {
             Claim = Substitute.For<IDocumentProcessingClaimService>();
             Processor = Substitute.For<IClaimedDocumentProcessingService>();
+            Recovery = Substitute.For<
+                IClaimedDocumentProcessingRecoveryService>();
             ClaimScope = Substitute.For<IServiceScope>();
             ProcessingScope = Substitute.For<IServiceScope>();
+            RecoveryScope = Substitute.For<IServiceScope>();
             var claimProvider = Substitute.For<IServiceProvider>();
             var processingProvider = Substitute.For<IServiceProvider>();
+            var recoveryProvider = Substitute.For<IServiceProvider>();
             ClaimScope.ServiceProvider.Returns(claimProvider);
             ProcessingScope.ServiceProvider.Returns(processingProvider);
+            RecoveryScope.ServiceProvider.Returns(recoveryProvider);
             claimProvider.GetService(typeof(IDocumentProcessingClaimService))
                 .Returns(Claim);
             processingProvider.GetService(
                     typeof(IClaimedDocumentProcessingService))
                 .Returns(Processor);
+            recoveryProvider.GetService(
+                    typeof(IClaimedDocumentProcessingRecoveryService))
+                .Returns(Recovery);
             var factory = Substitute.For<IServiceScopeFactory>();
-            factory.CreateScope().Returns(ClaimScope, ProcessingScope);
+            factory.CreateScope().Returns(
+                ClaimScope,
+                ProcessingScope,
+                RecoveryScope);
             Claim.ClaimNextAsync(Arg.Any<CancellationToken>())
                 .Returns(attemptId);
             Processor.ProcessAsync(
@@ -183,18 +248,52 @@ public sealed class DocumentProcessingWorkerTests
                     Arg.Any<CancellationToken>())
                 .Returns(
                     ProcessClaimedDocumentProcessingAttemptResult.Completed);
+            Recovery.RecoverAsync(
+                    Arg.Any<Guid>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(
+                    RecoverClaimedDocumentProcessingAttemptResult.Recovered);
+            Logger = new RecordingLogger<DocumentProcessingWorker>();
             Worker = new DocumentProcessingWorker(
                 factory,
                 new DocumentProcessingWorkerOptions(
                     true,
                     TimeSpan.FromMilliseconds(1)),
-                Substitute.For<ILogger<DocumentProcessingWorker>>());
+                Logger);
         }
 
         public IDocumentProcessingClaimService Claim { get; }
         public IClaimedDocumentProcessingService Processor { get; }
+        public IClaimedDocumentProcessingRecoveryService Recovery { get; }
         public IServiceScope ClaimScope { get; }
         public IServiceScope ProcessingScope { get; }
+        public IServiceScope RecoveryScope { get; }
+        public RecordingLogger<DocumentProcessingWorker> Logger { get; }
         public DocumentProcessingWorker Worker { get; }
+    }
+
+    private sealed record LogEntry(
+        LogLevel Level,
+        string Message,
+        Exception? Exception);
+
+    private sealed class RecordingLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add(new(logLevel, formatter(state, exception), exception));
+        }
     }
 }

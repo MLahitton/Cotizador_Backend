@@ -72,7 +72,37 @@ internal static class PreQuoteDocumentResponseMapper
                 Map(item.ElementType), item.RawMeasurements,
                 item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
                 item.RequiresReview, item.ReviewReasons.Select(Map).ToArray(),
-                item.SourcePages, item.Evidence.Select(Map).ToArray())).ToArray(),
+                item.SourcePages, item.Evidence.Select(Map).ToArray(),
+                item.Glass is null ? null : new StructuredExtractionItemGlassResponse(
+                    item.Glass.GlassTypeId,
+                    item.Glass.RawSpecification,
+                    item.Glass.NormalizedCode,
+                    Map(item.Glass.AssignmentScope),
+                    item.Glass.RequiresReview,
+                    item.Glass.ReviewReasons.Select(Map).ToArray(),
+                    item.Glass.SourcePages,
+                    item.Glass.Evidence.Select(value =>
+                        new StructuredExtractionItemGlassEvidenceResponse(
+                            value.PageNumber,
+                            value.SourceType == EvidenceSourceType.Native
+                                ? "NATIVE" : "OCR",
+                            value.Text)).ToArray()),
+                item.Valuation is null ? null
+                    : new StructuredExtractionItemGlassValuationResponse(
+                        Map(item.Valuation.Status),
+                        item.Valuation.Reason is { } reason ? Map(reason) : null,
+                        item.Valuation.GlassTypeId,
+                        item.Valuation.GlassPriceRangeVersionId,
+                        item.Valuation.PriceRangeVersion,
+                        item.Valuation.PriceRangeStatus?.ToString().ToUpperInvariant(),
+                        item.Valuation.Currency,
+                        item.Valuation.UnitAreaSquareMeters,
+                        item.Valuation.TotalAreaSquareMeters,
+                        item.Valuation.MinimumPricePerSquareMeter,
+                        item.Valuation.MaximumPricePerSquareMeter,
+                        item.Valuation.MinimumAmount,
+                        item.Valuation.MaximumAmount,
+                        item.Valuation.CalculatedAtUtc))).ToArray(),
             value.DocumentReferences.Select(item =>
                 new StructuredDocumentReferenceResponse(
                     item.Sequence, item.Reference, item.Description,
@@ -90,11 +120,39 @@ internal static class PreQuoteDocumentResponseMapper
                 value.Summary.ItemsRequiringReview,
                 value.Summary.KnownQuoteableUnitCount,
                 value.Summary.IssueCount,
-                value.Summary.ConflictCount),
+                value.Summary.ConflictCount,
+                value.Summary.IdentifiedGlassItemCount,
+                value.Summary.GlassItemsRequiringReview,
+                value.Summary.ValuedItemCount,
+                value.Summary.NotValuedItemCount,
+                value.Summary.TotalGlassAreaSquareMeters,
+                value.Summary.MinimumGlassAmount,
+                value.Summary.MaximumGlassAmount,
+                value.Summary.Currency,
+                value.Summary.IsAggregable,
+                value.Summary.AggregationIssue),
             new StructuredProcessingMetadataResponse(
                 value.ProcessingMetadata.Method,
                 value.ProcessingMetadata.DurationMs),
             value.CreatedAtUtc);
+
+    private static string Map(GlassValuationStatus value) => value switch
+    {
+        GlassValuationStatus.Valued => "VALUED",
+        GlassValuationStatus.NotValued => "NOT_VALUED",
+        _ => throw new ArgumentOutOfRangeException(nameof(value))
+    };
+
+    private static string Map(GlassValuationReason value) => value switch
+    {
+        GlassValuationReason.MissingMeasurements => "MISSING_MEASUREMENTS",
+        GlassValuationReason.MissingQuantity => "MISSING_QUANTITY",
+        GlassValuationReason.GlassNotNormalized => "GLASS_NOT_NORMALIZED",
+        GlassValuationReason.GlassTypeNotResolved => "GLASS_TYPE_NOT_RESOLVED",
+        GlassValuationReason.PriceRangeNotAvailable => "PRICE_RANGE_NOT_AVAILABLE",
+        GlassValuationReason.CurrencyMismatch => "CURRENCY_MISMATCH",
+        _ => throw new ArgumentOutOfRangeException(nameof(value))
+    };
 
     private static StructuredEvidenceResponse Map(
         StructuredEvidenceReadModel value) =>
@@ -145,6 +203,26 @@ internal static class PreQuoteDocumentResponseMapper
             "MISSING_OR_INVALID_QUANTITY",
         StructuredIssueCode.UnknownElementType => "UNKNOWN_ELEMENT_TYPE",
         StructuredIssueCode.OcrReviewRequired => "OCR_REVIEW_REQUIRED",
+        StructuredIssueCode.GlassTypeNotIdentified =>
+            "GLASS_TYPE_NOT_IDENTIFIED",
+        StructuredIssueCode.GlassTypeAmbiguous => "GLASS_TYPE_AMBIGUOUS",
+        StructuredIssueCode.GlassTypeConflict => "GLASS_TYPE_CONFLICT",
+        _ => throw new InvalidOperationException()
+    };
+    private static string Map(GlassAssignmentScope value) => value switch
+    {
+        GlassAssignmentScope.Item => "ITEM",
+        GlassAssignmentScope.Section => "SECTION",
+        GlassAssignmentScope.General => "GENERAL",
+        GlassAssignmentScope.Unassigned => "UNASSIGNED",
+        _ => throw new InvalidOperationException()
+    };
+    private static string Map(GlassReviewReason value) => value switch
+    {
+        GlassReviewReason.GlassTypeNotIdentified =>
+            "GLASS_TYPE_NOT_IDENTIFIED",
+        GlassReviewReason.GlassTypeAmbiguous => "GLASS_TYPE_AMBIGUOUS",
+        GlassReviewReason.GlassTypeConflict => "GLASS_TYPE_CONFLICT",
         _ => throw new InvalidOperationException()
     };
     private static string Map(StructuredConflictCode value) => value switch

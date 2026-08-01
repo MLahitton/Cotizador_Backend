@@ -13,6 +13,8 @@ public sealed class StructuredDocumentExtractionConfiguration :
         {
             t.HasCheckConstraint("ck_structured_extractions_counts", "\"item_count\" >= 0 AND \"document_reference_count\" >= 0 AND \"items_requiring_review\" >= 0 AND \"known_quoteable_unit_count\" >= 0");
             t.HasCheckConstraint("ck_structured_extractions_duration", "\"duration_ms\" >= 0");
+            t.HasCheckConstraint("ck_structured_extractions_glass_counts",
+                "(\"identified_glass_item_count\" IS NULL AND \"glass_items_requiring_review\" IS NULL) OR (\"identified_glass_item_count\" >= 0 AND \"glass_items_requiring_review\" >= 0)");
         });
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
@@ -25,6 +27,8 @@ public sealed class StructuredDocumentExtractionConfiguration :
         b.Property(x => x.DocumentReferenceCount).HasColumnName("document_reference_count");
         b.Property(x => x.ItemsRequiringReview).HasColumnName("items_requiring_review");
         b.Property(x => x.KnownQuoteableUnitCount).HasColumnName("known_quoteable_unit_count");
+        b.Property(x => x.IdentifiedGlassItemCount).HasColumnName("identified_glass_item_count");
+        b.Property(x => x.GlassItemsRequiringReview).HasColumnName("glass_items_requiring_review");
         b.Property(x => x.ProcessingMethod).HasColumnName("processing_method").HasColumnType("varchar(100)");
         b.Property(x => x.DurationMs).HasColumnName("duration_ms");
         b.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp with time zone");

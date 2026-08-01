@@ -10,11 +10,12 @@ namespace Infrastructure.DocumentProcessing;
 
 public sealed class CotizadorAiDocumentProcessingClient(
     HttpClient httpClient,
-    CotizadorAiOptions options)
+    CotizadorAiOptions options,
+    IDocumentProcessingDiagnostics? diagnostics = null)
     : IDocumentProcessingClient
 {
     private const string DocumentExtractionPath =
-        "api/v2/prequotes/document-extractions";
+        "api/v3/prequotes/document-extractions";
 
     private const string CorrelationHeaderName = "X-Correlation-ID";
     private const long MaximumPdfSizeBytes = 20_971_520;
@@ -66,18 +67,42 @@ public sealed class CotizadorAiDocumentProcessingClient(
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.Timeout);
         }
+        catch (ContractValidationException exception)
+        {
+            diagnostics?.ContractRejected(
+                request.DocumentId,
+                request.ProcessingAttemptId,
+                request.CorrelationId,
+                exception.HttpStatusCode,
+                exception.Stage,
+                exception.Category);
+            return DocumentProcessingClientResult.Failed(
+                DocumentProcessingClientFailure.InvalidResponse);
+        }
         catch (InvalidDataException)
         {
+            diagnostics?.ContractRejected(
+                request.DocumentId, request.ProcessingAttemptId,
+                request.CorrelationId, null,
+                "response_contract", "invalid_data");
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
         catch (JsonException)
         {
+            diagnostics?.ContractRejected(
+                request.DocumentId, request.ProcessingAttemptId,
+                request.CorrelationId, null,
+                "root_shape", "invalid_json");
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
         catch (DecoderFallbackException)
         {
+            diagnostics?.ContractRejected(
+                request.DocumentId, request.ProcessingAttemptId,
+                request.CorrelationId, null,
+                "response_body", "invalid_utf8");
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
@@ -218,7 +243,16 @@ public sealed class CotizadorAiDocumentProcessingClient(
     {
         var statusCode = (int)response.StatusCode;
 
-        ValidateCorrelationHeader(response, request.CorrelationId);
+        try
+        {
+            ValidateCorrelationHeader(response, request.CorrelationId);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw Contract(
+                "correlation_header", "invalid_correlation",
+                statusCode, exception);
+        }
 
         if (statusCode is 502 or 503)
         {
@@ -234,16 +268,39 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         if (statusCode is not 200 and not 413 and not 415 and not 422 and not 500)
         {
+            diagnostics?.ContractRejected(
+                request.DocumentId, request.ProcessingAttemptId,
+                request.CorrelationId, statusCode,
+                "http_status", "unsupported_status");
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
 
-        ValidateContentType(response);
+        try
+        {
+            ValidateContentType(response);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw Contract(
+                "content_type", "invalid_content_type",
+                statusCode, exception);
+        }
 
-        var payloadJson = await ReadResponseBodyAsync(
-            response.Content,
-            options.MaximumResponseBytes,
-            cancellationToken);
+        string payloadJson;
+        try
+        {
+            payloadJson = await ReadResponseBodyAsync(
+                response.Content,
+                options.MaximumResponseBytes,
+                cancellationToken);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw Contract(
+                "response_body", "invalid_size",
+                statusCode, exception);
+        }
 
         if (statusCode == 200)
         {
@@ -372,17 +429,30 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 CommentHandling = JsonCommentHandling.Disallow
             });
 
-        ValidateSuccessJsonShape(jsonDocument.RootElement);
+        var payloadSchemaVersion =
+            jsonDocument.RootElement.TryGetProperty(
+                "schemaVersion", out var schemaElement)
+            && schemaElement.ValueKind == JsonValueKind.String
+                ? schemaElement.GetString()
+                : null;
+        try
+        {
+            ValidateSuccessJsonShape(
+                jsonDocument.RootElement,
+                payloadSchemaVersion);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw Contract(
+                "root_shape", "invalid_shape", 200, exception);
+        }
 
         var response = JsonSerializer.Deserialize<SuccessResponseDto>(
             payloadJson,
             SerializerOptions)
             ?? throw new InvalidDataException();
 
-        if (!string.Equals(
-                response.SchemaVersion,
-                "2.0",
-                StringComparison.Ordinal)
+        if (response.SchemaVersion is not ("2.0" or "3.0")
             || response.DocumentId == Guid.Empty
             || response.DocumentId != request.DocumentId
             || response.ProcessingAttemptId == Guid.Empty
@@ -512,7 +582,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
         var structuredExtraction = ValidateStructuredExtraction(
             response.StructuredExtraction,
             response.Document.PageCount,
-            response.Document.RequiresOcr);
+            response.Document.RequiresOcr,
+            response.SchemaVersion);
 
         return new DocumentProcessingResponseData(
             response.SchemaVersion!,
@@ -597,7 +668,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
     }
 
     private static void ValidateSuccessJsonShape(
-        JsonElement root)
+        JsonElement root,
+        string? schemaVersion)
     {
         ValidateExactObjectProperties(
             root,
@@ -659,7 +731,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
             "durationMs");
 
         ValidateStructuredJsonShape(
-            root.GetProperty("structuredExtraction"));
+            root.GetProperty("structuredExtraction"),
+            schemaVersion);
     }
 
     private static void ValidateExactObjectProperties(
@@ -692,7 +765,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
         }
     }
 
-    private static void ValidateStructuredJsonShape(JsonElement root)
+    private static void ValidateStructuredJsonShape(
+        JsonElement root,
+        string? schemaVersion)
     {
         ValidateExactObjectProperties(root, "status", "project",
             "requirements", "items", "documentReferences", "issues",
@@ -702,16 +777,42 @@ public sealed class CotizadorAiDocumentProcessingClient(
         ValidateExactObjectProperties(root.GetProperty("requirements"),
             "glassSpecifications", "profileSpecifications", "finishes",
             "accessoriesAndSealants", "generalNotes");
-        ValidateExactObjectProperties(root.GetProperty("summary"),
-            "itemCount", "documentReferenceCount", "itemsRequiringReview",
-            "knownQuoteableUnitCount");
+        if (schemaVersion == "2.0")
+            ValidateExactObjectProperties(root.GetProperty("summary"),
+                "itemCount", "documentReferenceCount", "itemsRequiringReview",
+                "knownQuoteableUnitCount");
+        else if (schemaVersion == "3.0")
+            ValidateExactObjectProperties(root.GetProperty("summary"),
+                "itemCount", "documentReferenceCount", "itemsRequiringReview",
+                "knownQuoteableUnitCount", "identifiedGlassItemCount",
+                "glassItemsRequiringReview");
+        else
+            throw Contract(
+                "structured_shape", "unsupported_schema", 200);
         ValidateExactObjectProperties(root.GetProperty("processingMetadata"),
             "method", "durationMs");
         foreach (var item in root.GetProperty("items").EnumerateArray())
-            ValidateExactObjectProperties(item, "sequence", "reference",
-                "description", "elementType", "rawMeasurements",
-                "widthMillimeters", "heightMillimeters", "quantity",
-                "requiresReview", "reviewReasons", "sourcePages", "evidence");
+        {
+            var properties = new List<string>
+            {
+                "sequence", "reference", "description", "elementType",
+                "rawMeasurements", "widthMillimeters", "heightMillimeters",
+                "quantity", "requiresReview", "reviewReasons",
+                "sourcePages", "evidence"
+            };
+            if (schemaVersion == "3.0") properties.Add("glass");
+            ValidateExactObjectProperties(item, [.. properties]);
+            if (schemaVersion == "3.0")
+            {
+                var glass = item.GetProperty("glass");
+                ValidateExactObjectProperties(glass, "rawSpecification",
+                    "normalizedCode", "assignmentScope", "requiresReview",
+                    "reviewReasons", "sourcePages", "evidence");
+                foreach (var evidence in glass.GetProperty("evidence").EnumerateArray())
+                    ValidateExactObjectProperties(evidence, "pageNumber",
+                        "sourceType", "text");
+            }
+        }
         foreach (var item in root.GetProperty("documentReferences").EnumerateArray())
             ValidateExactObjectProperties(item, "sequence", "reference",
                 "description", "detail", "quantity", "sourcePages", "evidence");
@@ -726,7 +827,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
     private static StructuredExtractionData ValidateStructuredExtraction(
         StructuredExtractionDto dto,
         int pageCount,
-        bool requiresOcr)
+        bool requiresOcr,
+        string schemaVersion)
     {
         var status = dto.Status switch
         {
@@ -738,9 +840,11 @@ public sealed class CotizadorAiDocumentProcessingClient(
             || dto.DocumentReferences is null || dto.Issues is null
             || dto.Conflicts is null || dto.Summary is null
             || dto.ProcessingMetadata is null
-            || dto.ProcessingMetadata.Method != "rule_based_v1"
+            || dto.ProcessingMetadata.Method
+                != GetExpectedStructuredExtractionMethod(schemaVersion)
             || dto.ProcessingMetadata.DurationMs < 0)
-            throw new InvalidDataException();
+            throw Contract(
+                "structured_metadata", "method_mismatch", 200);
 
         ValidateNumbers(dto.Project.SourcePages, pageCount);
         var requirements = new List<StructuredRequirementData>();
@@ -763,14 +867,19 @@ public sealed class CotizadorAiDocumentProcessingClient(
             if (x.Sequence != index + 1 || string.IsNullOrWhiteSpace(x.Description)
                 || (x.WidthMillimeters is null) != (x.HeightMillimeters is null)
                 || x.WidthMillimeters is <= 0 || x.HeightMillimeters is <= 0
-                || x.Quantity is <= 0 || x.ReviewReasons is null)
+                || x.Quantity is <= 0 || x.ReviewReasons is null
+                || schemaVersion == "3.0" && x.Glass is null
+                || schemaVersion == "2.0" && x.Glass is not null)
                 throw new InvalidDataException();
             ValidateNumbers(x.SourcePages, pageCount);
+            var glass = x.Glass is null
+                ? null
+                : MapGlass(x.Glass, pageCount);
             items.Add(new StructuredItemData(x.Sequence, x.Reference,
                 x.Description, MapElementType(x.ElementType), x.RawMeasurements,
                 x.WidthMillimeters, x.HeightMillimeters, x.Quantity,
                 x.RequiresReview, x.ReviewReasons.Select(MapIssueCode).ToArray(),
-                x.SourcePages!, MapEvidence(x.Evidence, pageCount)));
+                x.SourcePages!, MapEvidence(x.Evidence, pageCount), glass));
         }
 
         var references = new List<StructuredDocumentReferenceData>();
@@ -788,7 +897,8 @@ public sealed class CotizadorAiDocumentProcessingClient(
         var issues = dto.Issues.Select((x, index) =>
         {
             if (x is null || string.IsNullOrWhiteSpace(x.Message)
-                || x.ItemSequence is <= 0) throw new InvalidDataException();
+                || x.ItemSequence is <= 0
+                || x.ItemSequence > items.Count) throw new InvalidDataException();
             ValidateNumbers(x.PageNumbers, pageCount);
             return new StructuredIssueData(index + 1, MapIssueCode(x.Code),
                 x.Message, x.ItemSequence, x.PageNumbers!);
@@ -808,6 +918,15 @@ public sealed class CotizadorAiDocumentProcessingClient(
             || summary.DocumentReferenceCount != references.Count
             || summary.ItemsRequiringReview != items.Count(x => x.RequiresReview)
             || summary.KnownQuoteableUnitCount != items.Sum(x => x.Quantity ?? 0))
+            throw new InvalidDataException();
+        if (schemaVersion == "3.0"
+            && (summary.IdentifiedGlassItemCount
+                    != items.Count(x => x.Glass?.NormalizedCode is not null)
+                || summary.GlassItemsRequiringReview
+                    != items.Count(x => x.Glass?.RequiresReview == true))
+            || schemaVersion == "2.0"
+                && (summary.IdentifiedGlassItemCount is not null
+                    || summary.GlassItemsRequiringReview is not null))
             throw new InvalidDataException();
 
         var requiresReview = requiresOcr
@@ -837,7 +956,65 @@ public sealed class CotizadorAiDocumentProcessingClient(
             requirements, items, references, issues, conflicts,
             summary.ItemCount, summary.DocumentReferenceCount,
             summary.ItemsRequiringReview, summary.KnownQuoteableUnitCount,
-            dto.ProcessingMetadata.Method!, dto.ProcessingMetadata.DurationMs);
+            dto.ProcessingMetadata.Method!, dto.ProcessingMetadata.DurationMs,
+            summary.IdentifiedGlassItemCount,
+            summary.GlassItemsRequiringReview);
+    }
+
+    private static StructuredItemGlassData MapGlass(
+        GlassDto dto, int pageCount)
+    {
+        if (dto.RawSpecification is { } raw
+            && (string.IsNullOrWhiteSpace(raw) || raw.Length > 500
+                || raw != raw.Trim()))
+            throw Contract("glass_contract", "invalid_raw_specification", 200);
+        if (dto.NormalizedCode is not null
+            && dto.NormalizedCode is not ("LAM_4_4" or "LAM_4_4_GRAY"
+                or "LAM_5_5" or "LAM_5_5_GRAY"))
+            throw Contract("glass_contract", "unknown_code", 200);
+        var scope = dto.AssignmentScope switch
+        {
+            "ITEM" => GlassAssignmentScope.Item,
+            "SECTION" => GlassAssignmentScope.Section,
+            "GENERAL" => GlassAssignmentScope.General,
+            "UNASSIGNED" => GlassAssignmentScope.Unassigned,
+            _ => throw Contract("glass_contract", "unknown_scope", 200)
+        };
+        if (dto.ReviewReasons is null)
+            throw Contract("glass_contract", "missing_review_reasons", 200);
+        var reasons = dto.ReviewReasons.Select(value => value switch
+        {
+            "GLASS_TYPE_NOT_IDENTIFIED" =>
+                GlassReviewReason.GlassTypeNotIdentified,
+            "GLASS_TYPE_AMBIGUOUS" => GlassReviewReason.GlassTypeAmbiguous,
+            "GLASS_TYPE_CONFLICT" => GlassReviewReason.GlassTypeConflict,
+            _ => throw Contract("glass_contract", "unknown_review_reason", 200)
+        }).ToArray();
+        ValidateNumbers(dto.SourcePages, pageCount);
+        var evidence = MapEvidence(dto.Evidence, pageCount);
+        var evidencePages = evidence.Select(value => value.PageNumber)
+            .Distinct().Order().ToArray();
+        var unassigned = scope == GlassAssignmentScope.Unassigned;
+        var validUnassigned = unassigned
+            && dto.RawSpecification is null
+            && dto.NormalizedCode is null
+            && dto.RequiresReview
+            && reasons.SequenceEqual(
+                [GlassReviewReason.GlassTypeNotIdentified])
+            && dto.SourcePages!.Count == 0
+            && evidence.Length == 0;
+        var validAssigned = !unassigned
+            && dto.RawSpecification is not null
+            && evidence.Length > 0
+            && dto.SourcePages!.SequenceEqual(evidencePages)
+            && (dto.NormalizedCode is not null
+                || dto.RequiresReview && reasons.Length > 0);
+        if (reasons.Distinct().Count() != reasons.Length
+            || dto.RequiresReview != (reasons.Length > 0)
+            || !validUnassigned && !validAssigned)
+            throw Contract("glass_contract", "inconsistent_assignment", 200);
+        return new(dto.RawSpecification, dto.NormalizedCode, scope,
+            dto.RequiresReview, reasons, dto.SourcePages!, evidence);
     }
 
     private static void AddRequirements(List<StructuredRequirementData> target,
@@ -904,6 +1081,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
         "MISSING_OR_INVALID_QUANTITY" => StructuredIssueCode.MissingOrInvalidQuantity,
         "UNKNOWN_ELEMENT_TYPE" => StructuredIssueCode.UnknownElementType,
         "OCR_REVIEW_REQUIRED" => StructuredIssueCode.OcrReviewRequired,
+        "GLASS_TYPE_NOT_IDENTIFIED" => StructuredIssueCode.GlassTypeNotIdentified,
+        "GLASS_TYPE_AMBIGUOUS" => StructuredIssueCode.GlassTypeAmbiguous,
+        "GLASS_TYPE_CONFLICT" => StructuredIssueCode.GlassTypeConflict,
         _ => throw new InvalidDataException()
     };
     private static StructuredConflictCode MapConflictCode(string? value) => value switch
@@ -1176,11 +1356,42 @@ public sealed class CotizadorAiDocumentProcessingClient(
     private sealed class RequirementsDto { public List<RequirementDto?>? GlassSpecifications { get; init; } public List<RequirementDto?>? ProfileSpecifications { get; init; } public List<RequirementDto?>? Finishes { get; init; } public List<RequirementDto?>? AccessoriesAndSealants { get; init; } public List<RequirementDto?>? GeneralNotes { get; init; } }
     private sealed class EvidenceDto { public int PageNumber { get; init; } public string? SourceType { get; init; } public string? Text { get; init; } }
     private sealed class RequirementDto { public string? Value { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
-    private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } public GlassDto? Glass { get; init; } }
+    private sealed class GlassDto { public string? RawSpecification { get; init; } public string? NormalizedCode { get; init; } public string? AssignmentScope { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
     private sealed class DocumentReferenceDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? Detail { get; init; } public int? Quantity { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
     private sealed class IssueDto { public string? Code { get; init; } public string? Message { get; init; } public int? ItemSequence { get; init; } public List<int>? PageNumbers { get; init; } }
     private sealed class ConflictDto { public string? Code { get; init; } public string? Message { get; init; } public List<int>? ItemSequences { get; init; } public List<int>? PageNumbers { get; init; } }
-    private sealed class SummaryDto { public int ItemCount { get; init; } public int DocumentReferenceCount { get; init; } public int ItemsRequiringReview { get; init; } public int KnownQuoteableUnitCount { get; init; } }
+    private sealed class SummaryDto { public int ItemCount { get; init; } public int DocumentReferenceCount { get; init; } public int ItemsRequiringReview { get; init; } public int KnownQuoteableUnitCount { get; init; } public int? IdentifiedGlassItemCount { get; init; } public int? GlassItemsRequiringReview { get; init; } }
+
+    private static string GetExpectedStructuredExtractionMethod(
+        string schemaVersion) => schemaVersion switch
+    {
+        "2.0" => "rule_based_v1",
+        "3.0" => "rule_based_v2",
+        _ => throw Contract(
+            "structured_metadata", "unsupported_schema", 200)
+    };
+
+    private static ContractValidationException Contract(
+        string stage,
+        string category,
+        int? httpStatusCode,
+        Exception? innerException = null) =>
+        new(stage, category, httpStatusCode, innerException);
+
+    private sealed class ContractValidationException(
+        string stage,
+        string category,
+        int? httpStatusCode,
+        Exception? innerException = null)
+        : Exception(
+            $"Contract validation failed at {stage}: {category}.",
+            innerException)
+    {
+        public string Stage { get; } = stage;
+        public string Category { get; } = category;
+        public int? HttpStatusCode { get; } = httpStatusCode;
+    }
 
     private sealed class NonDisposingStream(Stream innerStream) : Stream
     {
