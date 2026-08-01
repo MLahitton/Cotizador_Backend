@@ -436,7 +436,7 @@ public sealed class ProjectsController(
 
         if (result.Value is ProblemDetails problemDetails)
         {
-            problemDetails.Extensions["code"] = code;
+            problemDetails.Extensions["errorCode"] = code;
 
             if (!problemDetails.Extensions.TryGetValue(
                     "traceId",

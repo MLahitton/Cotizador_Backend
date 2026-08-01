@@ -1,6 +1,7 @@
 using System.Text;
 using Api.Authentication;
 using Api.OpenApi;
+using Api.ErrorHandling;
 using Application.Common.Abstractions.Authentication;
 using Application;
 using Infrastructure;
@@ -17,6 +18,7 @@ var authenticationOptions =
         builder.Configuration);
 
 builder.Services.AddControllers();
+builder.Services.AddPreQuoteProblemDetailsContract();
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
@@ -55,6 +57,19 @@ builder.Services
                     authenticationOptions.Jwt.SigningKey)),
             ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
             ClockSkew = TimeSpan.FromMinutes(1)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                if (ApiProblemDetailsFactory.IsContractualRequest(
+                        context.HttpContext))
+                {
+                    context.HandleResponse();
+                    await ApiProblemDetailsFactory.WriteUnauthorizedAsync(
+                        context.HttpContext);
+                }
+            }
         };
     });
 
@@ -122,6 +137,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseContractualProblemDetails();
 
 app.MapControllers();
 

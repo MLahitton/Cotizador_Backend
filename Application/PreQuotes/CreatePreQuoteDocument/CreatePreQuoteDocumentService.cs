@@ -5,6 +5,7 @@ using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
 using Domain.PreQuotes;
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 
 namespace Application.PreQuotes.CreatePreQuoteDocument;
 
@@ -15,9 +16,10 @@ public sealed class CreatePreQuoteDocumentService(
     IPreQuoteRepository preQuoteRepository,
     IProjectRepository projectRepository,
     IClientRepository clientRepository,
-    IFileStorage fileStorage)
+    IFileStorage fileStorage,
+    ILogger<CreatePreQuoteDocumentService> logger)
 {
-    private const long MaximumFileSizeBytes = 20 * 1024 * 1024;
+    public const long MaximumFileSizeBytes = 20 * 1024 * 1024;
 
     public async Task<CreatePreQuoteDocumentResult> ExecuteAsync(
         CreatePreQuoteDocumentCommand command,
@@ -78,9 +80,20 @@ public sealed class CreatePreQuoteDocumentService(
                 CreatePreQuoteDocumentFailure.Unauthorized);
         }
 
-        var user = await identityRepository.FindUserByIdAsync(
-            userId,
-            cancellationToken);
+        Domain.Identity.User? user;
+        try
+        {
+            user = await identityRepository.FindUserByIdAsync(
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            LogFailure(exception, command, userId, "identity_query");
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.QueryError);
+        }
 
         if (user is null)
         {
@@ -102,8 +115,10 @@ public sealed class CreatePreQuoteDocumentService(
                 command.PreQuoteId,
                 cancellationToken);
         }
-        catch (PreQuoteQueryException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command, userId, "prequote_query");
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.QueryError);
         }
@@ -122,8 +137,10 @@ public sealed class CreatePreQuoteDocumentService(
                 preQuote.ProjectId,
                 cancellationToken);
         }
-        catch (ProjectQueryException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command, userId, "project_query");
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.QueryError);
         }
@@ -132,6 +149,12 @@ public sealed class CreatePreQuoteDocumentService(
         {
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.ProjectNotFound);
+        }
+
+        if (project.CreatedByUserId != userId)
+        {
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.PreQuoteNotFound);
         }
 
         if (!project.IsActive)
@@ -148,8 +171,10 @@ public sealed class CreatePreQuoteDocumentService(
                 project.ClientId,
                 cancellationToken);
         }
-        catch (ClientQueryException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command, userId, "client_query");
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.QueryError);
         }
@@ -202,6 +227,13 @@ public sealed class CreatePreQuoteDocumentService(
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.StorageError);
         }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            LogFailure(exception, command, userId, "storage");
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.StorageError);
+        }
 
         try
         {
@@ -210,15 +242,13 @@ public sealed class CreatePreQuoteDocumentService(
 
             await preQuoteRepository.SaveChangesAsync(cancellationToken);
         }
-        catch (PreQuotePersistenceException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
-            var failure = await CompensateAsync(storageKey);
-            return CreatePreQuoteDocumentResult.Failed(failure);
-        }
-        catch (ArgumentException)
-        {
-            var failure = await CompensateAsync(storageKey);
-            return CreatePreQuoteDocumentResult.Failed(failure);
+            LogFailure(exception, command, userId, "persistence");
+            await CompensateAsync(storageKey, command, userId);
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.PersistenceError);
         }
 
         return CreatePreQuoteDocumentResult.Success(
@@ -231,8 +261,10 @@ public sealed class CreatePreQuoteDocumentService(
                 document.CreatedAtUtc));
     }
 
-    private async Task<CreatePreQuoteDocumentFailure> CompensateAsync(
-        string storageKey)
+    private async Task CompensateAsync(
+        string storageKey,
+        CreatePreQuoteDocumentCommand command,
+        Guid userId)
     {
         try
         {
@@ -240,15 +272,27 @@ public sealed class CreatePreQuoteDocumentService(
                 storageKey,
                 CancellationToken.None);
 
-            return CreatePreQuoteDocumentFailure.PersistenceError;
         }
-        catch (InvalidStorageKeyException)
+        catch (Exception exception)
         {
-            return CreatePreQuoteDocumentFailure.CompensationError;
+            LogFailure(exception, command, userId, "compensation");
         }
-        catch (FileStorageDeleteException)
-        {
-            return CreatePreQuoteDocumentFailure.CompensationError;
-        }
+    }
+
+    private void LogFailure(
+        Exception exception,
+        CreatePreQuoteDocumentCommand command,
+        Guid userId,
+        string stage)
+    {
+        logger.LogError(
+            "Document upload failed. PreQuoteId={PreQuoteId} UserId={UserId} Stage={Stage} TraceId={TraceId} SizeBytes={SizeBytes} ContentType={ContentType} ExceptionType={ExceptionType}",
+            command.PreQuoteId,
+            userId,
+            stage,
+            System.Diagnostics.Activity.Current?.Id,
+            command.SizeBytes,
+            command.ContentType,
+            exception.GetType().Name);
     }
 }

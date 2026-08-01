@@ -105,8 +105,8 @@ public sealed class ProjectCreationProblemDetailsTests
         Assert.Equal(JsonValueKind.String, root.GetProperty("detail").ValueKind);
         Assert.False(string.IsNullOrWhiteSpace(
             root.GetProperty("detail").GetString()));
-        Assert.Equal(JsonValueKind.String, root.GetProperty("code").ValueKind);
-        Assert.Equal(expectedCode, root.GetProperty("code").GetString());
+        Assert.Equal(JsonValueKind.String, root.GetProperty("errorCode").ValueKind);
+        Assert.Equal(expectedCode, root.GetProperty("errorCode").GetString());
         Assert.Equal(
             JsonValueKind.String,
             root.GetProperty("traceId").ValueKind);
@@ -318,8 +318,8 @@ public sealed class ProjectCreationProblemDetailsTests
         Assert.Equal(JsonValueKind.String, root.GetProperty("detail").ValueKind);
         Assert.False(string.IsNullOrWhiteSpace(
             root.GetProperty("detail").GetString()));
-        Assert.Equal(JsonValueKind.String, root.GetProperty("code").ValueKind);
-        Assert.Equal(expectedCode, root.GetProperty("code").GetString());
+        Assert.Equal(JsonValueKind.String, root.GetProperty("errorCode").ValueKind);
+        Assert.Equal(expectedCode, root.GetProperty("errorCode").GetString());
         Assert.Equal(
             JsonValueKind.String,
             root.GetProperty("traceId").ValueKind);

@@ -5,5 +5,5 @@ public sealed record ApiProblemDetailsResponse(
     string? Title,
     int? Status,
     string? Detail,
-    string Code,
+    string ErrorCode,
     string TraceId);

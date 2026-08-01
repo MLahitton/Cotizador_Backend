@@ -4,6 +4,7 @@ using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Domain.PreQuotes;
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 
 namespace Application.PreQuotes.CreatePreQuote;
 
@@ -13,7 +14,8 @@ public sealed class CreatePreQuoteService(
     IIdentityRepository identityRepository,
     IProjectRepository projectRepository,
     IClientRepository clientRepository,
-    IPreQuoteRepository preQuoteRepository)
+    IPreQuoteRepository preQuoteRepository,
+    ILogger<CreatePreQuoteService> logger)
 {
     public async Task<CreatePreQuoteResult> ExecuteAsync(
         CreatePreQuoteCommand command,
@@ -36,9 +38,20 @@ public sealed class CreatePreQuoteService(
                 CreatePreQuoteFailure.Unauthorized);
         }
 
-        var user = await identityRepository.FindUserByIdAsync(
-            userId,
-            cancellationToken);
+        Domain.Identity.User? user;
+        try
+        {
+            user = await identityRepository.FindUserByIdAsync(
+                userId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            LogFailure(exception, command.ProjectId, userId, "identity_query");
+            return CreatePreQuoteResult.Failed(
+                CreatePreQuoteFailure.QueryError);
+        }
 
         if (user is null)
         {
@@ -60,13 +73,21 @@ public sealed class CreatePreQuoteService(
                 command.ProjectId,
                 cancellationToken);
         }
-        catch (ProjectQueryException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command.ProjectId, userId, "project_query");
             return CreatePreQuoteResult.Failed(
                 CreatePreQuoteFailure.QueryError);
         }
 
         if (project is null)
+        {
+            return CreatePreQuoteResult.Failed(
+                CreatePreQuoteFailure.ProjectNotFound);
+        }
+
+        if (project.CreatedByUserId != userId)
         {
             return CreatePreQuoteResult.Failed(
                 CreatePreQuoteFailure.ProjectNotFound);
@@ -86,8 +107,10 @@ public sealed class CreatePreQuoteService(
                 project.ClientId,
                 cancellationToken);
         }
-        catch (ClientQueryException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command.ProjectId, userId, "client_query");
             return CreatePreQuoteResult.Failed(
                 CreatePreQuoteFailure.QueryError);
         }
@@ -106,20 +129,18 @@ public sealed class CreatePreQuoteService(
 
         var now = DateTimeOffset.UtcNow;
 
-        var preQuote = PreQuote.Create(
-            project.Id,
-            user.Id,
-            now);
-
-        preQuoteRepository.Add(preQuote);
-
+        PreQuote preQuote;
         try
         {
+            preQuote = PreQuote.Create(project.Id, user.Id, now);
+            preQuoteRepository.Add(preQuote);
             await preQuoteRepository.SaveChangesAsync(
                 cancellationToken);
         }
-        catch (PreQuotePersistenceException)
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
         {
+            LogFailure(exception, command.ProjectId, userId, "persistence");
             return CreatePreQuoteResult.Failed(
                 CreatePreQuoteFailure.PersistenceError);
         }
@@ -130,5 +151,21 @@ public sealed class CreatePreQuoteService(
                 preQuote.ProjectId,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc));
+    }
+
+    private void LogFailure(
+        Exception exception,
+        Guid projectId,
+        Guid userId,
+        string stage)
+    {
+        logger.LogError(
+            exception,
+            "PreQuote creation failed. ProjectId={ProjectId} UserId={UserId} Stage={Stage} TraceId={TraceId} ExceptionType={ExceptionType}",
+            projectId,
+            userId,
+            stage,
+            System.Diagnostics.Activity.Current?.Id,
+            exception.GetType().Name);
     }
 }
