@@ -4,7 +4,6 @@ using Contracts.Common;
 using Contracts.Projects;
 using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
 
 namespace Api.ErrorHandling;
 
@@ -37,90 +36,9 @@ public static class ApiProblemDetailsFactory
         };
     }
 
-    public static bool IsCreatePreQuoteRequest(HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsPost(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                ["api", "v1", "projects", _, "prequotes"]);
-
-    public static bool IsProjectsRoute(HttpContext context) =>
-        context.Request.Path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries) is
-            ["api", "v1", "projects", ..];
-
-    public static bool IsUploadDocumentRequest(HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsPost(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                ["api", "v1", "prequotes", _, "documents"]);
-
-    public static bool IsCreateDocumentProcessingAttemptRequest(
-        HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsPost(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                [
-                    "api",
-                    "v1",
-                    "prequote-documents",
-                    _,
-                    "processing-attempts"
-                ]);
-
-    public static bool IsGetProjectPreQuotesRequest(HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                ["api", "v1", "projects", _, "prequotes"]);
-
-    public static bool IsGetPreQuoteByIdRequest(HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                ["api", "v1", "prequotes", _]);
-
-    public static bool IsGetPreQuoteDocumentsRequest(HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                ["api", "v1", "prequotes", _, "documents"]);
-
-    public static bool IsGetDocumentProcessingAttemptRequest(
-        HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                [
-                    "api",
-                    "v1",
-                    "prequote-documents",
-                    _,
-                    "processing-attempts",
-                    _
-                ]);
-
-    public static bool IsGetStructuredExtractionRequest(
-        HttpContext context) =>
-        context.TryGetContractualMetadata(out _)
-        || (HttpMethods.IsGet(context.Request.Method)
-            && context.Request.Path.Value?
-                .Split('/', StringSplitOptions.RemoveEmptyEntries) is
-                [
-                    "api",
-                    "v1",
-                    "prequote-documents",
-                    _,
-                    "structured-extraction"
-                ]);
-
     public static bool IsContractualRequest(HttpContext context) =>
-        IsProjectsRoute(context)
+        context.TryGetContractualMetadata(out _)
+        || IsProjectsRoute(context)
         || IsCreatePreQuoteRequest(context)
         || IsUploadDocumentRequest(context)
         || IsGetProjectPreQuotesRequest(context)
@@ -129,6 +47,48 @@ public static class ApiProblemDetailsFactory
         || IsGetDocumentProcessingAttemptRequest(context)
         || IsGetStructuredExtractionRequest(context)
         || IsCreateDocumentProcessingAttemptRequest(context);
+
+    public static bool IsCreatePreQuoteRequest(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && (GetSegments(context) is
+            ["api", "v1", "projects", .., "prequotes"]);
+
+    public static bool IsProjectsRoute(HttpContext context) =>
+        GetSegments(context) is ["api", "v1", "projects", ..];
+
+    public static bool IsUploadDocumentRequest(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && (GetSegments(context) is
+            ["api", "v1", "prequotes", _, "documents"]);
+
+    public static bool IsCreateDocumentProcessingAttemptRequest(
+        HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && (GetSegments(context) is
+            ["api", "v1", "prequote-documents", _, "processing-attempts"]);
+
+    public static bool IsGetProjectPreQuotesRequest(HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method)
+        && (GetSegments(context) is ["api", "v1", "projects", _, "prequotes"]);
+
+    public static bool IsGetPreQuoteByIdRequest(HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method)
+        && (GetSegments(context) is ["api", "v1", "prequotes", _]);
+
+    public static bool IsGetPreQuoteDocumentsRequest(HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method)
+        && (GetSegments(context) is ["api", "v1", "prequotes", _, "documents"]);
+
+    public static bool IsGetDocumentProcessingAttemptRequest(
+        HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method)
+        && (GetSegments(context) is
+            ["api", "v1", "prequote-documents", _, "processing-attempts", _]);
+
+    public static bool IsGetStructuredExtractionRequest(HttpContext context) =>
+        HttpMethods.IsGet(context.Request.Method)
+        && (GetSegments(context) is
+            ["api", "v1", "prequote-documents", _, "structured-extraction"]);
 
     public static string ResolveInvalidRequestErrorCode(
         HttpContext context,
@@ -253,7 +213,7 @@ public static class ApiProblemDetailsFactory
             resolvedErrorCode = metadata.ForbiddenErrorCode;
         }
 
-        resolvedErrorCode ??= ProjectErrorCodes.InactiveUser;
+        resolvedErrorCode ??= ApiErrorCodes.AuthForbidden;
 
         var result = Create(
             context,
@@ -263,6 +223,11 @@ public static class ApiProblemDetailsFactory
             "No tienes permisos para ejecutar esta accion.");
         await WriteProblemDetailsAsync(context, result, context.RequestAborted);
     }
+
+    private static string[]? GetSegments(HttpContext context) =>
+        context.Request.Path.Value?.Split(
+            '/',
+            StringSplitOptions.RemoveEmptyEntries);
 }
 
 public static class ApiProblemDetailsServiceCollectionExtensions
@@ -292,29 +257,29 @@ public static class ApiProblemDetailsServiceCollectionExtensions
 
 public static class ApiProblemDetailsApplicationBuilderExtensions
 {
-        public static IApplicationBuilder UseContractualProblemDetails(
-            this IApplicationBuilder application)
+    public static IApplicationBuilder UseContractualProblemDetails(
+        this IApplicationBuilder application)
+    {
+        return application.Use(async (context, next) =>
         {
-            return application.Use(async (context, next) =>
+            await next(context);
+
+            var hasMetadata = context.TryGetContractualMetadata(out var metadata);
+            var isContractual = hasMetadata
+                || ApiProblemDetailsFactory.IsContractualRequest(context);
+            var resolvedMetadata = hasMetadata
+                ? metadata
+                : ApiProblemDetailsFactory.ResolveFallbackContractualMetadata(context);
+
+            if (!isContractual || context.Response.HasStarted)
             {
-                await next(context);
+                return;
+            }
 
-                var hasMetadata = context.TryGetContractualMetadata(out var metadata);
-                var isContractual = hasMetadata
-                    || ApiProblemDetailsFactory.IsContractualRequest(context);
-                var resolvedMetadata = hasMetadata
-                    ? metadata
-                    : ApiProblemDetailsFactory.ResolveFallbackContractualMetadata(context);
-
-                if (!isContractual || context.Response.HasStarted)
-                {
-                    return;
-                }
-
-                var allowHeader = context.Response.Headers.TryGetValue(
-                    "Allow",
-                    out var allowValues)
-                    ? allowValues.ToString()
+            var allowHeader = context.Response.Headers.TryGetValue(
+                "Allow",
+                out var allowValues)
+                ? allowValues.ToString()
                 : null;
 
             async Task WriteAsync(ObjectResult result)
@@ -362,8 +327,8 @@ public static class ApiProblemDetailsApplicationBuilderExtensions
                         resolvedMetadata.MethodNotAllowedErrorCode)
                         ? ApiErrorCodes.ApiMethodNotAllowed
                         : resolvedMetadata.MethodNotAllowedErrorCode,
-                    "Método no permitido",
-                    "El método no es válido para este recurso.");
+                    "Metodo no permitido",
+                    "El metodo no es valido para este recurso.");
                 await WriteAsync(result);
             }
             else if (context.Response.StatusCode

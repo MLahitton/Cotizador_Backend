@@ -5,29 +5,13 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "http://localhost:5042",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "Authentication__Google__ClientId": "local-dev-google-client-id",
-        "Authentication__Jwt__Issuer": "https://issuer.local",
-        "Authentication__Jwt__Audience": "cotizador-audience",
-        "Authentication__Jwt__SigningKey": "local-dev-signing-key-at-least-32-bytes-01",
-        "Authentication__Jwt__AccessTokenMinutes": "120"
-      }
+      "applicationUrl": "http://localhost:5042"
     },
     "https": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": false,
-      "applicationUrl": "https://localhost:7016;http://localhost:5042",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "Authentication__Google__ClientId": "local-dev-google-client-id",
-        "Authentication__Jwt__Issuer": "https://issuer.local",
-        "Authentication__Jwt__Audience": "cotizador-audience",
-        "Authentication__Jwt__SigningKey": "local-dev-signing-key-at-least-32-bytes-01",
-        "Authentication__Jwt__AccessTokenMinutes": "120"
-      }
+      "applicationUrl": "https://localhost:7016;http://localhost:5042"
     }
   }
 }

@@ -146,7 +146,9 @@ public sealed class PreQuoteDocumentsController(
     {
         if (!Request.HasFormContentType)
         {
-            return InvalidMultipartRequest();
+            return InvalidMultipartRequest(
+                StatusCodes.Status415UnsupportedMediaType,
+                ApiErrorCodes.ApiUnsupportedMediaType);
         }
 
         IFormCollection form;
@@ -290,11 +292,13 @@ public sealed class PreQuoteDocumentsController(
         };
     }
 
-    private ObjectResult InvalidMultipartRequest()
+    private ObjectResult InvalidMultipartRequest(
+        int statusCode = StatusCodes.Status400BadRequest,
+        string errorCode = DocumentErrorCodes.InvalidRequest)
     {
         return DocumentProblem(
-            statusCode: StatusCodes.Status400BadRequest,
-            errorCode: DocumentErrorCodes.InvalidRequest,
+            statusCode: statusCode,
+            errorCode: errorCode,
             title: "Solicitud multipart invalida.",
             detail: "La solicitud debe contener unicamente un archivo en el campo 'file'.");
     }

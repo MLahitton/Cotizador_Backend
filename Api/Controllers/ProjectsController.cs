@@ -261,18 +261,22 @@ public sealed class ProjectsController(
         {
             GetProjectsFailure.InvalidRequest => ProjectProblem(
                 StatusCodes.Status400BadRequest,
+                ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
                 "Los parámetros de consulta de proyectos no son válidos."),
             GetProjectsFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
+                ProjectErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             GetProjectsFailure.InactiveUser => ProjectProblem(
                 StatusCodes.Status403Forbidden,
+                ProjectErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no tiene acceso para consultar proyectos."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.QueryError,
                 "Error al consultar proyectos",
                 "No fue posible consultar los proyectos.")
         };
@@ -286,26 +290,32 @@ public sealed class ProjectsController(
         {
             SetProjectActivationFailure.InvalidRequest => ProjectProblem(
                 StatusCodes.Status400BadRequest,
+                ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
-                "Los datos para cambiar el estado no son válidos."),
+                "Los datos para cambiar el estado no son validos."),
             SetProjectActivationFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
+                ProjectErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             SetProjectActivationFailure.InactiveUser => ProjectProblem(
                 StatusCodes.Status403Forbidden,
+                ProjectErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no puede cambiar el estado de proyectos."),
             SetProjectActivationFailure.NotFound => ProjectProblem(
                 StatusCodes.Status404NotFound,
+                ProjectErrorCodes.ProjectNotFound,
                 "Proyecto no encontrado",
                 "No existe un proyecto con el identificador indicado."),
             SetProjectActivationFailure.QueryError => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.QueryError,
                 "Error al consultar el proyecto",
                 "No fue posible consultar el proyecto."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.PersistenceError,
                 "Error al cambiar el estado",
                 "No fue posible guardar el nuevo estado del proyecto.")
         };
@@ -319,22 +329,27 @@ public sealed class ProjectsController(
         {
             GetProjectByIdFailure.InvalidRequest => ProjectProblem(
                 StatusCodes.Status400BadRequest,
+                ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
                 "El identificador del proyecto no es válido."),
             GetProjectByIdFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
+                ProjectErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             GetProjectByIdFailure.InactiveUser => ProjectProblem(
                 StatusCodes.Status403Forbidden,
+                ProjectErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no tiene acceso para consultar proyectos."),
             GetProjectByIdFailure.NotFound => ProjectProblem(
                 StatusCodes.Status404NotFound,
+                ProjectErrorCodes.ProjectNotFound,
                 "Proyecto no encontrado",
                 "No existe un proyecto con el identificador indicado."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
+                ProjectErrorCodes.QueryError,
                 "Error al consultar el proyecto",
                 "No fue posible consultar el proyecto.")
         };
@@ -349,7 +364,7 @@ public sealed class ProjectsController(
                 StatusCodes.Status400BadRequest,
                 ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
-                "Los datos enviados para actualizar el proyecto no son válidos."),
+                "Los datos enviados para actualizar el proyecto no son validos."),
             UpdateProjectFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
                 ProjectErrorCodes.Unauthorized,
@@ -392,7 +407,7 @@ public sealed class ProjectsController(
                 StatusCodes.Status400BadRequest,
                 ProjectErrorCodes.InvalidRequest,
                 "Solicitud inválida",
-                "Los datos enviados para crear el proyecto no son válidos."),
+                "Los datos enviados para crear el proyecto no son validos."),
             CreateProjectFailure.Unauthorized => ProjectProblem(
                 StatusCodes.Status401Unauthorized,
                 ProjectErrorCodes.Unauthorized,
@@ -417,7 +432,7 @@ public sealed class ProjectsController(
                 StatusCodes.Status409Conflict,
                 ProjectErrorCodes.DuplicateCode,
                 "Código de proyecto duplicado",
-                "Ya existe un proyecto con el código indicado."),
+                "Ya existe otro proyecto con el código indicado."),
             _ => ProjectProblem(
                 StatusCodes.Status500InternalServerError,
                 ProjectErrorCodes.PersistenceError,
@@ -428,38 +443,12 @@ public sealed class ProjectsController(
 
     private ObjectResult ProjectProblem(
         int statusCode,
-        string code,
+        string errorCode,
         string title,
-        string detail)
-    {
-        var result = ProjectProblem(statusCode, title, detail);
-
-        if (result.Value is ProblemDetails problemDetails)
-        {
-            problemDetails.Extensions["errorCode"] = code;
-
-            if (!problemDetails.Extensions.TryGetValue(
-                    "traceId",
-                    out var existingTraceId)
-                || existingTraceId is not string traceId
-                || string.IsNullOrWhiteSpace(traceId))
-            {
-                problemDetails.Extensions["traceId"] =
-                    HttpContext.TraceIdentifier;
-            }
-        }
-
-        return result;
-    }
-
-    private ObjectResult ProjectProblem(
-        int statusCode,
-        string title,
-        string detail)
-    {
-        return Problem(
-            statusCode: statusCode,
-            title: title,
-            detail: detail);
-    }
+        string detail) => ApiProblemDetailsFactory.Create(
+        HttpContext,
+        statusCode,
+        errorCode,
+        title,
+        detail);
 }

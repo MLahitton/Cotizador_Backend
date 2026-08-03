@@ -197,6 +197,37 @@ public sealed class BeErrAuditContractTests
             "application/problem+json");
     }
 
+    [Fact]
+    public async Task Get_WithAuthorizationPolicyDenied_ReturnsAuthForbidden()
+    {
+        await using var host = await ControlledHost.StartAsync(
+            withJwt: true,
+            withControllers: false,
+            enforcePayloadLimit: false);
+
+        var token = CreateJwtToken(
+            JwtSigningKey,
+            DateTimeOffset.UtcNow.AddMinutes(-1),
+            UserId);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/v1/be-err-audit/forbidden-policy");
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                token);
+        using var response = await host.Client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        await AssertProblemResponseAsync(
+            response,
+            HttpStatusCode.Forbidden,
+            ApiErrorCodes.AuthForbidden,
+            "application/problem+json");
+    }
+
     private static async Task AssertProblemResponseAsync(
         HttpResponseMessage response,
         HttpStatusCode expectedStatus,
@@ -299,6 +330,13 @@ public sealed class BeErrAuditContractTests
 
             if (withJwt)
             {
+                builder.Services.AddAuthorization(options =>
+                {
+                    options.AddPolicy(
+                        "forbidden-policy",
+                        policy => policy.RequireAssertion(_ => false));
+                });
+
                 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     .AddJwtBearer(options =>
                     {
@@ -332,6 +370,15 @@ public sealed class BeErrAuditContractTests
                                 {
                                     context.HandleResponse();
                                     await ApiProblemDetailsFactory.WriteUnauthorizedAsync(
+                                        context.HttpContext);
+                                }
+                            },
+                            OnForbidden = async context =>
+                            {
+                                if (ApiProblemDetailsFactory.IsContractualRequest(
+                                        context.HttpContext))
+                                {
+                                    await ApiProblemDetailsFactory.WriteForbiddenAsync(
                                         context.HttpContext);
                                 }
                             }
@@ -413,6 +460,20 @@ public sealed class BeErrAuditContractTests
                     UnauthorizedErrorCode = ApiErrorCodes.AuthUnauthorized,
                     MethodNotAllowedErrorCode = ApiErrorCodes.ApiMethodNotAllowed
                 }).RequireAuthorization();
+
+                application.MapGet("/api/v1/be-err-audit/forbidden-policy", () =>
+                    TypedResults.Ok(new
+                    {
+                        Value = "forbidden"
+                    }))
+                    .WithMetadata(new ContractualErrorsAttribute
+                    {
+                        InvalidRequestErrorCode = ApiErrorCodes.AuthUnauthorized,
+                        UnauthorizedErrorCode = ApiErrorCodes.AuthUnauthorized,
+                        ForbiddenErrorCode = ApiErrorCodes.AuthForbidden,
+                        MethodNotAllowedErrorCode = ApiErrorCodes.ApiMethodNotAllowed
+                    })
+                    .RequireAuthorization("forbidden-policy");
             }
 
             await application.StartAsync();
