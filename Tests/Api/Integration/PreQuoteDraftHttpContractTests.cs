@@ -5,6 +5,8 @@ using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Api.Controllers;
+using Api.ErrorHandling;
+using Contracts.Common;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.ApprovePreQuoteDraft;
@@ -20,6 +22,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 
@@ -81,7 +84,7 @@ public sealed class PreQuoteDraftHttpContractTests
             Microsoft.AspNetCore.Mvc.ProblemDetails>(
                 TestContext.Current.CancellationToken);
         Assert.NotNull(problem);
-        Assert.Equal("Solicitud inválida", problem.Title);
+        Assert.Equal("Solicitud invalida", problem.Title);
         Assert.NotEqual("Borrador incompleto", problem.Title);
         await host.Repository.DidNotReceive().SaveChangesAsync(
             Arg.Any<CancellationToken>());
@@ -115,6 +118,96 @@ public sealed class PreQuoteDraftHttpContractTests
         Assert.Equal(1, body.Summary.ResolvedIssueCount);
         await host.Repository.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/v1/prequotes/not-a-uuid/draft")]
+    [InlineData("GET", "/api/v1/prequotes/not-a-uuid/draft")]
+    [InlineData("PUT", "/api/v1/prequotes/not-a-uuid/draft")]
+    [InlineData("APPROVE", "/api/v1/prequotes/not-a-uuid/draft/approve")]
+    public async Task Endpoint_WithMalformedPreQuoteId_ReturnsBadRequestContract(
+        string method,
+        string path)
+    {
+        var draft = CreateSimpleDraft();
+        await using var host = await ControlledHost.StartAsync(draft);
+        using var response = method switch
+        {
+            "POST" => await host.Client.PostAsync(
+                path,
+                JsonContent(BuildCreateBody(draft)),
+                TestContext.Current.CancellationToken),
+            "GET" => await host.Client.GetAsync(
+                path,
+                TestContext.Current.CancellationToken),
+            "PUT" => await host.Client.PutAsync(
+                path,
+                JsonContent(BuildSimpleBody(
+                    draft,
+                    issueStatus: "RESOLVED",
+                    conflictStatus: "RESOLVED")),
+                TestContext.Current.CancellationToken),
+            "APPROVE" => await host.Client.PostAsync(
+                path,
+                new StringContent(
+                    JsonSerializer.Serialize(new { expectedVersion = 1 }),
+                    Encoding.UTF8,
+                    "application/json"),
+                TestContext.Current.CancellationToken),
+            _ => throw new InvalidOperationException()
+        };
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await AssertProblemAsync(
+            response,
+            400,
+            PreQuoteDraftErrorCodes.InvalidRequest);
+    }
+
+    [Fact]
+    public async Task Get_WhenUnexpectedFailureOccurs_ReturnsGlobalInternalServerError()
+    {
+        var draft = CreateSimpleDraft();
+        await using var host = await ControlledHost.StartAsync(
+            draft,
+            throwUnexpectedOnGet: true);
+
+        using var response = await host.Client.GetAsync(
+            $"/api/v1/prequotes/{PreQuoteId}/draft",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var contract = await response.Content.ReadFromJsonAsync<
+            ApiProblemDetailsResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(contract);
+        Assert.Equal(ApiErrorCodes.InternalServerError, contract.ErrorCode);
+        Assert.False(string.IsNullOrWhiteSpace(contract.Type));
+        Assert.False(string.IsNullOrWhiteSpace(contract.Title));
+        Assert.False(string.IsNullOrWhiteSpace(contract.Detail));
+        Assert.False(string.IsNullOrWhiteSpace(contract.TraceId));
+        Assert.StartsWith("application/problem+json",
+            response.Content.Headers.ContentType?.ToString());
+        var raw = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("exception", raw, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sql", raw, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("connection", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Get_WithKnownQueryFailure_ReturnsContractualQueryErrorCode()
+    {
+        var draft = CreateSimpleDraft();
+        await using var host = await ControlledHost.StartAsync(
+            draft,
+            throwQueryError: true);
+
+        using var response = await host.Client.GetAsync(
+            $"/api/v1/prequotes/{PreQuoteId}/draft",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        await AssertProblemAsync(response, 500, PreQuoteDraftErrorCodes.QueryError);
     }
 
     private static string BuildSimpleBody(
@@ -284,6 +377,32 @@ public sealed class PreQuoteDraftHttpContractTests
     private static StringContent JsonContent(string value) =>
         new(value, Encoding.UTF8, "application/json");
 
+    private static string BuildCreateBody(PreQuoteDraft draft) =>
+        JsonSerializer.Serialize(new
+        {
+            sourceDocumentId = draft.SourceDocumentId,
+            sourceStructuredExtractionId = draft.SourceStructuredExtractionId
+        });
+
+    private static async Task AssertProblemAsync(
+        HttpResponseMessage response,
+        int expectedStatus,
+        string errorCode)
+    {
+        Assert.Equal((HttpStatusCode)expectedStatus, response.StatusCode);
+        var contract = await response.Content.ReadFromJsonAsync<
+            ApiProblemDetailsResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(contract);
+        Assert.Equal(errorCode, contract.ErrorCode);
+        Assert.False(string.IsNullOrWhiteSpace(contract.Type));
+        Assert.False(string.IsNullOrWhiteSpace(contract.Title));
+        Assert.Equal(expectedStatus, contract.Status);
+        Assert.False(string.IsNullOrWhiteSpace(contract.Detail));
+        Assert.False(string.IsNullOrWhiteSpace(contract.TraceId));
+        Assert.StartsWith("application/problem+json",
+            response.Content.Headers.ContentType?.ToString());
+    }
+
     private static PreQuoteDraft CreateSimpleDraft() => PreQuoteDraft.Create(
         PreQuoteId,
         Guid.NewGuid(),
@@ -372,7 +491,9 @@ public sealed class PreQuoteDraftHttpContractTests
         public IPreQuoteDraftRepository Repository { get; }
 
         public static async Task<ControlledHost> StartAsync(
-            PreQuoteDraft draft)
+            PreQuoteDraft draft,
+            bool throwUnexpectedOnGet = false,
+            bool throwQueryError = false)
         {
             var builder = WebApplication.CreateBuilder(
                 new WebApplicationOptions
@@ -397,13 +518,26 @@ public sealed class PreQuoteDraftHttpContractTests
                     PreQuoteId,
                     Arg.Any<CancellationToken>())
                 .Returns(draft);
+            repository.FindReadAsync(
+                    PreQuoteId,
+                    Arg.Any<CancellationToken>())
+                .Returns(throwQueryError
+                    ? Task.FromException<PreQuoteDraft?>(
+                        new PreQuoteDraftQueryException(
+                            new InvalidOperationException("database")))
+                    : throwUnexpectedOnGet
+                        ? Task.FromException<PreQuoteDraft?>(
+                            new InvalidOperationException("unexpected"))
+                        : Task.FromResult<PreQuoteDraft?>(draft));
             repository.SaveChangesAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.CompletedTask);
 
             builder.Services
                 .AddControllers()
                 .AddApplicationPart(typeof(PreQuoteDraftsController).Assembly);
+            builder.Services.AddPreQuoteProblemDetailsContract();
             builder.Services.AddAuthorization();
+            builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
             builder.Services.AddSingleton(currentUser);
             builder.Services.AddSingleton(identity);
             builder.Services.AddSingleton(repository);
@@ -425,9 +559,13 @@ public sealed class PreQuoteDraftHttpContractTests
             builder.Services.AddScoped<GetPreQuoteDraftService>();
             builder.Services.AddScoped<UpdatePreQuoteDraftService>();
             builder.Services.AddScoped<ApprovePreQuoteDraftService>();
+            builder.Services.AddProblemDetails();
+            builder.Logging.ClearProviders();
+            builder.Logging.SetMinimumLevel(LogLevel.Critical);
 
             var application = builder.Build();
             application.UseRouting();
+            application.UseExceptionHandler();
             application.Use(async (context, next) =>
             {
                 context.User = new ClaimsPrincipal(
@@ -439,6 +577,7 @@ public sealed class PreQuoteDraftHttpContractTests
                 await next(context);
             });
             application.UseAuthorization();
+            application.UseContractualProblemDetails();
             application.MapControllers();
             var started = false;
             HttpClient? client = null;

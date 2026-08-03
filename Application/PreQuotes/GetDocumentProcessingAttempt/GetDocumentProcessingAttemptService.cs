@@ -42,6 +42,26 @@ public sealed class GetDocumentProcessingAttemptService(
                 GetDocumentProcessingAttemptFailure.InactiveUser);
         }
 
+        DocumentProcessingSource? source;
+
+        try
+        {
+            source = await repository.FindDocumentSourceAsync(
+                documentId,
+                cancellationToken);
+        }
+        catch (DocumentProcessingQueryException)
+        {
+            return GetDocumentProcessingAttemptResult.Failed(
+                GetDocumentProcessingAttemptFailure.QueryError);
+        }
+
+        if (source is null || source.ProjectCreatedByUserId != userId)
+        {
+            return GetDocumentProcessingAttemptResult.Failed(
+                GetDocumentProcessingAttemptFailure.DocumentNotFound);
+        }
+
         DocumentProcessingAttemptStatusSnapshot? snapshot;
 
         try
@@ -61,7 +81,7 @@ public sealed class GetDocumentProcessingAttemptService(
         if (snapshot is null)
         {
             return GetDocumentProcessingAttemptResult.Failed(
-                GetDocumentProcessingAttemptFailure.NotFound);
+                GetDocumentProcessingAttemptFailure.AttemptNotFound);
         }
 
         return GetDocumentProcessingAttemptResult.Success(

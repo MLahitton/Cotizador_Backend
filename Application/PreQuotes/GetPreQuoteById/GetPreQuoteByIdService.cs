@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.PreQuotes;
 using FluentValidation;
 
@@ -8,6 +9,7 @@ public sealed class GetPreQuoteByIdService(
     IValidator<GetPreQuoteByIdQuery> validator,
     ICurrentUser currentUser,
     IIdentityRepository identityRepository,
+    IProjectRepository projectRepository,
     IPreQuoteRepository preQuoteRepository)
 {
     public async Task<GetPreQuoteByIdResult> ExecuteAsync(
@@ -65,6 +67,24 @@ public sealed class GetPreQuoteByIdService(
         {
             return GetPreQuoteByIdResult.Failed(
                 GetPreQuoteByIdFailure.NotFound);
+        }
+
+        try
+        {
+            var project = await projectRepository.FindByIdAsync(
+                preQuote.ProjectId,
+                cancellationToken);
+
+            if (project is null || project.CreatedByUserId != userId)
+            {
+                return GetPreQuoteByIdResult.Failed(
+                    GetPreQuoteByIdFailure.NotFound);
+            }
+        }
+        catch (ProjectQueryException)
+        {
+            return GetPreQuoteByIdResult.Failed(
+                GetPreQuoteByIdFailure.QueryError);
         }
 
         return GetPreQuoteByIdResult.Success(

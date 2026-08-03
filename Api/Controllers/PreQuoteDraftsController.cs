@@ -1,8 +1,10 @@
+﻿using Api.ErrorHandling;
 using Application.PreQuotes;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.CreatePreQuoteDraft;
 using Application.PreQuotes.GetPreQuoteDraft;
 using Application.PreQuotes.UpdatePreQuoteDraft;
+using Contracts.Common;
 using Contracts.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
@@ -12,7 +14,8 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/prequotes/{preQuoteId:guid}/draft")]
+[ContractualErrors(InvalidRequestErrorCode = PreQuoteDraftErrorCodes.InvalidRequest)]
+[Route("api/v1/prequotes/{preQuoteId}/draft")]
 public sealed class PreQuoteDraftsController(
     CreatePreQuoteDraftService createService,
     GetPreQuoteDraftService getService,
@@ -20,21 +23,48 @@ public sealed class PreQuoteDraftsController(
     ApprovePreQuoteDraftService approveService) : ControllerBase
 {
     [HttpPost]
+    [ProducesResponseType<PreQuoteDraftDetailsResponse>(
+        StatusCodes.Status201Created)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create(
-        Guid preQuoteId, CreatePreQuoteDraftRequest request,
+        [FromRoute] Guid preQuoteId, CreatePreQuoteDraftRequest request,
         CancellationToken cancellationToken)
     {
         var result = await createService.ExecuteAsync(
             new(preQuoteId, request.SourceDocumentId,
                 request.SourceStructuredExtractionId), cancellationToken);
         return result.IsSuccess
-            ? StatusCode(201, Map(result.Draft!))
+            ? StatusCode(StatusCodes.Status201Created, Map(result.Draft!))
             : Failure(result.Failure);
     }
 
     [HttpGet]
+    [ProducesResponseType<PreQuoteDraftDetailsResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get(
-        Guid preQuoteId, CancellationToken cancellationToken)
+        [FromRoute] Guid preQuoteId,
+        CancellationToken cancellationToken)
     {
         var result = await getService.ExecuteAsync(
             new(preQuoteId), cancellationToken);
@@ -42,8 +72,22 @@ public sealed class PreQuoteDraftsController(
     }
 
     [HttpPut]
+    [ProducesResponseType<PreQuoteDraftDetailsResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Update(
-        Guid preQuoteId, UpdatePreQuoteDraftRequest request,
+        [FromRoute] Guid preQuoteId, UpdatePreQuoteDraftRequest request,
         CancellationToken cancellationToken)
     {
         try
@@ -71,8 +115,22 @@ public sealed class PreQuoteDraftsController(
     }
 
     [HttpPost("approve")]
+    [ProducesResponseType<PreQuoteDraftDetailsResponse>(
+        StatusCodes.Status200OK)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Approve(
-        Guid preQuoteId, ApprovePreQuoteDraftRequest request,
+        [FromRoute] Guid preQuoteId, ApprovePreQuoteDraftRequest request,
         CancellationToken cancellationToken)
     {
         var result = await approveService.ExecuteAsync(
@@ -82,20 +140,93 @@ public sealed class PreQuoteDraftsController(
 
     private IActionResult Failure(PreQuoteDraftFailure failure) => failure switch
     {
-        PreQuoteDraftFailure.InvalidRequest => Problem(statusCode: 400, title: "Solicitud inválida", detail: "Los datos del borrador no son válidos."),
-        PreQuoteDraftFailure.Unauthorized => Problem(statusCode: 401, title: "No autorizado", detail: "No fue posible identificar al usuario autenticado."),
-        PreQuoteDraftFailure.InactiveUser => Problem(statusCode: 403, title: "Usuario inactivo", detail: "El usuario no tiene acceso a esta operación."),
-        PreQuoteDraftFailure.NotFound => Problem(statusCode: 404, title: "Borrador no encontrado", detail: "No fue posible encontrar la información solicitada."),
-        PreQuoteDraftFailure.VersionConflict => Problem(statusCode: 409, title: "Conflicto de concurrencia", detail: "El borrador fue modificado por otro usuario. Consulte nuevamente la versión actual antes de guardar."),
-        PreQuoteDraftFailure.InactiveProject => Problem(statusCode: 409, title: "Proyecto inactivo", detail: "El proyecto debe estar activo."),
-        PreQuoteDraftFailure.InactiveClient => Problem(statusCode: 409, title: "Cliente inactivo", detail: "El cliente debe estar activo."),
-        PreQuoteDraftFailure.DraftAlreadyExists => Problem(statusCode: 409, title: "Borrador existente", detail: "La precotización ya tiene un borrador."),
-        PreQuoteDraftFailure.DraftAlreadyApproved => Problem(statusCode: 409, title: "Borrador aprobado", detail: "El borrador aprobado no puede modificarse."),
-        PreQuoteDraftFailure.PendingIssues => Problem(statusCode: 409, title: "Issues pendientes", detail: "Todos los issues deben resolverse o descartarse."),
-        PreQuoteDraftFailure.PendingConflicts => Problem(statusCode: 409, title: "Conflictos pendientes", detail: "Todos los conflictos deben resolverse o descartarse."),
-        PreQuoteDraftFailure.InvalidDraftContent => Problem(statusCode: 409, title: "Borrador incompleto", detail: "El borrador no cumple las condiciones requeridas."),
-        _ => Problem(statusCode: 500, title: "Error del borrador", detail: "No fue posible completar la operación.")
+        PreQuoteDraftFailure.InvalidRequest => DraftProblem(
+            StatusCodes.Status400BadRequest,
+            PreQuoteDraftErrorCodes.InvalidRequest,
+            "Solicitud invalida",
+            "Los datos del borrador no son validos."),
+        PreQuoteDraftFailure.Unauthorized => DraftProblem(
+            StatusCodes.Status401Unauthorized,
+            PreQuoteErrorCodes.Unauthorized,
+            "No autorizado",
+            "No fue posible identificar al usuario autenticado."),
+        PreQuoteDraftFailure.InactiveUser => DraftProblem(
+            StatusCodes.Status403Forbidden,
+            PreQuoteErrorCodes.InactiveUser,
+            "Usuario inactivo",
+            "El usuario no tiene acceso a esta operacion."),
+        PreQuoteDraftFailure.NotFound => DraftProblem(
+            StatusCodes.Status404NotFound,
+            PreQuoteDraftErrorCodes.NotFound,
+            "Borrador no encontrado",
+            "No fue posible encontrar la informacion solicitada."),
+        PreQuoteDraftFailure.VersionConflict => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.VersionConflict,
+            "Conflicto de concurrencia",
+            "El borrador fue modificado por otro usuario. Consulte nuevamente la version actual antes de guardar."),
+        PreQuoteDraftFailure.InactiveProject => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.ProjectInactive,
+            "Proyecto inactivo",
+            "El proyecto debe estar activo."),
+        PreQuoteDraftFailure.InactiveClient => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.ClientInactive,
+            "Cliente inactivo",
+            "El cliente debe estar activo."),
+        PreQuoteDraftFailure.DraftAlreadyExists => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.AlreadyExists,
+            "Borrador existente",
+            "La precotizacion ya tiene un borrador."),
+        PreQuoteDraftFailure.DraftAlreadyApproved => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.AlreadyApproved,
+            "Borrador aprobado",
+            "El borrador aprobado no puede modificarse."),
+        PreQuoteDraftFailure.PendingIssues => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.PendingIssues,
+            "Issues pendientes",
+            "Todos los issues deben resolverse o descartarse."),
+        PreQuoteDraftFailure.PendingConflicts => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.PendingConflicts,
+            "Conflictos pendientes",
+            "Todos los conflictos deben resolverse o descartarse."),
+        PreQuoteDraftFailure.InvalidDraftContent => DraftProblem(
+            StatusCodes.Status409Conflict,
+            PreQuoteDraftErrorCodes.InvalidContent,
+            "Borrador incompleto",
+            "El borrador no cumple las condiciones requeridas."),
+        PreQuoteDraftFailure.QueryError => DraftProblem(
+            StatusCodes.Status500InternalServerError,
+            PreQuoteDraftErrorCodes.QueryError,
+            "Error al consultar borrador",
+            "No fue posible consultar el borrador."),
+        PreQuoteDraftFailure.PersistenceError => DraftProblem(
+            StatusCodes.Status500InternalServerError,
+            PreQuoteDraftErrorCodes.PersistenceError,
+            "Error al guardar borrador",
+            "No fue posible guardar el borrador."),
+        _ => DraftProblem(
+            StatusCodes.Status500InternalServerError,
+            ApiErrorCodes.InternalServerError,
+            "Error del borrador",
+            "No fue posible completar la operacion.")
     };
+
+    private ObjectResult DraftProblem(
+        int statusCode,
+        string errorCode,
+        string title,
+        string detail) => ApiProblemDetailsFactory.Create(
+            HttpContext,
+            statusCode,
+            errorCode,
+            title,
+            detail);
 
     private static PreQuoteDraftDetailsResponse Map(PreQuoteDraft d)
     {

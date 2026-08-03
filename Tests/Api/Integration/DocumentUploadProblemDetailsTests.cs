@@ -65,12 +65,13 @@ public sealed class DocumentUploadProblemDetailsTests
     }
 
     [Theory]
-    [InlineData("invalid_uuid")]
-    [InlineData("not_multipart")]
-    [InlineData("missing_file")]
-    [InlineData("wrong_field")]
+    [InlineData("invalid_uuid", 400)]
+    [InlineData("not_multipart", 415)]
+    [InlineData("missing_file", 400)]
+    [InlineData("wrong_field", 400)]
     public async Task Post_InvalidMultipart_ReturnsDocumentInvalidRequest(
-        string scenario)
+        string scenario,
+        int status)
     {
         await using var host = await ControlledHost.StartAsync("success");
         using var content = scenario == "not_multipart"
@@ -80,7 +81,10 @@ public sealed class DocumentUploadProblemDetailsTests
         using var response = await host.Client.PostAsync(
             $"/api/v1/prequotes/{id}/documents", content,
             TestContext.Current.CancellationToken);
-        await AssertProblemAsync(response, 400, DocumentErrorCodes.InvalidRequest);
+        var errorCode = scenario == "not_multipart"
+            ? ApiErrorCodes.ApiUnsupportedMediaType
+            : DocumentErrorCodes.InvalidRequest;
+        await AssertProblemAsync(response, status, errorCode);
     }
 
     [Fact]

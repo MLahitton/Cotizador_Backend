@@ -1,8 +1,11 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Projects;
 using Application.PreQuotes.GetPreQuoteDocuments;
 using Application.PreQuotes.GetStructuredDocumentExtraction;
+using Domain.Projects;
 using Domain.Identity;
+using Domain.PreQuotes;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
@@ -86,7 +89,9 @@ public sealed class PreQuoteDocumentQueryServicesTests
                     : []));
         ConfigureScenario(context, scenario);
         var service = new GetPreQuoteDocumentsService(
-            validator, context.CurrentUser, context.Identity, context.Repository);
+            validator, context.CurrentUser, context.Identity,
+            context.ProjectRepository, context.PreQuoteRepository,
+            context.Repository);
 
         var result = await service.ExecuteAsync(
             new GetPreQuoteDocumentsQuery(EntityId, 1, 20),
@@ -104,7 +109,9 @@ public sealed class PreQuoteDocumentQueryServicesTests
             .Returns(new PreQuoteDocumentsPageReadModel([], 0));
         var service = new GetPreQuoteDocumentsService(
             new GetPreQuoteDocumentsQueryValidator(),
-            context.CurrentUser, context.Identity, context.Repository);
+            context.CurrentUser, context.Identity,
+            context.ProjectRepository, context.PreQuoteRepository,
+            context.Repository);
 
         var result = await service.ExecuteAsync(
             new GetPreQuoteDocumentsQuery(EntityId, 1, 20),
@@ -176,15 +183,85 @@ public sealed class PreQuoteDocumentQueryServicesTests
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
         var repository = Substitute.For<IPreQuoteDocumentQueryRepository>();
+        var projectRepository = Substitute.For<IProjectRepository>();
+        var preQuoteRepository = Substitute.For<IPreQuoteRepository>();
+        var client = global::Domain.Clients.Client.Create(
+            global::Domain.Clients.ClientType.Person,
+            "Client",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            UserId,
+            CreatedAt);
+        var project = global::Domain.Projects.Project.Create(
+            client.Id,
+            "P-1",
+            "Project",
+            null,
+            null,
+            UserId,
+            CreatedAt);
+        var preQuote = new PreQuoteDetails(
+            EntityId,
+            project.Id,
+            0,
+            CreatedAt,
+            CreatedAt);
         currentUser.IsAuthenticated.Returns(true);
         currentUser.UserId.Returns(UserId);
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(CreateUser());
-        return new Context(currentUser, identity, repository);
+        preQuoteRepository.FindByIdAsync(
+                EntityId,
+                Arg.Any<CancellationToken>())
+            .Returns(preQuote);
+        projectRepository.FindByIdAsync(
+                project.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(project);
+        return new Context(
+            currentUser,
+            identity,
+            preQuoteRepository,
+            projectRepository,
+            repository);
     }
 
     private static void ConfigureScenario(Context context, string scenario)
     {
+        var user = CreateUser();
+        var client = global::Domain.Clients.Client.Create(
+            global::Domain.Clients.ClientType.Person,
+            "Client",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            UserId,
+            CreatedAt);
+        var project = global::Domain.Projects.Project.Create(
+            client.Id, "P-1", "Project", null, null, UserId, CreatedAt);
+        var preQuote = new PreQuoteDetails(
+            EntityId,
+            project.Id,
+            0,
+            CreatedAt,
+            CreatedAt);
+        context.PreQuoteRepository.FindByIdAsync(
+                EntityId,
+                Arg.Any<CancellationToken>())
+            .Returns(preQuote);
+        context.ProjectRepository.FindByIdAsync(
+                project.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(project);
         if (scenario == "unauthenticated")
         {
             context.CurrentUser.IsAuthenticated.Returns(false);
@@ -197,11 +274,11 @@ public sealed class PreQuoteDocumentQueryServicesTests
         }
         else if (scenario == "inactive")
         {
-            var user = CreateUser();
-            user.Deactivate(CreatedAt.AddMinutes(1));
+            var inactiveUser = CreateUser();
+            inactiveUser.Deactivate(CreatedAt.AddMinutes(1));
             context.Identity.FindUserByIdAsync(
                     UserId, Arg.Any<CancellationToken>())
-                .Returns(user);
+                .Returns(inactiveUser);
         }
         else if (scenario == "query_error")
         {
@@ -209,14 +286,21 @@ public sealed class PreQuoteDocumentQueryServicesTests
                     Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<int>(),
                     Arg.Any<CancellationToken>())
                 .Returns<Task<PreQuoteDocumentsPageReadModel?>>(
-                    _ => throw new PreQuoteDocumentQueryException(
+                _ => throw new PreQuoteDocumentQueryException(
                         new InvalidOperationException()));
             context.Repository.GetStructuredExtractionAsync(
                     Arg.Any<Guid>(), Arg.Any<Guid>(),
-                    Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>())
                 .Returns<Task<StructuredDocumentExtractionQueryReadModel?>>(
                     _ => throw new PreQuoteDocumentQueryException(
                         new InvalidOperationException()));
+        }
+        else if (scenario == "missing")
+        {
+            context.PreQuoteRepository.FindByIdAsync(
+                EntityId,
+                    Arg.Any<CancellationToken>())
+                .Returns((PreQuoteDetails?)null);
         }
     }
 
@@ -226,5 +310,7 @@ public sealed class PreQuoteDocumentQueryServicesTests
     private sealed record Context(
         ICurrentUser CurrentUser,
         IIdentityRepository Identity,
+        IPreQuoteRepository PreQuoteRepository,
+        IProjectRepository ProjectRepository,
         IPreQuoteDocumentQueryRepository Repository);
 }

@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.PreQuotes;
 using FluentValidation;
 
@@ -8,6 +9,8 @@ public sealed class GetPreQuoteDocumentsService(
     IValidator<GetPreQuoteDocumentsQuery> validator,
     ICurrentUser currentUser,
     IIdentityRepository identityRepository,
+    IProjectRepository projectRepository,
+    IPreQuoteRepository preQuoteRepository,
     IPreQuoteDocumentQueryRepository repository)
 {
     public async Task<GetPreQuoteDocumentsResult> ExecuteAsync(
@@ -45,6 +48,27 @@ public sealed class GetPreQuoteDocumentsService(
 
         try
         {
+            var preQuote = await preQuoteRepository.FindByIdAsync(
+                query.PreQuoteId,
+                cancellationToken);
+
+            if (preQuote is null)
+            {
+                return GetPreQuoteDocumentsResult.Failed(
+                    GetPreQuoteDocumentsFailure.NotFound);
+            }
+
+            var project = await projectRepository.FindByIdAsync(
+                preQuote.ProjectId,
+                cancellationToken);
+
+            if (project is null
+                || project.CreatedByUserId != userId)
+            {
+                return GetPreQuoteDocumentsResult.Failed(
+                    GetPreQuoteDocumentsFailure.NotFound);
+            }
+
             var documents = await repository.GetDocumentsAsync(
                 query.PreQuoteId,
                 query.Page,
@@ -53,10 +77,20 @@ public sealed class GetPreQuoteDocumentsService(
 
             return documents is null
                 ? GetPreQuoteDocumentsResult.Failed(
-                    GetPreQuoteDocumentsFailure.NotFound)
+                    GetPreQuoteDocumentsFailure.QueryError)
                 : GetPreQuoteDocumentsResult.Success(documents);
         }
         catch (PreQuoteDocumentQueryException)
+        {
+            return GetPreQuoteDocumentsResult.Failed(
+                GetPreQuoteDocumentsFailure.QueryError);
+        }
+        catch (ProjectQueryException)
+        {
+            return GetPreQuoteDocumentsResult.Failed(
+                GetPreQuoteDocumentsFailure.QueryError);
+        }
+        catch (PreQuoteQueryException)
         {
             return GetPreQuoteDocumentsResult.Failed(
                 GetPreQuoteDocumentsFailure.QueryError);

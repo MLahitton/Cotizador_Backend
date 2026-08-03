@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Api.Controllers;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
@@ -6,9 +6,11 @@ using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.CreatePreQuoteDraft;
 using Application.PreQuotes.GetPreQuoteDraft;
 using Application.PreQuotes.UpdatePreQuoteDraft;
+using Contracts.Common;
 using Contracts.PreQuotes;
 using Domain.Identity;
 using Domain.PreQuotes;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using Xunit;
@@ -150,7 +152,7 @@ public sealed class PreQuoteDraftsControllerTests
             var problem = AssertProblem(result, 409);
             Assert.Equal("Conflicto de concurrencia", problem.Title);
             Assert.Equal(
-                "El borrador fue modificado por otro usuario. Consulte nuevamente la versión actual antes de guardar.",
+                "El borrador fue modificado por otro usuario. Consulte nuevamente la version actual antes de guardar.",
                 problem.Detail);
         }
     }
@@ -281,7 +283,7 @@ public sealed class PreQuoteDraftsControllerTests
         var problem = AssertProblem(result, 500);
         var json = JsonSerializer.Serialize(problem);
 
-        Assert.Equal("Error del borrador", problem.Title);
+        Assert.Equal("Error al consultar borrador", problem.Title);
         Assert.DoesNotContain("exception", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sql", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("storageKey", json, StringComparison.OrdinalIgnoreCase);
@@ -327,6 +329,10 @@ public sealed class PreQuoteDraftsControllerTests
             new ApprovePreQuoteDraftService(
                 new ApprovePreQuoteDraftCommandValidator(),
                 current, identity, repository, clock));
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext()
+        };
         return new Context(current, identity, repository, controller);
     }
 
@@ -469,6 +475,66 @@ public sealed class PreQuoteDraftsControllerTests
         var objectResult = Assert.IsType<ObjectResult>(result);
         Assert.Equal(status, objectResult.StatusCode);
         return Assert.IsType<ProblemDetails>(objectResult.Value);
+    }
+
+    [Fact]
+    public void Methods_DeclaresStableProblemDetailsContract()
+    {
+        var create = typeof(PreQuoteDraftsController).GetMethod(
+            nameof(PreQuoteDraftsController.Create));
+        var get = typeof(PreQuoteDraftsController).GetMethod(
+            nameof(PreQuoteDraftsController.Get));
+        var update = typeof(PreQuoteDraftsController).GetMethod(
+            nameof(PreQuoteDraftsController.Update));
+        var approve = typeof(PreQuoteDraftsController).GetMethod(
+            nameof(PreQuoteDraftsController.Approve));
+
+        Assert.NotNull(create);
+        Assert.NotNull(get);
+        Assert.NotNull(update);
+        Assert.NotNull(approve);
+        Assert.Contains(create.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>(), response =>
+                response.StatusCode == StatusCodes.Status201Created
+                && response.Type == typeof(PreQuoteDraftDetailsResponse));
+        Assert.Contains(create.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>(), response =>
+                response.StatusCode == StatusCodes.Status400BadRequest
+                && response.Type == typeof(ApiProblemDetailsResponse));
+        foreach (var method in new[] { create, get, update, approve })
+        {
+            var responses = method!.GetCustomAttributes(
+                    typeof(ProducesResponseTypeAttribute),
+                    true)
+                .Cast<ProducesResponseTypeAttribute>()
+                .ToArray();
+            foreach (var expected in new[]
+                     {
+                         StatusCodes.Status400BadRequest,
+                         StatusCodes.Status401Unauthorized,
+                         StatusCodes.Status403Forbidden,
+                         StatusCodes.Status404NotFound,
+                         StatusCodes.Status500InternalServerError
+                     })
+            {
+                Assert.Contains(responses, response =>
+                    response.StatusCode == expected
+                    && response.Type == typeof(ApiProblemDetailsResponse));
+            }
+        }
+
+        var status404ForGet = get.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>()
+            .Any(response => response.StatusCode == StatusCodes.Status404NotFound);
+        Assert.True(status404ForGet);
+        var hasStatus409ForUpdate = update.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>()
+            .Any(response => response.StatusCode == StatusCodes.Status409Conflict);
+        var hasStatus409ForApprove = approve.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>()
+            .Any(response => response.StatusCode == StatusCodes.Status409Conflict);
+        Assert.True(hasStatus409ForUpdate);
+        Assert.True(hasStatus409ForApprove);
     }
 
     private sealed record Context(

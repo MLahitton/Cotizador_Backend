@@ -263,13 +263,26 @@ public sealed class DocumentProcessingAttemptsControllerTests
     }
 
     [Theory]
-    [InlineData("not_found", StatusCodes.Status404NotFound)]
-    [InlineData("unauthorized", StatusCodes.Status401Unauthorized)]
-    [InlineData("inactive", StatusCodes.Status403Forbidden)]
-    [InlineData("query", StatusCodes.Status500InternalServerError)]
+    [InlineData(
+        "unauthorized",
+        StatusCodes.Status401Unauthorized,
+        PreQuoteErrorCodes.Unauthorized)]
+    [InlineData(
+        "inactive",
+        StatusCodes.Status403Forbidden,
+        PreQuoteErrorCodes.InactiveUser)]
+    [InlineData(
+        "not_found",
+        StatusCodes.Status404NotFound,
+        DocumentProcessingAttemptErrorCodes.NotFound)]
+    [InlineData(
+        "query",
+        StatusCodes.Status500InternalServerError,
+        DocumentProcessingAttemptErrorCodes.QueryError)]
     public async Task GetById_WithFailure_ReturnsSafeProblem(
         string scenario,
-        int statusCode)
+        int statusCode,
+        string expectedErrorCode)
     {
         var context = new Context();
 
@@ -306,7 +319,16 @@ public sealed class DocumentProcessingAttemptsControllerTests
         var result = Assert.IsType<ObjectResult>(action);
         Assert.Equal(statusCode, result.StatusCode);
         var problem = Assert.IsType<ProblemDetails>(result.Value);
-        Assert.Empty(problem.Extensions);
+        Assert.True(problem.Extensions.ContainsKey("errorCode"));
+        var errorCode = Assert.IsType<string>(problem.Extensions["errorCode"]!);
+        Assert.False(string.IsNullOrWhiteSpace(errorCode));
+        Assert.Equal(expectedErrorCode, errorCode);
+        Assert.False(string.IsNullOrWhiteSpace(
+            problem.Extensions["traceId"]?.ToString()));
+        var serialized = System.Text.Json.JsonSerializer.Serialize(problem);
+        Assert.DoesNotContain("correlationId", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("stackTrace", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exception", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ConfigureCreateFailure(

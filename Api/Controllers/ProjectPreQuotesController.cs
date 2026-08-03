@@ -1,7 +1,7 @@
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.GetProjectPreQuotes;
-using Contracts.PreQuotes;
 using Contracts.Common;
+using Contracts.PreQuotes;
 using Api.ErrorHandling;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -10,6 +10,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ContractualErrors(InvalidRequestErrorCode = PreQuoteQueryErrorCodes.ListInvalidRequest)]
 [Route("api/v1/projects/{projectId}/prequotes")]
 public sealed class ProjectPreQuotesController(
     CreatePreQuoteService createPreQuoteService,
@@ -17,6 +18,7 @@ public sealed class ProjectPreQuotesController(
     : ControllerBase
 {
     [HttpPost]
+    [ContractualErrors(InvalidRequestErrorCode = PreQuoteErrorCodes.InvalidRequest)]
     [ProducesResponseType<CreatePreQuoteResponse>(
         StatusCodes.Status201Created)]
     [ProducesResponseType<ApiProblemDetailsResponse>(
@@ -59,15 +61,15 @@ public sealed class ProjectPreQuotesController(
     [HttpGet]
     [ProducesResponseType<GetProjectPreQuotesResponse>(
         StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<GetProjectPreQuotesResponse>> Get(
         [FromRoute] Guid projectId,
@@ -113,8 +115,8 @@ public sealed class ProjectPreQuotesController(
             CreatePreQuoteFailure.InvalidRequest => PreQuoteProblem(
                 StatusCodes.Status400BadRequest,
                 PreQuoteErrorCodes.InvalidRequest,
-                "Solicitud inválida",
-                "El identificador del proyecto no es válido."),
+                "Solicitud invalida",
+                "El identificador del proyecto no es valido."),
             CreatePreQuoteFailure.Unauthorized => PreQuoteProblem(
                 StatusCodes.Status401Unauthorized,
                 PreQuoteErrorCodes.Unauthorized,
@@ -134,7 +136,7 @@ public sealed class ProjectPreQuotesController(
                 StatusCodes.Status409Conflict,
                 PreQuoteErrorCodes.ProjectInactive,
                 "Proyecto inactivo",
-                "No se puede crear una precotización para un proyecto inactivo."),
+                "No se puede crear una precotizacion para un proyecto inactivo."),
             CreatePreQuoteFailure.ClientNotFound => PreQuoteProblem(
                 StatusCodes.Status404NotFound,
                 PreQuoteErrorCodes.ClientNotFound,
@@ -144,17 +146,17 @@ public sealed class ProjectPreQuotesController(
                 StatusCodes.Status409Conflict,
                 PreQuoteErrorCodes.ClientInactive,
                 "Cliente inactivo",
-                "No se puede crear una precotización para un proyecto cuyo cliente está inactivo."),
+                "No se puede crear una precotizacion para un proyecto cuyo cliente esta inactivo."),
             CreatePreQuoteFailure.QueryError => PreQuoteProblem(
                 StatusCodes.Status500InternalServerError,
                 PreQuoteErrorCodes.QueryError,
-                "Error al consultar el contexto de la precotización",
+                "Error al consultar el contexto de la precotizacion",
                 "No fue posible consultar el proyecto y su cliente."),
             _ => PreQuoteProblem(
                 StatusCodes.Status500InternalServerError,
                 PreQuoteErrorCodes.PersistenceError,
-                "Error al crear la precotización",
-                "No fue posible guardar la precotización.")
+                "Error al crear la precotizacion",
+                "No fue posible guardar la precotizacion.")
         };
     }
 
@@ -164,28 +166,29 @@ public sealed class ProjectPreQuotesController(
     {
         return failure switch
         {
-            GetProjectPreQuotesFailure.InvalidRequest =>
-                PreQuoteProblem(
-                    StatusCodes.Status400BadRequest,
-                    "Solicitud inválida",
-                    "Los parámetros de consulta de precotizaciones no son válidos."),
-            GetProjectPreQuotesFailure.Unauthorized =>
-                PreQuoteProblem(
-                    StatusCodes.Status401Unauthorized,
-                    "No autorizado",
-                    "No fue posible identificar al usuario autenticado."),
-            GetProjectPreQuotesFailure.InactiveUser =>
-                PreQuoteProblem(
-                    StatusCodes.Status403Forbidden,
-                    "Usuario inactivo",
-                    "El usuario no tiene acceso para consultar precotizaciones."),
-            GetProjectPreQuotesFailure.ProjectNotFound =>
-                PreQuoteProblem(
-                    StatusCodes.Status404NotFound,
-                    "Proyecto no encontrado",
-                    "No existe el proyecto indicado."),
+            GetProjectPreQuotesFailure.InvalidRequest => PreQuoteProblem(
+                StatusCodes.Status400BadRequest,
+                PreQuoteQueryErrorCodes.ListInvalidRequest,
+                "Solicitud invalida",
+                "Los parametros de consulta de precotizaciones no son validos."),
+            GetProjectPreQuotesFailure.Unauthorized => PreQuoteProblem(
+                StatusCodes.Status401Unauthorized,
+                PreQuoteErrorCodes.Unauthorized,
+                "No autorizado",
+                "No fue posible identificar al usuario autenticado."),
+            GetProjectPreQuotesFailure.InactiveUser => PreQuoteProblem(
+                StatusCodes.Status403Forbidden,
+                PreQuoteErrorCodes.InactiveUser,
+                "Usuario inactivo",
+                "El usuario no tiene acceso para consultar precotizaciones."),
+            GetProjectPreQuotesFailure.ProjectNotFound => PreQuoteProblem(
+                StatusCodes.Status404NotFound,
+                PreQuoteErrorCodes.ProjectNotFound,
+                "Proyecto no encontrado",
+                "No existe el proyecto indicado."),
             _ => PreQuoteProblem(
                 StatusCodes.Status500InternalServerError,
+                PreQuoteQueryErrorCodes.ListQueryError,
                 "Error al consultar precotizaciones",
                 "No fue posible consultar las precotizaciones del proyecto.")
         };
@@ -200,12 +203,4 @@ public sealed class ProjectPreQuotesController(
         return ApiProblemDetailsFactory.Create(
             HttpContext, statusCode, errorCode, title, detail);
     }
-
-    private ObjectResult PreQuoteProblem(
-        int statusCode,
-        string title,
-        string detail) => Problem(
-            statusCode: statusCode,
-            title: title,
-            detail: detail);
 }

@@ -62,7 +62,7 @@ public sealed class DocumentProcessingAttemptResultTests
     [InlineData(GetDocumentProcessingAttemptFailure.InvalidRequest)]
     [InlineData(GetDocumentProcessingAttemptFailure.Unauthorized)]
     [InlineData(GetDocumentProcessingAttemptFailure.InactiveUser)]
-    [InlineData(GetDocumentProcessingAttemptFailure.NotFound)]
+    [InlineData(GetDocumentProcessingAttemptFailure.AttemptNotFound)]
     [InlineData(GetDocumentProcessingAttemptFailure.QueryError)]
     public void GetFailed_PreservesTypedFailureWithoutAttempt(
         GetDocumentProcessingAttemptFailure failure)

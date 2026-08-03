@@ -8,8 +8,9 @@ public enum GetDocumentProcessingAttemptFailure
     InvalidRequest = 1,
     Unauthorized = 2,
     InactiveUser = 3,
-    NotFound = 4,
-    QueryError = 5
+    DocumentNotFound = 4,
+    AttemptNotFound = 5,
+    QueryError = 6
 }
 
 public sealed record GetDocumentProcessingAttemptResult(

@@ -69,6 +69,12 @@ public sealed class GetProjectPreQuotesService(
                 GetProjectPreQuotesFailure.ProjectNotFound);
         }
 
+        if (project.CreatedByUserId != userId)
+        {
+            return GetProjectPreQuotesResult.Failed(
+                GetProjectPreQuotesFailure.ProjectNotFound);
+        }
+
         PreQuoteSearchPage preQuotesPage;
 
         try

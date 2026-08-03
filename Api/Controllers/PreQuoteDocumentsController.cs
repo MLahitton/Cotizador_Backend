@@ -1,8 +1,8 @@
+using Api.ErrorHandling;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteDocuments;
-using Contracts.PreQuotes;
 using Contracts.Common;
-using Api.ErrorHandling;
+using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,6 +10,9 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ContractualErrors(
+    InvalidRequestErrorCode = DocumentErrorCodes.InvalidRequest,
+    UnsupportedMediaTypeErrorCode = DocumentErrorCodes.InvalidRequest)]
 [Route("api/v1/prequotes/{preQuoteId}/documents")]
 public sealed class PreQuoteDocumentsController(
     CreatePreQuoteDocumentService createPreQuoteDocumentService,
@@ -18,11 +21,15 @@ public sealed class PreQuoteDocumentsController(
     [HttpGet]
     [ProducesResponseType<GetPreQuoteDocumentsResponse>(
         StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get(
         [FromRoute] Guid preQuoteId,
@@ -39,21 +46,34 @@ public sealed class PreQuoteDocumentsController(
             return result.Failure switch
             {
                 GetPreQuoteDocumentsFailure.InvalidRequest =>
-                    Problem(statusCode: 400, title: "Solicitud inválida",
-                        detail: "Los parámetros de consulta no son válidos."),
+                    DocumentProblem(
+                        StatusCodes.Status400BadRequest,
+                        PreQuoteQueryErrorCodes.DocumentsInvalidRequest,
+                        "Solicitud invalida",
+                        "Los parametros de consulta no son validos."),
                 GetPreQuoteDocumentsFailure.Unauthorized =>
-                    Problem(statusCode: 401, title: "No autorizado",
-                        detail: "No fue posible identificar al usuario autenticado."),
+                    DocumentProblem(
+                        StatusCodes.Status401Unauthorized,
+                        PreQuoteErrorCodes.Unauthorized,
+                        "No autorizado",
+                        "No fue posible identificar al usuario autenticado."),
                 GetPreQuoteDocumentsFailure.InactiveUser =>
-                    Problem(statusCode: 403, title: "Usuario inactivo",
-                        detail: "El usuario no tiene acceso para consultar documentos."),
+                    DocumentProblem(
+                        StatusCodes.Status403Forbidden,
+                        PreQuoteErrorCodes.InactiveUser,
+                        "Usuario inactivo",
+                        "El usuario no tiene acceso para consultar documentos."),
                 GetPreQuoteDocumentsFailure.NotFound =>
-                    Problem(statusCode: 404,
-                        title: "Precotización no encontrada",
-                        detail: "No existe la precotización indicada."),
-                _ => Problem(statusCode: 500,
-                    title: "Error al consultar los documentos",
-                    detail: "No fue posible consultar los documentos de la precotización.")
+                    DocumentProblem(
+                        StatusCodes.Status404NotFound,
+                        PreQuoteQueryErrorCodes.NotFound,
+                        "Precotizacion no encontrada",
+                        "No existe la precotizacion indicada."),
+                _ => DocumentProblem(
+                    StatusCodes.Status500InternalServerError,
+                    PreQuoteQueryErrorCodes.DocumentsQueryError,
+                    "Error al consultar los documentos",
+                    "No fue posible consultar los documentos de la precotizacion."),
             };
         }
 
@@ -185,23 +205,23 @@ public sealed class PreQuoteDocumentsController(
             CreatePreQuoteDocumentFailure.InvalidRequest => DocumentProblem(
                 statusCode: StatusCodes.Status400BadRequest,
                 errorCode: DocumentErrorCodes.InvalidRequest,
-                title: "Solicitud inválida.",
-                detail: "Los datos enviados no son válidos."),
+                title: "Solicitud invalida",
+                detail: "Los datos enviados no son validos."),
             CreatePreQuoteDocumentFailure.InvalidFileName => DocumentProblem(
                 statusCode: StatusCodes.Status400BadRequest,
                 errorCode: DocumentErrorCodes.InvalidRequest,
-                title: "Nombre de archivo inválido.",
-                detail: "El archivo debe tener un nombre válido de hasta 255 caracteres."),
+                title: "Nombre de archivo invalido.",
+                detail: "El archivo debe tener un nombre valido de hasta 255 caracteres."),
             CreatePreQuoteDocumentFailure.UnsupportedFileType => DocumentProblem(
                 statusCode: StatusCodes.Status415UnsupportedMediaType,
                 errorCode: DocumentErrorCodes.UnsupportedFileType,
                 title: "Tipo de archivo no soportado.",
-                detail: "Únicamente se permiten documentos PDF."),
+                detail: "Unicamente se permiten documentos PDF."),
             CreatePreQuoteDocumentFailure.EmptyFile => DocumentProblem(
                 statusCode: StatusCodes.Status422UnprocessableEntity,
                 errorCode: DocumentErrorCodes.EmptyFile,
-                title: "Archivo vacío.",
-                detail: "El documento PDF debe contener información."),
+                title: "Archivo vacio.",
+                detail: "El documento PDF debe contener informacion."),
             CreatePreQuoteDocumentFailure.FileTooLarge => DocumentProblem(
                 statusCode: StatusCodes.Status413PayloadTooLarge,
                 errorCode: DocumentErrorCodes.FileTooLarge,
@@ -220,13 +240,13 @@ public sealed class PreQuoteDocumentsController(
             CreatePreQuoteDocumentFailure.PreQuoteNotFound => DocumentProblem(
                 statusCode: StatusCodes.Status404NotFound,
                 errorCode: DocumentErrorCodes.PreQuoteNotFound,
-                title: "Precotización no encontrada.",
-                detail: "La precotización indicada no existe."),
+                title: "Precotizacion no encontrada.",
+                detail: "La precotizacion indicada no existe."),
             CreatePreQuoteDocumentFailure.ProjectNotFound => DocumentProblem(
                 statusCode: StatusCodes.Status404NotFound,
                 errorCode: DocumentErrorCodes.PreQuoteNotFound,
                 title: "Proyecto no encontrado.",
-                detail: "El proyecto asociado a la precotización no existe."),
+                detail: "El proyecto asociado a la precotizacion no existe."),
             CreatePreQuoteDocumentFailure.InactiveProject => DocumentProblem(
                 statusCode: StatusCodes.Status409Conflict,
                 errorCode: DocumentErrorCodes.ProjectInactive,
@@ -246,7 +266,7 @@ public sealed class PreQuoteDocumentsController(
                 statusCode: StatusCodes.Status500InternalServerError,
                 errorCode: DocumentErrorCodes.PersistenceError,
                 title: "Error de consulta.",
-                detail: "No fue posible consultar la información requerida."),
+                detail: "No fue posible consultar la informacion requerida."),
             CreatePreQuoteDocumentFailure.StorageError => DocumentProblem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 errorCode: DocumentErrorCodes.StorageError,
@@ -260,8 +280,8 @@ public sealed class PreQuoteDocumentsController(
             CreatePreQuoteDocumentFailure.CompensationError => DocumentProblem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 errorCode: DocumentErrorCodes.PersistenceError,
-                title: "Error de compensación.",
-                detail: "No fue posible revertir el archivo después del error de persistencia."),
+                title: "Error de compensacion.",
+                detail: "No fue posible revertir el archivo despues del error de persistencia."),
             _ => DocumentProblem(
                 statusCode: StatusCodes.Status500InternalServerError,
                 errorCode: DocumentErrorCodes.PersistenceError,
@@ -275,8 +295,8 @@ public sealed class PreQuoteDocumentsController(
         return DocumentProblem(
             statusCode: StatusCodes.Status400BadRequest,
             errorCode: DocumentErrorCodes.InvalidRequest,
-            title: "Solicitud multipart inválida.",
-            detail: "La solicitud debe contener únicamente un archivo en el campo 'file'.");
+            title: "Solicitud multipart invalida.",
+            detail: "La solicitud debe contener unicamente un archivo en el campo 'file'.");
     }
 
     private ObjectResult DocumentProblem(

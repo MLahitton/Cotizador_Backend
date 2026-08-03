@@ -3,6 +3,7 @@ using Application.Projects.GetProjectById;
 using Application.Projects.GetProjects;
 using Application.Projects.SetProjectActivation;
 using Application.Projects.UpdateProject;
+using Api.ErrorHandling;
 using Contracts.Common;
 using Contracts.Projects;
 using Microsoft.AspNetCore.Authorization;
@@ -12,6 +13,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ContractualErrors(InvalidRequestErrorCode = ProjectErrorCodes.InvalidRequest)]
 [Route("api/v1/projects")]
 public sealed class ProjectsController(
     CreateProjectService createProjectService,
@@ -23,11 +25,10 @@ public sealed class ProjectsController(
 {
     [HttpGet]
     [ProducesResponseType<GetProjectsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(
-        StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<GetProjectsResponse>> Get(
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
@@ -134,13 +135,13 @@ public sealed class ProjectsController(
             response);
     }
 
-    [HttpGet("{projectId:guid}")]
+    [HttpGet("{projectId}")]
     [ProducesResponseType<ProjectDetailsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ProjectDetailsResponse>> GetById(
         Guid projectId,
@@ -169,10 +170,9 @@ public sealed class ProjectsController(
             project.UpdatedAtUtc));
     }
 
-    [HttpPut("{projectId:guid}")]
+    [HttpPut("{projectId}")]
     [ProducesResponseType<ProjectDetailsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ApiProblemDetailsResponse>(
-        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ApiProblemDetailsResponse>(
@@ -216,13 +216,13 @@ public sealed class ProjectsController(
             project.UpdatedAtUtc));
     }
 
-    [HttpPatch("{projectId:guid}/activation")]
+    [HttpPatch("{projectId}/activation")]
     [ProducesResponseType<ProjectDetailsResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ProjectDetailsResponse>> SetActivation(
         Guid projectId,

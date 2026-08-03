@@ -1,5 +1,7 @@
 using Application.PreQuotes.GetPreQuoteById;
+using Contracts.Common;
 using Contracts.PreQuotes;
+using Api.ErrorHandling;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,23 +9,24 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ContractualErrors(InvalidRequestErrorCode = PreQuoteErrorCodes.InvalidRequest)]
 [Route("api/v1/prequotes")]
 public sealed class PreQuotesController(
     GetPreQuoteByIdService getPreQuoteByIdService)
     : ControllerBase
 {
-    [HttpGet("{preQuoteId:guid}")]
+    [HttpGet("{preQuoteId}")]
     [ProducesResponseType<PreQuoteDetailsResponse>(
         StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType<ApiProblemDetailsResponse>(
         StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<PreQuoteDetailsResponse>> GetById(
         [FromRoute] Guid preQuoteId,
@@ -56,35 +59,39 @@ public sealed class PreQuotesController(
         {
             GetPreQuoteByIdFailure.InvalidRequest => PreQuoteProblem(
                 StatusCodes.Status400BadRequest,
-                "Solicitud inválida",
-                "El identificador de la precotización no es válido."),
+                PreQuoteErrorCodes.InvalidRequest,
+                "Solicitud invalida",
+                "El identificador de la precotizacion no es valido."),
             GetPreQuoteByIdFailure.Unauthorized => PreQuoteProblem(
                 StatusCodes.Status401Unauthorized,
+                PreQuoteErrorCodes.Unauthorized,
                 "No autorizado",
                 "No fue posible identificar al usuario autenticado."),
             GetPreQuoteByIdFailure.InactiveUser => PreQuoteProblem(
                 StatusCodes.Status403Forbidden,
+                PreQuoteErrorCodes.InactiveUser,
                 "Usuario inactivo",
                 "El usuario no tiene acceso para consultar precotizaciones."),
             GetPreQuoteByIdFailure.NotFound => PreQuoteProblem(
                 StatusCodes.Status404NotFound,
-                "Precotización no encontrada",
-                "No existe la precotización indicada."),
+                PreQuoteQueryErrorCodes.NotFound,
+                "Precotizacion no encontrada",
+                "No existe la precotizacion indicada."),
             _ => PreQuoteProblem(
                 StatusCodes.Status500InternalServerError,
-                "Error al consultar la precotización",
-                "No fue posible consultar la precotización.")
+                PreQuoteErrorCodes.QueryError,
+                "Error al consultar la precotizacion",
+                "No fue posible consultar la precotizacion.")
         };
     }
 
     private ObjectResult PreQuoteProblem(
         int statusCode,
+        string errorCode,
         string title,
         string detail)
     {
-        return Problem(
-            statusCode: statusCode,
-            title: title,
-            detail: detail);
+        return ApiProblemDetailsFactory.Create(
+            HttpContext, statusCode, errorCode, title, detail);
     }
 }

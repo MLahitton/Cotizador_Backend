@@ -13,6 +13,10 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
+[ContractualErrors(
+    InvalidRequestErrorCode = DocumentProcessingErrorCodes.InvalidRequest,
+    UnauthorizedErrorCode = PreQuoteErrorCodes.Unauthorized,
+    ForbiddenErrorCode = PreQuoteErrorCodes.InactiveUser)]
 [Route("api/v1/prequote-documents/{documentId}/processing-attempts")]
 public sealed class DocumentProcessingAttemptsController(
     CreateDocumentProcessingAttemptService createService,
@@ -56,16 +60,16 @@ public sealed class DocumentProcessingAttemptsController(
         return MapCreateFailure(result.Failure);
     }
 
-    [HttpGet("{processingAttemptId:guid}")]
+    [HttpGet("{processingAttemptId}")]
     [ProducesResponseType(
         typeof(DocumentProcessingAttemptStatusResponse),
         StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(
-        typeof(ProblemDetails),
+        typeof(ApiProblemDetailsResponse),
         StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetById(
         [FromRoute] Guid documentId,
@@ -84,26 +88,41 @@ public sealed class DocumentProcessingAttemptsController(
 
         return result.Failure switch
         {
-            GetDocumentProcessingAttemptFailure.InvalidRequest => Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Solicitud invalida",
-                detail: "Los identificadores indicados no son validos."),
-            GetDocumentProcessingAttemptFailure.Unauthorized => Problem(
-                statusCode: StatusCodes.Status401Unauthorized,
-                title: "No autorizado",
-                detail: "No fue posible identificar al usuario autenticado."),
-            GetDocumentProcessingAttemptFailure.InactiveUser => Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Usuario inactivo",
-                detail: "El usuario no tiene acceso para consultar procesamientos."),
-            GetDocumentProcessingAttemptFailure.NotFound => Problem(
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Intento no encontrado",
-                detail: "No existe un intento de procesamiento accesible con el identificador indicado."),
-            _ => Problem(
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error al consultar el intento",
-                detail: "No fue posible consultar el estado del procesamiento.")
+            GetDocumentProcessingAttemptFailure.InvalidRequest =>
+                AttemptProblem(
+                    StatusCodes.Status400BadRequest,
+                    DocumentProcessingAttemptErrorCodes.InvalidRequest,
+                    "Solicitud invalida",
+                    "Los identificadores de documento o intento no son validos."),
+            GetDocumentProcessingAttemptFailure.Unauthorized =>
+                AttemptProblem(
+                    StatusCodes.Status401Unauthorized,
+                    PreQuoteErrorCodes.Unauthorized,
+                    "No autorizado",
+                    "No fue posible identificar al usuario autenticado."),
+            GetDocumentProcessingAttemptFailure.InactiveUser =>
+                AttemptProblem(
+                    StatusCodes.Status403Forbidden,
+                    PreQuoteErrorCodes.InactiveUser,
+                    "Usuario inactivo",
+                    "El usuario no tiene acceso para consultar procesamientos."),
+            GetDocumentProcessingAttemptFailure.DocumentNotFound =>
+                AttemptProblem(
+                    StatusCodes.Status404NotFound,
+                    DocumentProcessingAttemptErrorCodes.DocumentNotFound,
+                    "Documento no encontrado",
+                    "No existe un documento de precotizacion accesible con el identificador indicado."),
+            GetDocumentProcessingAttemptFailure.AttemptNotFound =>
+                AttemptProblem(
+                    StatusCodes.Status404NotFound,
+                    DocumentProcessingAttemptErrorCodes.NotFound,
+                    "Intento no encontrado",
+                    "No existe un intento de procesamiento accesible con el identificador indicado."),
+            _ => AttemptProblem(
+                StatusCodes.Status500InternalServerError,
+                DocumentProcessingAttemptErrorCodes.QueryError,
+                "Error al consultar el intento",
+                "No fue posible consultar el estado del procesamiento.")
         };
     }
 
@@ -182,6 +201,17 @@ public sealed class DocumentProcessingAttemptsController(
             title,
             detail);
     }
+
+    private ObjectResult AttemptProblem(
+        int status,
+        string errorCode,
+        string title,
+        string detail) => ApiProblemDetailsFactory.Create(
+            HttpContext,
+            status,
+            errorCode,
+            title,
+            detail);
 
     private static DocumentProcessingAttemptStatusResponse MapStatus(
         DocumentProcessingAttemptStatusData attempt)

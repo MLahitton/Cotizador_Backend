@@ -22,6 +22,8 @@ var authenticationOptions =
 
 builder.Services.AddControllers();
 builder.Services.AddPreQuoteProblemDetailsContract();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
@@ -61,20 +63,29 @@ builder.Services
             ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
             ClockSkew = TimeSpan.FromMinutes(1)
         };
-        options.Events = new JwtBearerEvents
-        {
-            OnChallenge = async context =>
-            {
-                if (ApiProblemDetailsFactory.IsContractualRequest(
-                        context.HttpContext))
+                options.Events = new JwtBearerEvents
                 {
-                    context.HandleResponse();
-                    await ApiProblemDetailsFactory.WriteUnauthorizedAsync(
-                        context.HttpContext);
-                }
-            }
-        };
-    });
+                    OnChallenge = async context =>
+                    {
+                        if (ApiProblemDetailsFactory.IsContractualRequest(
+                                context.HttpContext))
+                        {
+                            context.HandleResponse();
+                            await ApiProblemDetailsFactory.WriteUnauthorizedAsync(
+                                context.HttpContext);
+                        }
+                    },
+                    OnForbidden = async context =>
+                    {
+                        if (ApiProblemDetailsFactory.IsContractualRequest(
+                                context.HttpContext))
+                        {
+                            await ApiProblemDetailsFactory.WriteForbiddenAsync(
+                                context.HttpContext);
+                        }
+                    }
+                };
+            });
 
 builder.Services.AddAuthorization();
 
@@ -138,6 +149,7 @@ if (app.Environment.IsDevelopment())
     app.UseCors(FrontendDevelopmentCorsPolicy);
 }
 
+app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseContractualProblemDetails();

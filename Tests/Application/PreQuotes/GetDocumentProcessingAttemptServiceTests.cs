@@ -60,7 +60,8 @@ public sealed class GetDocumentProcessingAttemptServiceTests
     [InlineData("unauthorized", GetDocumentProcessingAttemptFailure.Unauthorized)]
     [InlineData("missing_user", GetDocumentProcessingAttemptFailure.Unauthorized)]
     [InlineData("inactive_user", GetDocumentProcessingAttemptFailure.InactiveUser)]
-    [InlineData("not_found", GetDocumentProcessingAttemptFailure.NotFound)]
+    [InlineData("not_found", GetDocumentProcessingAttemptFailure.DocumentNotFound)]
+    [InlineData("attempt_not_found", GetDocumentProcessingAttemptFailure.AttemptNotFound)]
     [InlineData("query", GetDocumentProcessingAttemptFailure.QueryError)]
     public async Task ExecuteAsync_WithFailure_ReturnsSafeResult(
         string scenario,
@@ -91,7 +92,19 @@ public sealed class GetDocumentProcessingAttemptServiceTests
                         Arg.Any<CancellationToken>())
                     .Returns(user);
                 break;
+            case "not_found":
+                context.Repository.FindDocumentSourceAsync(
+                        DocumentId,
+                        Arg.Any<CancellationToken>())
+                    .Returns((DocumentProcessingSource?)null);
+                break;
+            case "attempt_not_found":
+                break;
             case "query":
+                context.Repository.FindDocumentSourceAsync(
+                        DocumentId,
+                        Arg.Any<CancellationToken>())
+                    .Returns(Context.CreateSource(UserId, CreatedAt));
                 context.Repository.FindAttemptStatusAsync(
                         DocumentId,
                         AttemptId,
@@ -132,6 +145,10 @@ public sealed class GetDocumentProcessingAttemptServiceTests
                     UserId,
                     Arg.Any<CancellationToken>())
                 .Returns((DocumentProcessingAttemptStatusSnapshot?)null);
+            Repository.FindDocumentSourceAsync(
+                    DocumentId,
+                    Arg.Any<CancellationToken>())
+                .Returns(CreateSource(UserId, CreatedAt));
             Service = new GetDocumentProcessingAttemptService(
                 CurrentUser,
                 IdentityRepository,
@@ -149,5 +166,21 @@ public sealed class GetDocumentProcessingAttemptServiceTests
             "User",
             null,
             CreatedAt);
+
+        public static DocumentProcessingSource CreateSource(
+            Guid projectCreatedByUserId,
+            DateTimeOffset at) =>
+            new DocumentProcessingSource(
+                DocumentId,
+                Guid.NewGuid(),
+                "document.pdf",
+                "application/pdf",
+                1234,
+                "prequotes/document.pdf",
+                Guid.NewGuid(),
+                projectCreatedByUserId,
+                true,
+                Guid.NewGuid(),
+                true);
     }
 }

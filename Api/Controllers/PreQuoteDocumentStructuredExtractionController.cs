@@ -1,4 +1,6 @@
 using Application.PreQuotes.GetStructuredDocumentExtraction;
+using Api.ErrorHandling;
+using Contracts.Common;
 using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,18 +9,18 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/prequote-documents/{documentId:guid}/structured-extraction")]
+[Route("api/v1/prequote-documents/{documentId}/structured-extraction")]
 public sealed class PreQuoteDocumentStructuredExtractionController(
     GetStructuredDocumentExtractionService service) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<StructuredDocumentExtractionDetailsResponse>(
         StatusCodes.Status200OK)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
-    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<ProblemDetails>(
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse),
         StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Get(
         [FromRoute] Guid documentId,
@@ -33,20 +35,34 @@ public sealed class PreQuoteDocumentStructuredExtractionController(
             return result.Failure switch
             {
                 GetStructuredDocumentExtractionFailure.InvalidRequest =>
-                    Problem(statusCode: 400, title: "Solicitud inválida",
-                        detail: "El identificador del documento no es válido."),
+                    StructuredExtractionProblem(
+                        statusCode: StatusCodes.Status400BadRequest,
+                        errorCode: StructuredExtractionErrorCodes.InvalidRequest,
+                        title: "Solicitud invalida",
+                        detail: "El identificador del documento no es valido."),
                 GetStructuredDocumentExtractionFailure.Unauthorized =>
-                    Problem(statusCode: 401, title: "No autorizado",
+                    StructuredExtractionProblem(
+                        statusCode: StatusCodes.Status401Unauthorized,
+                        errorCode: PreQuoteErrorCodes.Unauthorized,
+                        title: "No autorizado",
                         detail: "No fue posible identificar al usuario autenticado."),
                 GetStructuredDocumentExtractionFailure.InactiveUser =>
-                    Problem(statusCode: 403, title: "Usuario inactivo",
+                    StructuredExtractionProblem(
+                        statusCode: StatusCodes.Status403Forbidden,
+                        errorCode: PreQuoteErrorCodes.InactiveUser,
+                        title: "Usuario inactivo",
                         detail: "El usuario no tiene acceso para consultar documentos."),
                 GetStructuredDocumentExtractionFailure.NotFound =>
-                    Problem(statusCode: 404, title: "Documento no encontrado",
-                        detail: "No existe el documento de precotización indicado."),
-                _ => Problem(statusCode: 500,
-                    title: "Error al consultar la extracción estructurada",
-                    detail: "No fue posible consultar la extracción estructurada del documento.")
+                    StructuredExtractionProblem(
+                        statusCode: StatusCodes.Status404NotFound,
+                        errorCode: DocumentProcessingAttemptErrorCodes.DocumentNotFound,
+                        title: "Documento no encontrado",
+                        detail: "No existe el documento de precotizacion indicado."),
+                _ => StructuredExtractionProblem(
+                    statusCode: StatusCodes.Status500InternalServerError,
+                    errorCode: StructuredExtractionErrorCodes.QueryError,
+                    title: "Error al consultar la extraccion estructurada",
+                    detail: "No fue posible consultar la extraccion estructurada del documento.")
             };
         }
 
@@ -67,4 +83,15 @@ public sealed class PreQuoteDocumentStructuredExtractionController(
                 : PreQuoteDocumentResponseMapper.Map(
                     details.StructuredExtraction)));
     }
+
+    private ObjectResult StructuredExtractionProblem(
+        int statusCode,
+        string errorCode,
+        string title,
+        string detail) => ApiProblemDetailsFactory.Create(
+            HttpContext,
+            statusCode,
+            errorCode,
+            title,
+            detail);
 }
