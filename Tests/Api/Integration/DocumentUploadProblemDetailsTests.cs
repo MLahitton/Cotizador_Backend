@@ -24,6 +24,7 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 using ProjectEntity = global::Domain.Projects.Project;
@@ -139,6 +140,11 @@ public sealed class DocumentUploadProblemDetailsTests
         Assert.StartsWith("application/problem+json", response.Content.Headers.ContentType?.ToString());
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken));
+        var contract = await response.Content.ReadFromJsonAsync<
+            ApiProblemDetailsResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(contract);
+        Assert.Equal(errorCode, contract.ErrorCode);
+        Assert.False(string.IsNullOrWhiteSpace(contract.TraceId));
         var root = json.RootElement;
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("type").GetString()));
         Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("title").GetString()));
@@ -164,6 +170,7 @@ public sealed class DocumentUploadProblemDetailsTests
         {
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             { ApplicationName = typeof(PreQuoteDocumentsController).Assembly.GetName().Name, EnvironmentName = "Testing" });
+            builder.Logging.ClearProviders(); builder.Logging.AddConsole();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             var current = Substitute.For<ICurrentUser>();
             var identity = Substitute.For<IIdentityRepository>();

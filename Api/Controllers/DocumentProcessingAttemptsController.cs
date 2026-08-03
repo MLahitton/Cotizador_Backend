@@ -1,7 +1,9 @@
 using System.Text.Json;
+using Api.ErrorHandling;
 using Application.PreQuotes;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
+using Contracts.Common;
 using Contracts.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +13,7 @@ namespace Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/v1/prequote-documents/{documentId:guid}/processing-attempts")]
+[Route("api/v1/prequote-documents/{documentId}/processing-attempts")]
 public sealed class DocumentProcessingAttemptsController(
     CreateDocumentProcessingAttemptService createService,
     GetDocumentProcessingAttemptService getService)
@@ -21,13 +23,13 @@ public sealed class DocumentProcessingAttemptsController(
     [ProducesResponseType(
         typeof(DocumentProcessingAttemptStatusResponse),
         StatusCodes.Status202Accepted)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(
-        typeof(ProblemDetails),
+        typeof(ApiProblemDetailsResponse),
         StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> Create(
         [FromRoute] Guid documentId,
@@ -51,7 +53,7 @@ public sealed class DocumentProcessingAttemptsController(
                 response);
         }
 
-        return MapCreateFailure(result.Failure, documentId);
+        return MapCreateFailure(result.Failure);
     }
 
     [HttpGet("{processingAttemptId:guid}")]
@@ -106,67 +108,79 @@ public sealed class DocumentProcessingAttemptsController(
     }
 
     private IActionResult MapCreateFailure(
-        CreateDocumentProcessingAttemptFailure failure,
-        Guid documentId)
+        CreateDocumentProcessingAttemptFailure failure)
     {
         return failure switch
         {
-            CreateDocumentProcessingAttemptFailure.InvalidRequest => Problem(
-                statusCode: StatusCodes.Status400BadRequest,
-                title: "Solicitud invalida",
-                detail: "El identificador del documento no es valido."),
-            CreateDocumentProcessingAttemptFailure.Unauthorized => Problem(
-                statusCode: StatusCodes.Status401Unauthorized,
-                title: "No autorizado",
-                detail: "No fue posible identificar al usuario autenticado."),
-            CreateDocumentProcessingAttemptFailure.InactiveUser => Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Usuario inactivo",
-                detail: "El usuario no tiene acceso para procesar documentos."),
-            CreateDocumentProcessingAttemptFailure.DocumentNotFound => Problem(
-                statusCode: StatusCodes.Status404NotFound,
-                title: "Documento no encontrado",
-                detail: "No existe el documento de precotizacion indicado."),
-            CreateDocumentProcessingAttemptFailure.InactiveProject => Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Proyecto inactivo",
-                detail: "No se pueden procesar documentos de un proyecto inactivo."),
-            CreateDocumentProcessingAttemptFailure.InactiveClient => Problem(
-                statusCode: StatusCodes.Status409Conflict,
-                title: "Cliente inactivo",
-                detail: "No se pueden procesar documentos para un cliente inactivo."),
+            CreateDocumentProcessingAttemptFailure.InvalidRequest =>
+                CreateProblem(
+                    StatusCodes.Status400BadRequest,
+                    DocumentProcessingErrorCodes.InvalidRequest,
+                    "Solicitud invalida",
+                    "El identificador del documento no es valido."),
+            CreateDocumentProcessingAttemptFailure.Unauthorized =>
+                CreateProblem(
+                    StatusCodes.Status401Unauthorized,
+                    PreQuoteErrorCodes.Unauthorized,
+                    "No autorizado",
+                    "No fue posible identificar al usuario autenticado."),
+            CreateDocumentProcessingAttemptFailure.InactiveUser =>
+                CreateProblem(
+                    StatusCodes.Status403Forbidden,
+                    PreQuoteErrorCodes.InactiveUser,
+                    "Usuario inactivo",
+                    "El usuario no tiene acceso para procesar documentos."),
+            CreateDocumentProcessingAttemptFailure.DocumentNotFound =>
+                CreateProblem(
+                    StatusCodes.Status404NotFound,
+                    DocumentProcessingErrorCodes.DocumentNotFound,
+                    "Documento no encontrado",
+                    "No existe un documento de precotizacion accesible con el identificador indicado."),
+            CreateDocumentProcessingAttemptFailure.InactiveProject =>
+                CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    DocumentProcessingErrorCodes.ProjectInactive,
+                    "Proyecto inactivo",
+                    "No se pueden procesar documentos de un proyecto inactivo."),
+            CreateDocumentProcessingAttemptFailure.InactiveClient =>
+                CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    DocumentProcessingErrorCodes.ClientInactive,
+                    "Cliente inactivo",
+                    "No se pueden procesar documentos para un cliente inactivo."),
             CreateDocumentProcessingAttemptFailure
                 .DocumentProcessingAlreadyActive =>
-                CreateActiveAttemptResponse(documentId),
-            CreateDocumentProcessingAttemptFailure.QueryError => Problem(
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error al consultar el documento",
-                detail: "No fue posible consultar el documento y su contexto."),
-            _ => Problem(
-                statusCode: StatusCodes.Status500InternalServerError,
-                title: "Error al crear el intento",
-                detail: "No fue posible registrar el intento de procesamiento.")
+                CreateProblem(
+                    StatusCodes.Status409Conflict,
+                    DocumentProcessingErrorCodes.AlreadyActive,
+                    "Procesamiento ya activo",
+                    "El documento ya tiene un intento de procesamiento activo."),
+            CreateDocumentProcessingAttemptFailure.QueryError =>
+                CreateProblem(
+                    StatusCodes.Status500InternalServerError,
+                    DocumentProcessingErrorCodes.QueryError,
+                    "Error al consultar el documento",
+                    "No fue posible consultar el documento y su contexto."),
+            _ => CreateProblem(
+                StatusCodes.Status500InternalServerError,
+                DocumentProcessingErrorCodes.PersistenceError,
+                "Error al crear el intento",
+                "No fue posible registrar el intento de procesamiento.")
         };
     }
 
-    private static ObjectResult CreateActiveAttemptResponse(Guid documentId)
+    private ObjectResult CreateProblem(
+        int status,
+        string errorCode,
+        string title,
+        string detail)
     {
-        var problemDetails = new ProblemDetails
-        {
-            Title = "Procesamiento ya activo",
-            Status = StatusCodes.Status409Conflict,
-            Detail =
-                "El documento ya tiene un intento de procesamiento activo."
-        };
-
-        problemDetails.Extensions["errorCode"] =
-            "DOCUMENT_PROCESSING_ALREADY_ACTIVE";
-        problemDetails.Extensions["documentId"] = documentId;
-
-        return new ObjectResult(problemDetails)
-        {
-            StatusCode = StatusCodes.Status409Conflict
-        };
+        return ApiProblemDetailsFactory.Create(
+            HttpContext,
+            status,
+            errorCode,
+            title,
+            detail);
     }
 
     private static DocumentProcessingAttemptStatusResponse MapStatus(

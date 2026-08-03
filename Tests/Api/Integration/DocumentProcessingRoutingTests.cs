@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using System.Security.Claims;
 using System.Text.Json;
 using Api.Controllers;
+using Api.ErrorHandling;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
@@ -102,6 +103,30 @@ public sealed class DocumentProcessingRoutingTests
             .ClaimNextPendingDocumentProcessingAttemptAsync(
                 Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Post_WithMalformedDocumentId_ReturnsStableInvalidRequest()
+    {
+        await using var host = await ControlledHost.StartAsync();
+
+        using var response = await host.Client.PostAsync(
+            "/api/v1/prequote-documents/not-a-guid/processing-attempts",
+            null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.StartsWith(
+            "application/problem+json",
+            response.Content.Headers.ContentType?.ToString());
+        using var json = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(
+                TestContext.Current.CancellationToken));
+        Assert.Equal(
+            DocumentProcessingErrorCodes.InvalidRequest,
+            json.RootElement.GetProperty("errorCode").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(
+            json.RootElement.GetProperty("traceId").GetString()));
     }
 
     private static Uri ResolveLocation(Uri baseAddress, Uri location)
@@ -208,6 +233,7 @@ public sealed class DocumentProcessingRoutingTests
                 .AddControllers()
                 .AddApplicationPart(
                     typeof(DocumentProcessingAttemptsController).Assembly);
+            builder.Services.AddPreQuoteProblemDetailsContract();
             builder.Services.AddAuthorization();
             builder.Services.AddSingleton(validator);
             builder.Services.AddSingleton(currentUser);
@@ -236,6 +262,7 @@ public sealed class DocumentProcessingRoutingTests
                     await next(context);
                 });
             application.UseAuthorization();
+            application.UseContractualProblemDetails();
             application.MapControllers();
 
             var applicationStarted = false;
@@ -332,6 +359,7 @@ public sealed class DocumentProcessingRoutingTests
                 100,
                 "prequotes/document.pdf",
                 Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                UserId,
                 true,
                 Guid.Parse("55555555-5555-5555-5555-555555555555"),
                 true);

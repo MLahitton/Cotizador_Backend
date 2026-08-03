@@ -31,6 +31,7 @@ public sealed class RecoverClaimedDocumentProcessingAttemptServiceTests
                     100,
                     "prequotes/document.pdf",
                     Guid.NewGuid(),
+                    Guid.NewGuid(),
                     true,
                     Guid.NewGuid(),
                     true)));

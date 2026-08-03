@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
+using Contracts.Common;
 using Contracts.PreQuotes;
 using CotizadorBackend.Tests.TestDoubles;
 using Domain.Identity;
@@ -78,67 +79,67 @@ public sealed class DocumentProcessingAttemptsControllerTests
         StatusCodes.Status400BadRequest,
         "Solicitud invalida",
         "El identificador del documento no es valido.",
-        null)]
+        DocumentProcessingErrorCodes.InvalidRequest)]
     [InlineData(
         "unauthorized",
         StatusCodes.Status401Unauthorized,
         "No autorizado",
         "No fue posible identificar al usuario autenticado.",
-        null)]
+        PreQuoteErrorCodes.Unauthorized)]
     [InlineData(
         "inactive_user",
         StatusCodes.Status403Forbidden,
         "Usuario inactivo",
         "El usuario no tiene acceso para procesar documentos.",
-        null)]
+        PreQuoteErrorCodes.InactiveUser)]
     [InlineData(
         "missing_document",
         StatusCodes.Status404NotFound,
         "Documento no encontrado",
-        "No existe el documento de precotizacion indicado.",
-        null)]
+        "No existe un documento de precotizacion accesible con el identificador indicado.",
+        DocumentProcessingErrorCodes.DocumentNotFound)]
     [InlineData(
         "inactive_project",
         StatusCodes.Status409Conflict,
         "Proyecto inactivo",
         "No se pueden procesar documentos de un proyecto inactivo.",
-        null)]
+        DocumentProcessingErrorCodes.ProjectInactive)]
     [InlineData(
         "inactive_client",
         StatusCodes.Status409Conflict,
         "Cliente inactivo",
         "No se pueden procesar documentos para un cliente inactivo.",
-        null)]
+        DocumentProcessingErrorCodes.ClientInactive)]
     [InlineData(
         "source_query",
         StatusCodes.Status500InternalServerError,
         "Error al consultar el documento",
         "No fue posible consultar el documento y su contexto.",
-        null)]
+        DocumentProcessingErrorCodes.QueryError)]
     [InlineData(
         "active_query",
         StatusCodes.Status500InternalServerError,
         "Error al consultar el documento",
         "No fue posible consultar el documento y su contexto.",
-        null)]
+        DocumentProcessingErrorCodes.QueryError)]
     [InlineData(
         "initial_persistence",
         StatusCodes.Status500InternalServerError,
         "Error al crear el intento",
         "No fue posible registrar el intento de procesamiento.",
-        null)]
+        DocumentProcessingErrorCodes.PersistenceError)]
     [InlineData(
         "concurrent_active",
         StatusCodes.Status409Conflict,
         "Procesamiento ya activo",
         "El documento ya tiene un intento de procesamiento activo.",
-        "DOCUMENT_PROCESSING_ALREADY_ACTIVE")]
+        DocumentProcessingErrorCodes.AlreadyActive)]
     public async Task Create_WithFailure_ReturnsExactSafeProblem(
         string scenario,
         int statusCode,
         string title,
         string detail,
-        string? errorCode)
+        string errorCode)
     {
         var context = new Context();
         ConfigureCreateFailure(context, scenario);
@@ -155,16 +156,10 @@ public sealed class DocumentProcessingAttemptsControllerTests
         Assert.Equal(detail, problem.Detail);
         Assert.False(problem.Extensions.ContainsKey("processingAttemptId"));
 
-        if (errorCode is null)
-        {
-            Assert.False(problem.Extensions.ContainsKey("errorCode"));
-            Assert.False(problem.Extensions.ContainsKey("documentId"));
-        }
-        else
-        {
-            Assert.Equal(errorCode, problem.Extensions["errorCode"]);
-            Assert.Equal(DocumentId, problem.Extensions["documentId"]);
-        }
+        Assert.Equal(errorCode, problem.Extensions["errorCode"]);
+        Assert.False(problem.Extensions.ContainsKey("documentId"));
+        Assert.False(string.IsNullOrWhiteSpace(
+            problem.Extensions["traceId"]?.ToString()));
 
         var serialized = System.Text.Json.JsonSerializer.Serialize(problem);
         Assert.DoesNotContain(
@@ -192,6 +187,29 @@ public sealed class DocumentProcessingAttemptsControllerTests
             serialized,
             StringComparison.OrdinalIgnoreCase);
         Assert.IsNotType<AcceptedAtActionResult>(action);
+    }
+
+    [Fact]
+    public void Create_DeclaresStableProblemDetailsContract()
+    {
+        var method = typeof(DocumentProcessingAttemptsController).GetMethod(
+            nameof(DocumentProcessingAttemptsController.Create));
+        Assert.NotNull(method);
+        var responses = method.GetCustomAttributes(
+                typeof(ProducesResponseTypeAttribute), true)
+            .Cast<ProducesResponseTypeAttribute>()
+            .ToArray();
+
+        Assert.Contains(responses, response =>
+            response.StatusCode == StatusCodes.Status202Accepted
+            && response.Type
+                == typeof(DocumentProcessingAttemptStatusResponse));
+        foreach (var status in new[] { 400, 401, 403, 404, 409, 500 })
+        {
+            Assert.Contains(responses, response =>
+                response.StatusCode == status
+                && response.Type == typeof(ApiProblemDetailsResponse));
+        }
     }
 
     [Theory]
@@ -404,6 +422,7 @@ public sealed class DocumentProcessingAttemptsControllerTests
                     100,
                     "prequotes/document.pdf",
                     Guid.NewGuid(),
+                    UserId,
                     true,
                     Guid.NewGuid(),
                     true));
@@ -430,6 +449,10 @@ public sealed class DocumentProcessingAttemptsControllerTests
                 IdentityRepository,
                 Repository);
             Controller = new DocumentProcessingAttemptsController(create, get);
+            Controller.ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext()
+            };
         }
 
         public IValidator<CreateDocumentProcessingAttemptCommand> Validator { get; }
@@ -457,6 +480,7 @@ public sealed class DocumentProcessingAttemptsControllerTests
                 100,
                 "prequotes/document.pdf",
                 Guid.NewGuid(),
+                UserId,
                 projectIsActive,
                 Guid.NewGuid(),
                 clientIsActive);

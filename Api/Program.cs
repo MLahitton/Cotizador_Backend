@@ -13,6 +13,9 @@ const string FrontendDevelopmentCorsPolicy = "FrontendDevelopment";
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
 var authenticationOptions =
     CotizadorAuthenticationOptions.FromConfiguration(
         builder.Configuration);

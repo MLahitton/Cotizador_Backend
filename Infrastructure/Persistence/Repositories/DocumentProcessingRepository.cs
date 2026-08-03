@@ -232,6 +232,7 @@ public sealed class DocumentProcessingRepository(
                 document.SizeBytes,
                 document.StorageKey,
                 project.Id,
+                project.CreatedByUserId,
                 project.IsActive,
                 client.Id,
                 client.IsActive);

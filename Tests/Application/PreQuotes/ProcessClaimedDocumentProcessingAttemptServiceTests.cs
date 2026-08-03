@@ -679,6 +679,7 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                 100,
                 "prequotes/document.pdf",
                 Guid.Parse("66666666-6666-6666-6666-666666666666"),
+                Guid.Parse("88888888-8888-8888-8888-888888888888"),
                 true,
                 Guid.Parse("77777777-7777-7777-7777-777777777777"),
                 true);

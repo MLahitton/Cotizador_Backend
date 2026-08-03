@@ -66,6 +66,11 @@ public sealed class CreateDocumentProcessingAttemptService(
             return Failed(CreateDocumentProcessingAttemptFailure.DocumentNotFound);
         }
 
+        if (source.ProjectCreatedByUserId != userId)
+        {
+            return Failed(CreateDocumentProcessingAttemptFailure.DocumentNotFound);
+        }
+
         if (!source.ProjectIsActive)
         {
             return Failed(CreateDocumentProcessingAttemptFailure.InactiveProject);

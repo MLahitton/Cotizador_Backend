@@ -57,8 +57,30 @@ public static class ApiProblemDetailsFactory
         return segments is ["api", "v1", "prequotes", _, "documents"];
     }
 
+    public static bool IsCreateDocumentProcessingAttemptRequest(
+        HttpContext context)
+    {
+        if (!HttpMethods.IsPost(context.Request.Method))
+        {
+            return false;
+        }
+
+        var segments = context.Request.Path.Value?
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return segments is
+        [
+            "api",
+            "v1",
+            "prequote-documents",
+            _,
+            "processing-attempts"
+        ];
+    }
+
     public static bool IsContractualRequest(HttpContext context) =>
-        IsCreatePreQuoteRequest(context) || IsUploadDocumentRequest(context);
+        IsCreatePreQuoteRequest(context)
+        || IsUploadDocumentRequest(context)
+        || IsCreateDocumentProcessingAttemptRequest(context);
 
     public static async Task WriteUnauthorizedAsync(HttpContext context)
     {
@@ -93,15 +115,26 @@ public static class ApiProblemDetailsServiceCollectionExtensions
                     ? ApiProblemDetailsFactory.Create(
                         context.HttpContext,
                         StatusCodes.Status400BadRequest,
-                        ApiProblemDetailsFactory.IsUploadDocumentRequest(
-                            context.HttpContext)
-                            ? DocumentErrorCodes.InvalidRequest
-                            : PreQuoteErrorCodes.InvalidRequest,
+                        ResolveInvalidRequestErrorCode(context.HttpContext),
                         "Solicitud invalida",
                         "La solicitud no tiene un formato valido.")
                     : fallback(context);
         });
         return services;
+    }
+
+    private static string ResolveInvalidRequestErrorCode(
+        HttpContext context)
+    {
+        if (ApiProblemDetailsFactory.IsUploadDocumentRequest(context))
+        {
+            return DocumentErrorCodes.InvalidRequest;
+        }
+
+        return ApiProblemDetailsFactory
+            .IsCreateDocumentProcessingAttemptRequest(context)
+            ? DocumentProcessingErrorCodes.InvalidRequest
+            : PreQuoteErrorCodes.InvalidRequest;
     }
 }
 

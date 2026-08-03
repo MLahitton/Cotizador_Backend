@@ -286,6 +286,7 @@ public sealed class CreatePreQuoteDocumentService(
         string stage)
     {
         logger.LogError(
+            exception,
             "Document upload failed. PreQuoteId={PreQuoteId} UserId={UserId} Stage={Stage} TraceId={TraceId} SizeBytes={SizeBytes} ContentType={ContentType} ExceptionType={ExceptionType}",
             command.PreQuoteId,
             userId,

@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 using ProjectEntity = global::Domain.Projects.Project;
@@ -115,6 +116,11 @@ public sealed class PreQuoteCreationProblemDetailsTests
             response.Content.Headers.ContentType?.ToString());
         var raw = await response.Content.ReadAsStringAsync(
             TestContext.Current.CancellationToken);
+        var contract = await response.Content.ReadFromJsonAsync<
+            ApiProblemDetailsResponse>(TestContext.Current.CancellationToken);
+        Assert.NotNull(contract);
+        Assert.Equal(errorCode, contract.ErrorCode);
+        Assert.False(string.IsNullOrWhiteSpace(contract.TraceId));
         using var json = JsonDocument.Parse(raw);
         var root = json.RootElement;
         Assert.False(string.IsNullOrWhiteSpace(
@@ -160,6 +166,8 @@ public sealed class PreQuoteCreationProblemDetailsTests
                         .Assembly.GetName().Name,
                     EnvironmentName = "Testing"
                 });
+            builder.Logging.ClearProviders();
+            builder.Logging.AddConsole();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             var currentUser = Substitute.For<ICurrentUser>();
             var identity = Substitute.For<IIdentityRepository>();

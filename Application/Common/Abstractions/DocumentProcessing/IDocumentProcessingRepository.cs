@@ -58,6 +58,7 @@ public sealed record DocumentProcessingSource(
     long SizeBytes,
     string StorageKey,
     Guid ProjectId,
+    Guid ProjectCreatedByUserId,
     bool ProjectIsActive,
     Guid ClientId,
     bool ClientIsActive);

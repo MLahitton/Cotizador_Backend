@@ -72,6 +72,28 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WithForeignProject_ReturnsNotFoundBeforeStateChecks()
+    {
+        var context = new Context
+        {
+            Source = Context.CreateSource(
+                projectCreatedByUserId: Guid.NewGuid(),
+                projectActive: false,
+                clientActive: false)
+        };
+
+        var result = await context.ExecuteAsync();
+
+        AssertFailure(
+            result,
+            CreateDocumentProcessingAttemptFailure.DocumentNotFound);
+        await context.Repository.DidNotReceive()
+            .HasActiveDocumentProcessingAttemptAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithConcurrentConflict_ReturnsExistingConflict()
     {
         var context = new Context();
@@ -345,6 +367,7 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
             string contentType = "application/pdf",
             long sizeBytes = 100,
             string storageKey = "prequotes/document.pdf",
+            Guid? projectCreatedByUserId = null,
             bool projectActive = true,
             bool clientActive = true)
         {
@@ -356,6 +379,7 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
                 sizeBytes,
                 storageKey,
                 Guid.Parse("44444444-4444-4444-4444-444444444444"),
+                projectCreatedByUserId ?? UserId,
                 projectActive,
                 Guid.Parse("55555555-5555-5555-5555-555555555555"),
                 clientActive);
