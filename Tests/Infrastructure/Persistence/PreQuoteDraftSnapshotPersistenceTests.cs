@@ -210,14 +210,18 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                     item.HeightMillimeters,
                     item.Quantity,
                     item.IsIncluded)],
-                [],
-                [],
-                [],
-                [],
+                ExistingRequirements(draft),
+                ExistingReferences(draft),
+                PendingIssues(draft),
+                PendingConflicts(draft),
                 seeded.OwnerUserId,
                 At.AddMinutes(10));
 
             Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+            Assert.Equal(
+                PreQuoteDraftValuationInvalidationReason.WidthChanged,
+                valuation!.InvalidationReason);
+            Assert.NotNull(valuation!.InvalidatedAtUtc);
 
             await repository.SaveChangesAsync(cancellationToken);
         }
@@ -231,6 +235,15 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
 
         Assert.Equal(PreQuoteDraftValuationStatus.Stale,
             persistedItem.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.WidthChanged,
+            persistedItem.ValuationSnapshot?.InvalidationReason);
+        Assert.Equal(At.AddMinutes(10), persistedItem.ValuationSnapshot?.InvalidatedAtUtc);
+        Assert.NotNull(persistedItem.ValuationSnapshot);
+        Assert.NotNull(persistedItem.ValuationSnapshot!.UnitAmount);
+        Assert.NotNull(persistedItem.ValuationSnapshot.UnitPricePerSquareMeter);
+        Assert.NotNull(persistedItem.ValuationSnapshot.TotalAreaSquareMeters);
+        Assert.NotNull(persistedItem.ValuationSnapshot.TotalAmount);
         Assert.Equal(0, persisted.EconomicSummary.ValuedItemCount);
         Assert.Equal(1, persisted.EconomicSummary.StaleValuationItemCount);
         Assert.False(persisted.EconomicSummary.IsEconomicallyComplete);
@@ -662,6 +675,52 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                 cancellationToken);
         }
     }
+
+    private static PreQuoteDraftRequirementEdit[] ExistingRequirements(
+        PreQuoteDraft draft) =>
+        draft.Requirements
+            .OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftRequirementEdit(
+                x.Id,
+                x.Sequence,
+                x.Category,
+                x.Value,
+                x.IsIncluded))
+            .ToArray();
+
+    private static PreQuoteDraftReferenceEdit[] ExistingReferences(
+        PreQuoteDraft draft) =>
+        draft.DocumentReferences
+            .OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftReferenceEdit(
+                x.Id,
+                x.Sequence,
+                x.Reference,
+                x.Description,
+                x.Detail,
+                x.Quantity,
+                x.IsIncluded))
+            .ToArray();
+
+    private static PreQuoteDraftResolutionEdit[] PendingIssues(
+        PreQuoteDraft draft) =>
+        draft.Issues
+            .OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftResolutionEdit(
+                x.Id,
+                PreQuoteDraftResolutionStatus.Pending,
+                null))
+            .ToArray();
+
+    private static PreQuoteDraftResolutionEdit[] PendingConflicts(
+        PreQuoteDraft draft) =>
+        draft.Conflicts
+            .OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftResolutionEdit(
+                x.Id,
+                PreQuoteDraftResolutionStatus.Pending,
+                null))
+            .ToArray();
 
     private sealed record SeededDraft(
         Guid OwnerUserId,

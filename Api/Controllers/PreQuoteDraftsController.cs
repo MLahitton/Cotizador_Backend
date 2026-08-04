@@ -240,6 +240,7 @@ public sealed class PreQuoteDraftsController(
             x.Id,
             x.Sequence,
             Origin(x.Origin),
+            x.SourceStructuredItemId,
             x.SourceItemSequence,
             x.Reference,
             x.Description,
@@ -253,7 +254,7 @@ public sealed class PreQuoteDraftsController(
             MapValuationSnapshot(
                 x.ValuationStatus,
                 x.ValuationSnapshot)
-            )).ToArray();
+        )).ToArray();
 
         var requirementResponses = requirements.Select(x => new PreQuoteDraftRequirementResponse(
             x.Id,
@@ -319,6 +320,8 @@ public sealed class PreQuoteDraftsController(
             conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Resolved),
             conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Dismissed));
 
+        var economicSummaryResponse = MapEconomicSummary(d);
+
         return new PreQuoteDraftDetailsResponse(
             d.Id,
             d.PreQuoteId,
@@ -326,21 +329,20 @@ public sealed class PreQuoteDraftsController(
             d.SourceStructuredExtractionId,
             Status(d.Status),
             d.Version,
-            new(d.ProjectName, d.ClientName, d.Location),
+            d.ProjectName,
+            d.ClientName,
+            d.Location,
+            d.CreatedAtUtc,
+            d.UpdatedAtUtc,
+            d.ApprovedAtUtc,
             itemResponses,
             requirementResponses,
             documentReferenceResponses,
             issueResponses,
             conflictResponses,
+            economicSummaryResponse,
             summary,
-            MapEconomicSummary(d),
-            new PreQuoteDraftAuditResponse(
-                d.CreatedByUserId,
-                d.UpdatedByUserId,
-                d.ApprovedByUserId,
-                d.CreatedAtUtc,
-                d.UpdatedAtUtc,
-                d.ApprovedAtUtc));
+            null);
     }
 
     private static PreQuoteDraftItemGlassResponse? MapGlassSnapshot(
@@ -348,20 +350,21 @@ public sealed class PreQuoteDraftsController(
     {
         if (snapshot is null) return null;
         return new(
-            snapshot.GlassTypeId,
-            snapshot.RawSpecification,
-            snapshot.NormalizedCodeSnapshot,
-            snapshot.AssignmentScope.ToString(),
-            snapshot.RequiresReview,
-            snapshot.ReviewReasons
+            SourceStructuredItemGlassId: snapshot.SourceStructuredItemGlassId,
+            GlassTypeId: snapshot.GlassTypeId,
+            RawSpecification: snapshot.RawSpecification,
+            NormalizedCodeSnapshot: snapshot.NormalizedCodeSnapshot,
+            AssignmentScope: snapshot.AssignmentScope.ToString(),
+            RequiresReview: snapshot.RequiresReview,
+            ReviewReasons: snapshot.ReviewReasons
                 .OrderBy(r => r.Sequence)
                 .Select(r => r.Code.ToString())
                 .ToArray(),
-            snapshot.SourcePages
+            SourcePages: snapshot.SourcePages
                 .OrderBy(p => p.Sequence)
                 .Select(p => p.PageNumber)
                 .ToArray(),
-            snapshot.Evidence
+            Evidence: snapshot.Evidence
                 .OrderBy(e => e.Sequence)
                 .Select(e => new PreQuoteDraftItemGlassEvidenceResponse(
                     e.Sequence, e.PageNumber, e.SourceType.ToString(),
@@ -386,7 +389,6 @@ public sealed class PreQuoteDraftsController(
             snapshot.UnitAreaSquareMeters,
             snapshot.TotalAreaSquareMeters,
             snapshot.UnitPricePerSquareMeter,
-            snapshot.UnitPricePerSquareMeter,
             snapshot.UnitAmount,
             snapshot.TotalAmount,
             snapshot.Currency,
@@ -395,45 +397,18 @@ public sealed class PreQuoteDraftsController(
             snapshot.InvalidationReason?.ToString());
     }
 
-    private static PreQuoteDraftEconomicSummaryResponse MapEconomicSummary(PreQuoteDraft draft)
-    {
-        var included = draft.Items.Where(x => x.IsIncluded).ToArray();
-        var valued = included.Where(
-            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Valued
-                && x.ValuationSnapshot is not null).ToArray();
-        var pending = included.Where(
-            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Pending).ToArray();
-        var stale = included.Where(
-            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Stale).ToArray();
-        var requiringReview = included.Where(
-            x => x.ValuationStatus == PreQuoteDraftValuationStatus.RequiresReview).ToArray();
-
-        var areas = valued.Sum(x => x.ValuationSnapshot!.TotalAreaSquareMeters ?? 0m);
-        var minimum = valued.Sum(x => x.ValuationSnapshot!.TotalAmount ?? 0m);
-        var maximum = minimum;
-        var hasKnownCurrency = valued
-            .Select(x => x.ValuationSnapshot!.Currency)
-            .Where(currency => !string.IsNullOrWhiteSpace(currency))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var currency = hasKnownCurrency.Length == 1
-            ? hasKnownCurrency[0]
-            : null;
-
-        return new(
-            included.Length,
-            included.Sum(x => (int?)x.Quantity ?? 0),
-            valued.Length,
-            pending.Length,
-            stale.Length,
-            requiringReview.Length,
-            areas == 0m ? null : areas,
-            minimum == 0m ? null : minimum,
-            maximum == 0m ? null : maximum,
-            currency,
-            included.Any() && stale.Length == 0 && pending.Length == 0 &&
-                requiringReview.Length == 0 && valued.Length > 0);
-    }
+    private static PreQuoteDraftEconomicSummaryResponse MapEconomicSummary(PreQuoteDraft draft) =>
+        new(
+            draft.EconomicSummary.IncludedItemCount,
+            draft.EconomicSummary.IncludedKnownQuoteableUnitCount,
+            draft.EconomicSummary.ValuedItemCount,
+            draft.EconomicSummary.PendingValuationItemCount,
+            draft.EconomicSummary.StaleValuationItemCount,
+            draft.EconomicSummary.ItemsRequiringReviewCount,
+            draft.EconomicSummary.TotalAreaSquareMeters,
+            draft.EconomicSummary.GlassSubtotal,
+            draft.EconomicSummary.Currency,
+            draft.EconomicSummary.IsEconomicallyComplete);
 
     private static PreQuoteDraftResolutionEdit IssueResolution(PreQuoteDraftIssueResolutionRequest x) => new(x.DraftIssueId, ResolutionStatus(x.ResolutionStatus), x.ResolutionNote);
     private static PreQuoteDraftResolutionEdit ConflictResolution(PreQuoteDraftConflictResolutionRequest x) => new(x.DraftConflictId, ResolutionStatus(x.ResolutionStatus), x.ResolutionNote);
@@ -454,6 +429,7 @@ public sealed class PreQuoteDraftsController(
         PreQuoteDraftValuationStatus.NotApplicable => "PENDING",
         _ => "PENDING"
     };
-    private static string Issue(StructuredIssueCode x) => x switch { StructuredIssueCode.ProjectNameNotFound => "PROJECT_NAME_NOT_FOUND", StructuredIssueCode.NoQuoteableItemsFound => "NO_QUOTEABLE_ITEMS_FOUND", StructuredIssueCode.IncompleteTableRow => "INCOMPLETE_TABLE_ROW", StructuredIssueCode.MissingItemReference => "MISSING_ITEM_REFERENCE", StructuredIssueCode.MissingOrInvalidMeasurements => "MISSING_OR_INVALID_MEASUREMENTS", StructuredIssueCode.MissingOrInvalidQuantity => "MISSING_OR_INVALID_QUANTITY", StructuredIssueCode.UnknownElementType => "UNKNOWN_ELEMENT_TYPE", _ => "OCR_REVIEW_REQUIRED" };
+    private static string Issue(StructuredIssueCode x) =>
+        PreQuoteDraftIssueCodeMap.MapContractCode(x);
     private static string Conflict(StructuredConflictCode x) => x switch { StructuredConflictCode.ConflictingProjectName => "CONFLICTING_PROJECT_NAME", StructuredConflictCode.ConflictingClientName => "CONFLICTING_CLIENT_NAME", StructuredConflictCode.ConflictingLocation => "CONFLICTING_LOCATION", _ => "DUPLICATE_ITEM_REFERENCE" };
 }

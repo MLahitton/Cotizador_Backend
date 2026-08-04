@@ -108,14 +108,16 @@ public sealed class PreQuoteDraftHttpContractTests
         Assert.NotNull(body);
         Assert.Equal("IN_REVIEW", body.Status);
         Assert.Equal(2, body.Version);
-        Assert.Equal(7, body.Summary.TotalItemCount);
-        Assert.Equal(1, body.Summary.ManualItemCount);
-        Assert.Equal(19, body.Summary.IncludedKnownQuoteableUnitCount);
-        Assert.Equal(13, body.Summary.TotalRequirementCount);
-        Assert.Equal(12, body.Summary.IncludedRequirementCount);
-        Assert.Equal(3, body.Summary.TotalDocumentReferenceCount);
-        Assert.Equal(0, body.Summary.PendingIssueCount);
-        Assert.Equal(1, body.Summary.ResolvedIssueCount);
+        Assert.NotNull(body.Summary);
+        var summary = body.Summary;
+        Assert.Equal(7, summary.TotalItemCount);
+        Assert.Equal(1, summary.ManualItemCount);
+        Assert.Equal(19, summary.IncludedKnownQuoteableUnitCount);
+        Assert.Equal(13, summary.TotalRequirementCount);
+        Assert.Equal(12, summary.IncludedRequirementCount);
+        Assert.Equal(3, summary.TotalDocumentReferenceCount);
+        Assert.Equal(0, summary.PendingIssueCount);
+        Assert.Equal(1, summary.ResolvedIssueCount);
         await host.Repository.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
     }

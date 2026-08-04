@@ -75,6 +75,220 @@ public sealed class PreQuoteDraftEditingSemanticsTests
         Assert.Equal(PreQuoteDraftStatus.Approved, draft.Status);
     }
 
+    [Fact]
+    public void UpdateWidth_MarksValuationStale()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+        var valuedAmount = item.ValuationSnapshot!.TotalAmount;
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, widthMillimeters: 120)],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.WidthChanged,
+            item.ValuationSnapshot!.InvalidationReason);
+        Assert.Equal(At.AddMinutes(1), item.ValuationSnapshot.InvalidatedAtUtc);
+        Assert.Equal(valuedAmount, item.ValuationSnapshot.TotalAmount);
+    }
+
+    [Fact]
+    public void UpdateHeight_MarksValuationStale()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+        var valuedArea = item.ValuationSnapshot!.TotalAreaSquareMeters;
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, heightMillimeters: 120)],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.HeightChanged,
+            item.ValuationSnapshot!.InvalidationReason);
+        Assert.Equal(At.AddMinutes(1), item.ValuationSnapshot.InvalidatedAtUtc);
+        Assert.Equal(valuedArea, item.ValuationSnapshot.TotalAreaSquareMeters);
+    }
+
+    [Fact]
+    public void UpdateQuantity_MarksValuationStale()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+        var valuedSubtotal = item.ValuationSnapshot!.TotalAmount;
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, quantity: 5)],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.QuantityChanged,
+            item.ValuationSnapshot!.InvalidationReason);
+        Assert.Equal(At.AddMinutes(1), item.ValuationSnapshot.InvalidatedAtUtc);
+        Assert.Equal(valuedSubtotal, item.ValuationSnapshot.TotalAmount);
+    }
+
+    [Fact]
+    public void UpdateMultipleInputs_UsesMultipleInputsReason()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, widthMillimeters: 120, heightMillimeters: 120)],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.MultipleInputsChanged,
+            item.ValuationSnapshot!.InvalidationReason);
+    }
+
+    [Fact]
+    public void UpdateDescription_PreservesValued()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, description: "Description updated")],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Equal("Description updated", item.Description);
+        Assert.Null(item.ValuationSnapshot!.InvalidationReason);
+        Assert.Null(item.ValuationSnapshot.InvalidatedAtUtc);
+    }
+
+    [Fact]
+    public void UpdateReference_PreservesValued()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, reference: "R-2")],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Equal("R-2", item.Reference);
+        Assert.Null(item.ValuationSnapshot!.InvalidationReason);
+        Assert.Null(item.ValuationSnapshot.InvalidatedAtUtc);
+    }
+
+    [Fact]
+    public void UpdateRawMeasurements_PreservesValued()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(
+                item,
+                rawMeasurements: "90x120 mm")],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal(PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Equal("90x120 mm", item.RawMeasurements);
+        Assert.Null(item.ValuationSnapshot!.InvalidationReason);
+        Assert.Null(item.ValuationSnapshot.InvalidatedAtUtc);
+    }
+
+    [Fact]
+    public void UpdateIsIncluded_PreservesSnapshot()
+    {
+        var draft = CreateWithValuation();
+        var item = draft.Items.Single();
+        var snapshotId = item.ValuationSnapshot!.Id;
+
+        draft.Update(
+            1,
+            "Project",
+            "Client",
+            "Location",
+            [CreateItemEdit(item, isIncluded: false)],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            [],
+            [],
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.False(item.IsIncluded);
+        Assert.Equal(snapshotId, item.ValuationSnapshot!.Id);
+        Assert.Equal(PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Null(item.ValuationSnapshot.InvalidationReason);
+        Assert.Null(item.ValuationSnapshot.InvalidatedAtUtc);
+    }
+
+
     private static void Update(
         PreQuoteDraft draft,
         bool addManualRows = false,
@@ -166,4 +380,85 @@ public sealed class PreQuoteDraftEditingSemanticsTests
                 1)],
             [],
             []);
+
+    private static PreQuoteDraft CreateWithValuation() =>
+        PreQuoteDraft.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Project",
+            "Client",
+            "Location",
+            UserId,
+            At,
+            [
+                new(
+                    Guid.NewGuid(),
+                    1,
+                    "I-1",
+                    "Item",
+                    StructuredElementType.Window,
+                    "100 x 100 mm",
+                    100,
+                    100,
+                    1,
+                    null,
+                    new(
+                        Guid.NewGuid(),
+                        PreQuoteDraftValuationStatus.Valued,
+                        null,
+                        Guid.NewGuid(),
+                        Guid.NewGuid(),
+                        100,
+                        100,
+                        1,
+                        1.500000m,
+                        4.500000m,
+                        90000.123456m,
+                        270000.370368m,
+                        810001.111104m,
+                        "COP",
+                        At.AddMinutes(2),
+                        null,
+                        null))
+            ],
+            [],
+            [],
+            [],
+            []);
+
+    private static PreQuoteDraftItemEdit CreateItemEdit(
+        PreQuoteDraftItem item,
+        string? reference = null,
+        string description = "Item",
+        int? widthMillimeters = null,
+        int? heightMillimeters = null,
+        int? quantity = null,
+        string? rawMeasurements = null,
+        bool? isIncluded = null)
+    {
+        return new(
+            item.Id,
+            item.Sequence,
+            reference ?? item.Reference,
+            description,
+            item.ElementType,
+            rawMeasurements ?? item.RawMeasurements,
+            widthMillimeters ?? item.WidthMillimeters,
+            heightMillimeters ?? item.HeightMillimeters,
+            quantity ?? item.Quantity,
+            isIncluded ?? item.IsIncluded);
+    }
+
+    private static PreQuoteDraftRequirementEdit[] ExistingRequirements(
+        PreQuoteDraft draft) =>
+        draft.Requirements.OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftRequirementEdit(
+                x.Id, x.Sequence, x.Category, x.Value, x.IsIncluded)).ToArray();
+    private static PreQuoteDraftReferenceEdit[] ExistingReferences(
+        PreQuoteDraft draft) =>
+        draft.DocumentReferences.OrderBy(x => x.Sequence)
+            .Select(x => new PreQuoteDraftReferenceEdit(
+                x.Id, x.Sequence, x.Reference, x.Description,
+                x.Detail, x.Quantity, x.IsIncluded)).ToArray();
 }

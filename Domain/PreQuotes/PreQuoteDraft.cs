@@ -251,11 +251,57 @@ public sealed record PreQuoteDraftReferenceSource(
     Guid SourceId, int Sequence, string? Reference, string Description,
     string? Detail, int? Quantity);
 public sealed record PreQuoteDraftIssueSource(
-    Guid SourceId, int Sequence, StructuredIssueCode Code, string Message,
+    Guid? SourceId, int Sequence, StructuredIssueCode Code, string Message,
     int? ItemSequence, int[] PageNumbers);
 public sealed record PreQuoteDraftConflictSource(
     Guid SourceId, int Sequence, StructuredConflictCode Code, string Message,
     int[] ItemSequences, int[] PageNumbers);
+public static class PreQuoteDraftIssueCodeMap
+{
+    public static bool TryMapGlassReviewReasonToIssueCode(
+        GlassReviewReason reason,
+        out StructuredIssueCode code)
+    {
+        (code, var isKnown) = reason switch
+        {
+            GlassReviewReason.GlassTypeNotIdentified => (StructuredIssueCode.GlassTypeNotIdentified, true),
+            GlassReviewReason.GlassTypeAmbiguous => (StructuredIssueCode.GlassTypeAmbiguous, true),
+            GlassReviewReason.GlassTypeConflict => (StructuredIssueCode.GlassTypeConflict, true),
+            _ => (StructuredIssueCode.OcrReviewRequired, false)
+        };
+        return isKnown;
+    }
+
+    public static string MapContractCode(StructuredIssueCode value) => value switch
+    {
+        StructuredIssueCode.ProjectNameNotFound => "PROJECT_NAME_NOT_FOUND",
+        StructuredIssueCode.NoQuoteableItemsFound => "NO_QUOTEABLE_ITEMS_FOUND",
+        StructuredIssueCode.IncompleteTableRow => "INCOMPLETE_TABLE_ROW",
+        StructuredIssueCode.MissingItemReference => "MISSING_ITEM_REFERENCE",
+        StructuredIssueCode.MissingOrInvalidMeasurements =>
+            "MISSING_OR_INVALID_MEASUREMENTS",
+        StructuredIssueCode.MissingOrInvalidQuantity =>
+            "MISSING_OR_INVALID_QUANTITY",
+        StructuredIssueCode.UnknownElementType => "UNKNOWN_ELEMENT_TYPE",
+        StructuredIssueCode.OcrReviewRequired => "OCR_REVIEW_REQUIRED",
+        StructuredIssueCode.GlassTypeNotIdentified =>
+            "GLASS_TYPE_NOT_IDENTIFIED",
+        StructuredIssueCode.GlassTypeAmbiguous => "GLASS_TYPE_AMBIGUOUS",
+        StructuredIssueCode.GlassTypeConflict => "GLASS_TYPE_CONFLICT",
+        _ => "OCR_REVIEW_REQUIRED"
+    };
+
+    public static string MapIssueMessage(StructuredIssueCode code) => code switch
+    {
+        StructuredIssueCode.GlassTypeNotIdentified =>
+            "No fue posible identificar el tipo de vidrio.",
+        StructuredIssueCode.GlassTypeAmbiguous =>
+            "Se identificaron múltiples tipos de vidrio posibles.",
+        StructuredIssueCode.GlassTypeConflict =>
+            "Se detectó información contradictoria sobre el tipo de vidrio.",
+        _ => string.Empty
+    };
+}
 public sealed record PreQuoteDraftItemEdit(
     Guid? Id, int Sequence, string? Reference, string Description,
     StructuredElementType ElementType, string? RawMeasurements,
@@ -359,9 +405,82 @@ public sealed class PreQuoteDraft
         draft._items.AddRange(items.Select(x => PreQuoteDraftItem.FromAi(draft.Id, x, userId, createdAtUtc)));
         draft._requirements.AddRange(requirements.Select(x => PreQuoteDraftRequirement.FromAi(draft.Id, x, userId, createdAtUtc)));
         draft._documentReferences.AddRange(references.Select(x => PreQuoteDraftDocumentReference.FromAi(draft.Id, x, userId, createdAtUtc)));
-        draft._issues.AddRange(issues.Select(x => PreQuoteDraftIssue.Create(draft.Id, x, createdAtUtc)));
+        var mergedIssues = MergeIssues(issues, items);
+        draft._issues.AddRange(mergedIssues.Select(x => PreQuoteDraftIssue.Create(draft.Id, x, createdAtUtc)));
         draft._conflicts.AddRange(conflicts.Select(x => PreQuoteDraftConflict.Create(draft.Id, x, createdAtUtc)));
         return draft;
+    }
+
+    private static string PageKey(int[] pageNumbers) =>
+        string.Join(',', pageNumbers);
+
+    private static IReadOnlyList<PreQuoteDraftIssueSource> MergeIssues(
+        IReadOnlyList<PreQuoteDraftIssueSource> explicitIssues,
+        IReadOnlyList<PreQuoteDraftItemSource> items)
+    {
+        var merged = new List<PreQuoteDraftIssueSource>();
+        var existing = new HashSet<(StructuredIssueCode Code, int? ItemSequence, string PageKey)>();
+        var sequence = 1;
+
+        foreach (var issue in explicitIssues.OrderBy(x => x.Sequence))
+        {
+            var normalizedPages = issue.PageNumbers
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+            var normalized = issue with
+            {
+                Message = issue.Message.Trim(),
+                Sequence = sequence,
+                PageNumbers = normalizedPages
+            };
+            var identity = (normalized.Code, normalized.ItemSequence, PageKey(normalizedPages));
+            if (existing.Add(identity))
+            {
+                merged.Add(normalized);
+                sequence++;
+            }
+        }
+
+        foreach (var item in items.OrderBy(x => x.Sequence))
+        {
+            if (item.Glass is null || item.Glass.ReviewReasons.Count == 0) continue;
+
+            var pageNumbers = item.Glass.SourcePages
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+            var reasons = item.Glass.ReviewReasons
+                .Distinct()
+                .ToArray();
+            foreach (var reason in reasons)
+            {
+                if (!PreQuoteDraftIssueCodeMap.TryMapGlassReviewReasonToIssueCode(
+                        reason, out var issueCode))
+                {
+                    continue;
+                }
+
+                var message = PreQuoteDraftIssueCodeMap.MapIssueMessage(issueCode);
+                var itemSequence = item.Sequence;
+                var identity = (issueCode, itemSequence, PageKey(pageNumbers));
+                if (!existing.Add(identity))
+                {
+                    continue;
+                }
+
+                merged.Add(new PreQuoteDraftIssueSource(
+                    null,
+                    sequence,
+                    issueCode,
+                    message,
+                    itemSequence,
+                    pageNumbers));
+                sequence++;
+            }
+        }
+
+        return merged;
     }
 
     private PreQuoteDraftEconomicSummary CalculateEconomicSummary()
@@ -377,14 +496,33 @@ public sealed class PreQuoteDraft
             x => x.ValuationStatus == PreQuoteDraftValuationStatus.RequiresReview)
             .ToArray();
 
-        var valuedArea = valued.Sum(x => x.ValuationSnapshot!.TotalAreaSquareMeters
-            ?? 0);
-        var valuedSubtotal = valued.Sum(x => x.ValuationSnapshot!.TotalAmount ?? 0);
-        var currencies = valued.Select(x => x.ValuationSnapshot!.Currency)
-            .Where(currency => currency is not null)
+        var validValuedItems = valued
+            .Where(x => x.ValuationSnapshot is not null
+                && x.ValuationSnapshot.TotalAmount is not null
+                && x.ValuationSnapshot.TotalAreaSquareMeters is not null
+                && x.ValuationSnapshot.Currency is { } currency
+                && !string.IsNullOrWhiteSpace(currency))
+            .ToArray();
+
+        var compatibleCurrencies = validValuedItems
+            .Select(x => x.ValuationSnapshot!.Currency!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var currency = currencies.Length == 1 ? currencies[0] : null;
+        var currency = compatibleCurrencies.Length == 1
+            ? compatibleCurrencies[0]
+            : null;
+
+        var hasCurrencyCompatibility = valued.Length > 0 && currency is not null
+            && valued.Length == validValuedItems.Length;
+
+        var valuedArea = hasCurrencyCompatibility
+            ? validValuedItems.Sum(
+                x => x.ValuationSnapshot!.TotalAreaSquareMeters!)
+            : 0;
+        var valuedSubtotal = hasCurrencyCompatibility
+            ? validValuedItems.Sum(
+                x => x.ValuationSnapshot!.TotalAmount!)
+            : 0;
 
         return new(
             included.Length,
@@ -397,7 +535,10 @@ public sealed class PreQuoteDraft
             valuedSubtotal == 0 ? null : valuedSubtotal,
             currency,
             valued.Length > 0 && stale.Length == 0 && pending.Length == 0 &&
-                requiringReview.Length == 0 && currency is not null);
+                requiringReview.Length == 0 && currency is not null &&
+                valued.All(x => x.ValuationSnapshot is not null &&
+                    x.ValuationSnapshot.Currency is not null &&
+                    !string.IsNullOrWhiteSpace(x.ValuationSnapshot.Currency)));
     }
 
     public void Update(
@@ -617,6 +758,9 @@ public sealed class PreQuoteDraftItem
         PreQuoteDraft.Dimensions(x.WidthMillimeters, x.HeightMillimeters);
         PreQuoteDraft.Quantity(x.Quantity);
 
+        var previousWidth = WidthMillimeters;
+        var previousHeight = HeightMillimeters;
+        var previousQuantity = Quantity;
         var widthChanged = x.WidthMillimeters != WidthMillimeters;
         var heightChanged = x.HeightMillimeters != HeightMillimeters;
         var quantityChanged = x.Quantity != Quantity;
@@ -631,11 +775,18 @@ public sealed class PreQuoteDraftItem
         Quantity = x.Quantity;
         IsIncluded = x.IsIncluded;
 
+        var changedEconomicInputs = 0;
+        if (widthChanged) changedEconomicInputs++;
+        if (heightChanged) changedEconomicInputs++;
+        if (quantityChanged) changedEconomicInputs++;
+
         if (ValuationStatus == PreQuoteDraftValuationStatus.Valued
             && ValuationSnapshot is not null
-            && (widthChanged || heightChanged || quantityChanged))
+            && (x.WidthMillimeters != previousWidth
+                || x.HeightMillimeters != previousHeight
+                || x.Quantity != previousQuantity))
         {
-            var reason = widthChanged && heightChanged && quantityChanged
+            var reason = changedEconomicInputs > 1
                 ? PreQuoteDraftValuationInvalidationReason.MultipleInputsChanged
                 : widthChanged
                     ? PreQuoteDraftValuationInvalidationReason.WidthChanged
@@ -687,8 +838,8 @@ public abstract class PreQuoteDraftFinding
 }
 public sealed class PreQuoteDraftIssue : PreQuoteDraftFinding
 {
-    private PreQuoteDraftIssue(){} public Guid SourceStructuredIssueId{get;private set;} public int SourceIssueSequence{get;private set;} public StructuredIssueCode Code{get;private set;} public string Message{get;private set;}=""; public int? ItemSequence{get;private set;} public int[] PageNumbers{get;private set;}=[]; public PreQuoteDraft Draft{get;private set;}=null!;
-    internal static PreQuoteDraftIssue Create(Guid d,PreQuoteDraftIssueSource x,DateTimeOffset at)=>new(){Id=Guid.NewGuid(),PreQuoteDraftId=d,Sequence=x.Sequence,SourceStructuredIssueId=x.SourceId,SourceIssueSequence=x.Sequence,Code=x.Code,Message=x.Message,ItemSequence=x.ItemSequence,PageNumbers=x.PageNumbers.ToArray(),ResolutionStatus=PreQuoteDraftResolutionStatus.Pending,CreatedAtUtc=at};
+    private PreQuoteDraftIssue(){} public Guid? SourceStructuredIssueId{get;private set;} public int? SourceIssueSequence{get;private set;} public StructuredIssueCode Code{get;private set;} public string Message{get;private set;}=""; public int? ItemSequence{get;private set;} public int[] PageNumbers{get;private set;}=[]; public PreQuoteDraft Draft{get;private set;}=null!;
+    internal static PreQuoteDraftIssue Create(Guid d,PreQuoteDraftIssueSource x,DateTimeOffset at)=>new(){Id=Guid.NewGuid(),PreQuoteDraftId=d,Sequence=x.Sequence,SourceStructuredIssueId=x.SourceId,SourceIssueSequence=x.SourceId is null ? null : x.Sequence,Code=x.Code,Message=x.Message,ItemSequence=x.ItemSequence,PageNumbers=x.PageNumbers.ToArray(),ResolutionStatus=PreQuoteDraftResolutionStatus.Pending,CreatedAtUtc=at};
 }
 public sealed class PreQuoteDraftConflict : PreQuoteDraftFinding
 {

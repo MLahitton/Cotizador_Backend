@@ -17,7 +17,7 @@ public sealed class UpdatePreQuoteDraftServiceTests
         new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task Execute_DraftNotFound_WhenOwnerIsUnauthorizedForDraft()
+    public async Task UpdateForeignOwner_ReturnsNotFound()
     {
         var draft = CreateDraft();
         var user = CreateUser();
@@ -126,6 +126,265 @@ public sealed class UpdatePreQuoteDraftServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task UpdateWidth_ReturnsStaleItem()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, item.Description,
+                    item.ElementType, item.RawMeasurements,
+                    120, item.HeightMillimeters, item.Quantity, item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.WidthChanged,
+            item.ValuationSnapshot?.InvalidationReason);
+    }
+
+    [Fact]
+    public async Task UpdateHeight_ReturnsStaleItem()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, item.Description,
+                    item.ElementType, item.RawMeasurements,
+                    item.WidthMillimeters, 150, item.Quantity, item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.HeightChanged,
+            item.ValuationSnapshot?.InvalidationReason);
+    }
+
+    [Fact]
+    public async Task UpdateQuantity_ReturnsStaleItem()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, item.Description,
+                    item.ElementType, item.RawMeasurements,
+                    item.WidthMillimeters, item.HeightMillimeters, 5, item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftValuationStatus.Stale, item.ValuationStatus);
+        Assert.Equal(
+            PreQuoteDraftValuationInvalidationReason.QuantityChanged,
+            item.ValuationSnapshot?.InvalidationReason);
+    }
+
+    [Fact]
+    public async Task UpdateDescription_DoesNotInvalidate()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, "Description updated",
+                    item.ElementType, item.RawMeasurements,
+                    item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
+                    item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Null(item.ValuationSnapshot?.InvalidationReason);
+        Assert.Null(item.ValuationSnapshot?.InvalidatedAtUtc);
+    }
+
+    [Fact]
+    public async Task UpdateReference_DoesNotInvalidate()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, "R-2", item.Description,
+                    item.ElementType, item.RawMeasurements,
+                    item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
+                    item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Null(item.ValuationSnapshot?.InvalidationReason);
+    }
+
+    [Fact]
+    public async Task UpdateRawMeasurements_DoesNotInvalidate()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, item.Description,
+                    item.ElementType, "120x150 mm",
+                    item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
+                    item.IsIncluded)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            PreQuoteDraftValuationStatus.Valued, item.ValuationStatus);
+        Assert.Null(item.ValuationSnapshot?.InvalidationReason);
+    }
+
+    [Fact]
+    public async Task UpdateIsIncluded_RecalculatesSummary()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var item = draft.Items.Single();
+
+        var command = CreateCommand(draft) with
+        {
+            Items =
+            [
+                new(
+                    item.Id, 1, item.Reference, item.Description,
+                    item.ElementType, item.RawMeasurements,
+                    item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
+                    false)
+            ]
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.False(item.IsIncluded);
+        Assert.Equal(0, draft.EconomicSummary.IncludedItemCount);
+        Assert.Equal(0, draft.EconomicSummary.ValuedItemCount);
+    }
+
+    [Fact]
+    public async Task UpdateWithExpectedVersion_PreservesConcurrency()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        var command = CreateCommand(draft) with { PreQuoteId = PreQuoteId, ExpectedVersion = 2 };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftFailure.VersionConflict, result.Failure);
+        await context.Repository.DidNotReceive().SaveChangesAsync(
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdateQueryFailure_ReturnsQueryError()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        context.Repository.FindForUpdateAsync(
+            PreQuoteId,
+            UserId,
+            Arg.Any<CancellationToken>()).Returns<Task<PreQuoteDraft?>>(
+            x => throw new PreQuoteDraftQueryException(new Exception("db")));
+
+        var result = await context.Service.ExecuteAsync(
+            CreateCommand(draft),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftFailure.QueryError, result.Failure);
+        await context.Repository.DidNotReceive().SaveChangesAsync(
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task UpdatePersistenceFailure_ReturnsPersistenceError()
+    {
+        var draft = CreateDraftWithValuation();
+        var context = CreateContext(draft);
+        context.Repository.SaveChangesAsync(
+            Arg.Any<CancellationToken>()).Returns<Task>(
+            x => throw new PreQuoteDraftPersistenceException(new Exception("db")));
+
+        var result = await context.Service.ExecuteAsync(
+            CreateCommand(draft),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftFailure.PersistenceError, result.Failure);
+    }
+
     private static Context CreateContext(PreQuoteDraft draft)
     {
         var currentUser = Substitute.For<ICurrentUser>();
@@ -213,7 +472,20 @@ public sealed class UpdatePreQuoteDraftServiceTests
                 null)).ToArray());
     }
 
-    private static PreQuoteDraft CreateDraft() => PreQuoteDraft.Create(
+    private static PreQuoteDraft CreateDraft() =>
+        CreateDraftWithItems([CreateDraftItem(
+            PreQuoteDraftValuationStatus.Pending,
+            1,
+            "I-1")]);
+
+    private static PreQuoteDraft CreateDraftWithValuation() =>
+        CreateDraftWithItems([CreateDraftItem(
+            PreQuoteDraftValuationStatus.Valued,
+            1,
+            "I-1")]);
+
+    private static PreQuoteDraft CreateDraftWithItems(
+        PreQuoteDraftItemSource[] items) => PreQuoteDraft.Create(
         PreQuoteId,
         Guid.NewGuid(),
         Guid.NewGuid(),
@@ -222,22 +494,56 @@ public sealed class UpdatePreQuoteDraftServiceTests
         "Location",
         UserId,
         At,
-        [new(
-            Guid.NewGuid(), 1, "I-1", "Item",
-            StructuredElementType.Window, null, 100, 100, 1)],
-        [new(
-            Guid.NewGuid(), 1,
+        items,
+        [new(Guid.NewGuid(), 1,
             RequirementCategory.GeneralNote, "Requirement")],
-        [new(
-            Guid.NewGuid(), 1, "R-1", "Reference", null, 1)],
-        [new(
-            Guid.NewGuid(), 1,
+        [new(Guid.NewGuid(), 1, "R-1", "Reference", null, 1)],
+        [new(Guid.NewGuid(), 1,
             StructuredIssueCode.OcrReviewRequired,
             "Issue", 1, [1])],
-        [new(
-            Guid.NewGuid(), 1,
+        [new(Guid.NewGuid(), 1,
             StructuredConflictCode.DuplicateItemReference,
             "Conflict", [1], [1])]);
+
+    private static PreQuoteDraftItemSource CreateDraftItem(
+        PreQuoteDraftValuationStatus valuationStatus,
+        int sequence,
+        string reference)
+    {
+        PreQuoteDraftItemValuationSnapshotSource? valuation = valuationStatus == PreQuoteDraftValuationStatus.Pending
+            ? null
+            : new(
+                Guid.NewGuid(),
+                valuationStatus,
+                null,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                100,
+                100,
+                1,
+                1.5m,
+                3,
+                90000.123456m,
+                270000.370368m,
+                810001.111104m,
+                "COP",
+                At.AddMinutes(2),
+                null,
+                null);
+
+        return new(
+            Guid.NewGuid(),
+            sequence,
+            reference,
+            "Item",
+            StructuredElementType.Window,
+            null,
+            100,
+            100,
+            1,
+            null,
+            valuation);
+    }
 
     private static User CreateUser() => User.CreateFromGoogle(
         "user@example.com", "Test", "User", null, At);

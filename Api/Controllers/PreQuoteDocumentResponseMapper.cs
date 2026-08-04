@@ -191,24 +191,8 @@ internal static class PreQuoteDocumentResponseMapper
         RequirementCategory.GeneralNote => "GENERAL_NOTE",
         _ => throw new InvalidOperationException()
     };
-    private static string Map(StructuredIssueCode value) => value switch
-    {
-        StructuredIssueCode.ProjectNameNotFound => "PROJECT_NAME_NOT_FOUND",
-        StructuredIssueCode.NoQuoteableItemsFound => "NO_QUOTEABLE_ITEMS_FOUND",
-        StructuredIssueCode.IncompleteTableRow => "INCOMPLETE_TABLE_ROW",
-        StructuredIssueCode.MissingItemReference => "MISSING_ITEM_REFERENCE",
-        StructuredIssueCode.MissingOrInvalidMeasurements =>
-            "MISSING_OR_INVALID_MEASUREMENTS",
-        StructuredIssueCode.MissingOrInvalidQuantity =>
-            "MISSING_OR_INVALID_QUANTITY",
-        StructuredIssueCode.UnknownElementType => "UNKNOWN_ELEMENT_TYPE",
-        StructuredIssueCode.OcrReviewRequired => "OCR_REVIEW_REQUIRED",
-        StructuredIssueCode.GlassTypeNotIdentified =>
-            "GLASS_TYPE_NOT_IDENTIFIED",
-        StructuredIssueCode.GlassTypeAmbiguous => "GLASS_TYPE_AMBIGUOUS",
-        StructuredIssueCode.GlassTypeConflict => "GLASS_TYPE_CONFLICT",
-        _ => throw new InvalidOperationException()
-    };
+    private static string Map(StructuredIssueCode value) =>
+        PreQuoteDraftIssueCodeMap.MapContractCode(value);
     private static string Map(GlassAssignmentScope value) => value switch
     {
         GlassAssignmentScope.Item => "ITEM",

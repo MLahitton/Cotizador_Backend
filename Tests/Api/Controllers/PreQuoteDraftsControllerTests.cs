@@ -253,10 +253,10 @@ public sealed class PreQuoteDraftsControllerTests
         Assert.Equal("RESOLVED", response.Issues[0].ResolutionStatus);
         Assert.Equal(2, response.Version);
         Assert.NotNull(response.Summary);
-        Assert.NotNull(response.Audit);
+        Assert.Null(response.Audit);
         foreach (var forbidden in new[]
         {
-            "payloadJson", "storageKey", "sourceStructuredItemId",
+            "payloadJson", "storageKey",
             "sourceStructuredRequirementId",
             "sourceStructuredDocumentReferenceId",
             "sourceStructuredIssueId", "sourceStructuredConflictId"

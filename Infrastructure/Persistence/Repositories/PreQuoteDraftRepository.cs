@@ -80,6 +80,7 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.GlassDetection.SourcePages
                                 .OrderBy(page => page.Sequence)
                                 .Select(page => page.PageNumber)
+                                .Distinct()
                                 .ToArray(),
                             x.GlassDetection.Evidence
                                 .OrderBy(evidence => evidence.Sequence)
@@ -107,24 +108,11 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.GlassValuation.TotalAreaSquareMeters,
                             x.GlassValuation.MinimumPricePerSquareMeter,
                             x.GlassValuation.MinimumAmount,
-                            x.GlassValuation.MinimumAmount == null
-                                || x.GlassValuation.TotalAreaSquareMeters == null
-                                ? null
-                                : x.GlassValuation.MinimumAmount,
+                            x.GlassValuation.MaximumAmount,
                             x.GlassValuation.Currency,
                             x.GlassValuation.CalculatedAtUtc,
                             null,
-                            x.GlassValuation.Reason == null
-                                ? null
-                                : x.GlassValuation.Reason == GlassValuationReason.MissingMeasurements
-                                    ? PreQuoteDraftValuationInvalidationReason.WidthChanged
-                                    : x.GlassValuation.Reason == GlassValuationReason.MissingQuantity
-                                        ? PreQuoteDraftValuationInvalidationReason.QuantityChanged
-                                        : x.GlassValuation.Reason == GlassValuationReason.GlassTypeNotResolved
-                                            ? PreQuoteDraftValuationInvalidationReason.QuantityChanged
-                                            : x.GlassValuation.Reason == GlassValuationReason.PriceRangeNotAvailable
-                                                ? PreQuoteDraftValuationInvalidationReason.QuantityChanged
-                                                : null)))
+                            null)))
                 .ToArrayAsync(cancellationToken);
             var requirements = await dbContext.Set<StructuredExtractionRequirement>()
                 .AsNoTracking().Where(x => x.StructuredDocumentExtractionId == extractionId)
