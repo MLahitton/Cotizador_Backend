@@ -111,11 +111,80 @@ public sealed class BeErrAuditContractTests
             new StringContent(bigBody, Encoding.UTF8, "application/json"),
             TestContext.Current.CancellationToken);
 
+        var raw = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(raw);
+        var root = json.RootElement;
+
+        Assert.True(host.PayloadLimiterProducedStatusOnly);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.StartsWith(
+            "application/problem+json",
+            response.Content.Headers.ContentType?.ToString());
+        Assert.False(string.IsNullOrWhiteSpace(raw));
+        Assert.Equal("API_PAYLOAD_TOO_LARGE", root.GetProperty("errorCode").GetString());
+        Assert.Equal((int)HttpStatusCode.RequestEntityTooLarge, root.GetProperty("status").GetInt32());
+        Assert.Equal(
+            "urn:cotizador:error:api_payload_too_large",
+            root.GetProperty("type").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("traceId").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("title").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("detail").GetString()));
+        Assert.False(root.TryGetProperty("code", out _));
+        Assert.False(root.TryGetProperty("stackTrace", out _));
+        Assert.DoesNotContain(
+            "stack",
+            raw,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "internal",
+            raw,
+            StringComparison.OrdinalIgnoreCase);
+
         await AssertProblemResponseAsync(
             response,
             HttpStatusCode.RequestEntityTooLarge,
             ApiErrorCodes.ApiPayloadTooLarge,
             "application/problem+json");
+    }
+
+    [Fact]
+    public async Task Get_ToBadRequestException_TransformsToApiPayloadTooLarge()
+    {
+        await using var host = await ControlledHost.StartAsync(
+            withJwt: false,
+            withControllers: false,
+            enforcePayloadLimit: false);
+
+        using var response = await host.Client.GetAsync(
+            "/api/v1/projects/bad-request",
+            TestContext.Current.CancellationToken);
+
+        await AssertProblemResponseAsync(
+            response,
+            HttpStatusCode.RequestEntityTooLarge,
+            ApiErrorCodes.ApiPayloadTooLarge,
+            "application/problem+json");
+
+        var raw = await response.Content.ReadAsStringAsync(
+            TestContext.Current.CancellationToken);
+        using var json = JsonDocument.Parse(raw);
+        var root = json.RootElement;
+        Assert.Equal(
+            "urn:cotizador:error:api_payload_too_large",
+            root.GetProperty("type").GetString());
+        Assert.Equal(
+            (int)HttpStatusCode.RequestEntityTooLarge,
+            root.GetProperty("status").GetInt32());
+        Assert.Equal(
+            ApiErrorCodes.ApiPayloadTooLarge,
+            root.GetProperty("errorCode").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("traceId").GetString()));
+        Assert.False(root.TryGetProperty("stack", out _));
+        Assert.DoesNotContain(
+            "stack",
+            raw,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -278,16 +347,28 @@ public sealed class BeErrAuditContractTests
         return handler.WriteToken(handler.CreateToken(descriptor));
     }
 
-    private sealed class ControlledHost : IAsyncDisposable
-    {
-        private ControlledHost(WebApplication application, HttpClient client)
+        private sealed class ControlledHost : IAsyncDisposable
+        {
+        private sealed class PayloadLimiterState
+        {
+            public bool ProducedStatusOnly;
+        }
+
+        private ControlledHost(
+            WebApplication application,
+            HttpClient client,
+            PayloadLimiterState payloadLimiterState)
         {
             Application = application;
             Client = client;
+            _payloadLimiterState = payloadLimiterState;
         }
 
         public WebApplication Application { get; }
         public HttpClient Client { get; }
+        public bool PayloadLimiterProducedStatusOnly => _payloadLimiterState.ProducedStatusOnly;
+
+        private readonly PayloadLimiterState _payloadLimiterState;
 
         public static async Task<ControlledHost> StartAsync(
             bool withJwt,
@@ -399,6 +480,7 @@ public sealed class BeErrAuditContractTests
             application.UseExceptionHandler();
             application.UseRouting();
             application.UseContractualProblemDetails();
+            var payloadLimiterState = new PayloadLimiterState();
 
             if (enforcePayloadLimit)
             {
@@ -409,7 +491,9 @@ public sealed class BeErrAuditContractTests
                         && (HttpMethods.IsPost(context.Request.Method)
                             || HttpMethods.IsPut(context.Request.Method)))
                     {
-                        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+                        payloadLimiterState.ProducedStatusOnly = true;
+                        context.Response.StatusCode =
+                            StatusCodes.Status413PayloadTooLarge;
                         return;
                     }
 
@@ -450,6 +534,9 @@ public sealed class BeErrAuditContractTests
                     {
                         InvalidRequestErrorCode = ApiErrorCodes.InternalServerError
                     });
+                application.MapGet(
+                    "/api/v1/projects/bad-request",
+                    throwBadRequestException);
 
                 application.MapGet("/api/v1/be-err-audit/protected", () => TypedResults.Ok(new
                 {
@@ -481,12 +568,22 @@ public sealed class BeErrAuditContractTests
                 .Features.Get<IServerAddressesFeature>()?.Addresses;
             Assert.NotNull(addresses);
             var client = new HttpClient { BaseAddress = new Uri(Assert.Single(addresses)) };
-            return new ControlledHost(application, client);
+            return new ControlledHost(
+                application,
+                client,
+                payloadLimiterState);
         }
 
         private static IResult throwUnexpectedFailure()
         {
             throw new InvalidOperationException("Unexpected audit failure");
+        }
+
+        private static IResult throwBadRequestException()
+        {
+            throw new BadHttpRequestException(
+                "Payload too large in test",
+                StatusCodes.Status413PayloadTooLarge);
         }
 
         public async ValueTask DisposeAsync()
