@@ -27,18 +27,23 @@ public interface IPreQuoteDraftRepository
         Guid preQuoteId,
         Guid documentId,
         Guid structuredExtractionId,
+        Guid ownerUserId,
         CancellationToken cancellationToken);
     Task<bool> ExistsAsync(
         Guid preQuoteId,
+        Guid ownerUserId,
         CancellationToken cancellationToken);
     Task<PreQuoteDraft?> FindForUpdateAsync(
         Guid preQuoteId,
+        Guid ownerUserId,
         CancellationToken cancellationToken);
     Task<PreQuoteDraft?> FindReadAsync(
         Guid preQuoteId,
+        Guid ownerUserId,
         CancellationToken cancellationToken);
     Task<PreQuoteDraftActivityContext?> FindActivityAsync(
         Guid preQuoteId,
+        Guid ownerUserId,
         CancellationToken cancellationToken);
     void Add(PreQuoteDraft draft);
     Task SaveChangesAsync(CancellationToken cancellationToken);

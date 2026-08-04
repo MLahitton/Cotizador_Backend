@@ -39,6 +39,7 @@ public sealed record PreQuoteDraftDetailsResponse(
     IReadOnlyList<PreQuoteDraftIssueResponse> Issues,
     IReadOnlyList<PreQuoteDraftConflictResponse> Conflicts,
     PreQuoteDraftSummaryResponse Summary,
+    PreQuoteDraftEconomicSummaryResponse EconomicSummary,
     PreQuoteDraftAuditResponse Audit);
 public sealed record PreQuoteDraftProjectResponse(
     string? Name, string? ClientName, string? Location);
@@ -46,7 +47,34 @@ public sealed record PreQuoteDraftItemResponse(
     Guid DraftItemId, int Sequence, string Origin, int? SourceSequence,
     string? Reference, string Description, string ElementType,
     string? RawMeasurements, int? WidthMillimeters, int? HeightMillimeters,
-    int? Quantity, bool IsIncluded);
+    int? Quantity, bool IsIncluded,
+    PreQuoteDraftItemGlassResponse? Glass,
+    PreQuoteDraftItemValuationResponse? Valuation);
+
+public sealed record PreQuoteDraftItemGlassResponse(
+    Guid? GlassTypeId,
+    string? RawSpecification,
+    string? NormalizedCodeSnapshot,
+    string AssignmentScope,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<int> SourcePages,
+    IReadOnlyList<PreQuoteDraftItemGlassEvidenceResponse> Evidence);
+
+public sealed record PreQuoteDraftItemGlassEvidenceResponse(
+    int Sequence, int PageNumber, string SourceType, string Text);
+
+public sealed record PreQuoteDraftItemValuationResponse(
+    Guid SourceStructuredItemValuationId, string Status, string? Reason,
+    Guid? GlassTypeId, Guid? GlassPriceRangeVersionId,
+    int? WidthMillimetersUsed, int? HeightMillimetersUsed, int? QuantityUsed,
+    decimal? UnitAreaSquareMeters, decimal? TotalAreaSquareMeters,
+    decimal? MinimumUnitPricePerSquareMeter,
+    decimal? MaximumUnitPricePerSquareMeter,
+    decimal? MinimumAmount, decimal? MaximumAmount,
+    string? Currency, DateTimeOffset ValuedAtUtc,
+    DateTimeOffset? InvalidatedAtUtc, string? InvalidationReason);
+
 public sealed record PreQuoteDraftRequirementResponse(
     Guid DraftRequirementId, int Sequence, string Origin, int? SourceSequence,
     string Category, string Value, bool IsIncluded);
@@ -74,6 +102,19 @@ public sealed record PreQuoteDraftSummaryResponse(
     int ResolvedIssueCount, int DismissedIssueCount,
     int PendingConflictCount, int ResolvedConflictCount,
     int DismissedConflictCount);
+
+public sealed record PreQuoteDraftEconomicSummaryResponse(
+    int IncludedItemCount,
+    int IncludedQuantity,
+    int ValuedItemCount,
+    int PendingValuationItemCount,
+    int StaleValuationItemCount,
+    int ItemsRequiringReviewCount,
+    decimal? TotalAreaSquareMeters,
+    decimal? MinimumGlassSubtotal,
+    decimal? MaximumGlassSubtotal,
+    string? Currency,
+    bool IsEconomicallyComplete);
 public sealed record PreQuoteDraftAuditResponse(
     Guid CreatedByUserId, Guid UpdatedByUserId, Guid? ApprovedByUserId,
     DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc,

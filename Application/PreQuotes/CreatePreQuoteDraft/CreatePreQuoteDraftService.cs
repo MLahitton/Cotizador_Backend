@@ -22,12 +22,14 @@ public sealed class CreatePreQuoteDraftService(
         if (!user.IsActive) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveUser);
         try
         {
-            if (await repository.ExistsAsync(command.PreQuoteId, cancellationToken))
-                return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.DraftAlreadyExists);
             var source = await repository.FindSourceAsync(
                 command.PreQuoteId, command.SourceDocumentId,
-                command.SourceStructuredExtractionId, cancellationToken);
+                command.SourceStructuredExtractionId, user.Id,
+                cancellationToken);
             if (source is null) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.NotFound);
+            if (await repository.ExistsAsync(
+                    command.PreQuoteId, user.Id, cancellationToken))
+                return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.DraftAlreadyExists);
             if (!source.ProjectIsActive) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveProject);
             if (!source.ClientIsActive) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveClient);
             var draft = PreQuoteDraft.Create(

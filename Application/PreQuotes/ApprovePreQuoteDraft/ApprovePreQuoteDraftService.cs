@@ -16,8 +16,14 @@ public sealed class ApprovePreQuoteDraftService(
         if (!user.IsActive) return ApprovePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveUser);
         try
         {
-            var activity = await repository.FindActivityAsync(command.PreQuoteId, cancellationToken);
-            var draft = await repository.FindForUpdateAsync(command.PreQuoteId, cancellationToken);
+            var activity = await repository.FindActivityAsync(
+                command.PreQuoteId,
+                userId,
+                cancellationToken);
+            var draft = await repository.FindForUpdateAsync(
+                command.PreQuoteId,
+                userId,
+                cancellationToken);
             if (activity is null || draft is null) return ApprovePreQuoteDraftResult.Failed(PreQuoteDraftFailure.NotFound);
             if (!activity.ProjectIsActive) return ApprovePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveProject);
             if (!activity.ClientIsActive) return ApprovePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveClient);

@@ -16,7 +16,10 @@ public sealed class UpdatePreQuoteDraftService(
         if (!user.IsActive) return UpdatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveUser);
         try
         {
-            var draft = await repository.FindForUpdateAsync(command.PreQuoteId, cancellationToken);
+            var draft = await repository.FindForUpdateAsync(
+                command.PreQuoteId,
+                userId,
+                cancellationToken);
             if (draft is null) return UpdatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.NotFound);
             try
             {

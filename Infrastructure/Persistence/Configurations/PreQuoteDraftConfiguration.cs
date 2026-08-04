@@ -1,5 +1,6 @@
 using Domain.Identity;
 using Domain.PreQuotes;
+using Domain.Catalogs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -97,6 +98,159 @@ public sealed class PreQuoteDraftItemConfiguration : IEntityTypeConfiguration<Pr
                 "(\"origin\" = 'Ai' AND \"source_structured_item_id\" IS NOT NULL AND \"source_item_sequence\" IS NOT NULL) OR (\"origin\" = 'Manual' AND \"source_structured_item_id\" IS NULL AND \"source_item_sequence\" IS NULL)");
         });
         b.HasOne<StructuredExtractionItem>().WithMany().HasForeignKey(x => x.SourceStructuredItemId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.GlassSnapshot).WithOne()
+            .HasForeignKey<PreQuoteDraftItemGlassSnapshot>(x => x.PreQuoteDraftItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.ValuationSnapshot).WithOne()
+            .HasForeignKey<PreQuoteDraftItemValuationSnapshot>(x => x.PreQuoteDraftItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PreQuoteDraftItemGlassSnapshotConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemGlassSnapshot>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemGlassSnapshot> b)
+    {
+        b.ToTable("pre_quote_draft_item_glass_snapshots", "core", t =>
+        {
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_snapshot_scope",
+                "\"assignment_scope\" IN ('Item', 'Section', 'General', 'Unassigned')");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_snapshot_identity",
+                "(\"normalized_code_snapshot\" IS NULL AND \"glass_type_id\" IS NULL) OR (\"normalized_code_snapshot\" IS NOT NULL AND \"glass_type_id\" IS NOT NULL)");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_snapshot_requirements",
+                "\"requires_review\" IS NOT NULL");
+        });
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.PreQuoteDraftItemId).HasColumnName("pre_quote_draft_item_id").HasColumnType("uuid");
+        b.Property(x => x.SourceStructuredItemGlassId).HasColumnName("source_structured_item_glass_id").HasColumnType("uuid");
+        b.Property(x => x.GlassTypeId).HasColumnName("glass_type_id").HasColumnType("uuid");
+        b.Property(x => x.RawSpecification).HasColumnName("raw_specification").HasMaxLength(500);
+        b.Property(x => x.NormalizedCodeSnapshot).HasColumnName("normalized_code_snapshot").HasMaxLength(30);
+        b.Property(x => x.AssignmentScope).HasColumnName("assignment_scope").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
+    }
+}
+
+public sealed class PreQuoteDraftItemValuationSnapshotConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemValuationSnapshot>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemValuationSnapshot> b)
+    {
+        b.ToTable("pre_quote_draft_item_valuation_snapshots", "core", t =>
+        {
+            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_areas",
+                "\"unit_area_square_meters\" IS NULL OR \"unit_area_square_meters\" >= 0 AND \"total_area_square_meters\" >= 0");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_amounts",
+                "\"unit_amount\" IS NULL OR \"unit_amount\" >= 0 AND \"total_amount\" >= \"unit_amount\"");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_prices",
+                "\"unit_price_per_square_meter\" IS NULL OR \"unit_price_per_square_meter\" > 0");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_currency",
+                "\"currency\" IS NULL OR char_length(\"currency\") = 3");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_status",
+                "\"status\" IN ('NotApplicable', 'Pending', 'Valued', 'Stale', 'RequiresReview')");
+        });
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.PreQuoteDraftItemId).HasColumnName("pre_quote_draft_item_id").HasColumnType("uuid");
+        b.Property(x => x.SourceStructuredItemValuationId).HasColumnName("source_structured_item_valuation_id").HasColumnType("uuid");
+        b.Property(x => x.Status).HasColumnName("status").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.Reason).HasColumnName("reason").HasConversion<string>().HasMaxLength(40);
+        b.Property(x => x.GlassTypeId).HasColumnName("glass_type_id").HasColumnType("uuid");
+        b.Property(x => x.GlassPriceRangeVersionId).HasColumnName("glass_price_range_version_id").HasColumnType("uuid");
+        b.Property(x => x.WidthMillimetersUsed).HasColumnName("width_millimeters_used");
+        b.Property(x => x.HeightMillimetersUsed).HasColumnName("height_millimeters_used");
+        b.Property(x => x.QuantityUsed).HasColumnName("quantity_used");
+        b.Property(x => x.UnitAreaSquareMeters).HasColumnName("unit_area_square_meters").HasPrecision(18, 6);
+        b.Property(x => x.TotalAreaSquareMeters).HasColumnName("total_area_square_meters").HasPrecision(18, 6);
+        b.Property(x => x.UnitPricePerSquareMeter).HasColumnName("unit_price_per_square_meter").HasPrecision(18, 6);
+        b.Property(x => x.UnitAmount).HasColumnName("unit_amount").HasPrecision(18, 6);
+        b.Property(x => x.TotalAmount).HasColumnName("total_amount").HasPrecision(18, 6);
+        b.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3);
+        b.Property(x => x.ValuedAtUtc).HasColumnName("valued_at_utc").HasColumnType("timestamp with time zone");
+        b.Property(x => x.InvalidatedAtUtc).HasColumnName("invalidated_at_utc").HasColumnType("timestamp with time zone");
+        b.Property(x => x.InvalidationReason).HasColumnName("invalidation_reason").HasConversion<string>().HasMaxLength(30);
+        b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
+        b.HasOne<GlassType>().WithMany().HasForeignKey(x => x.GlassTypeId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<GlassPriceRangeVersion>().WithMany().HasForeignKey(x => x.GlassPriceRangeVersionId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class PreQuoteDraftItemGlassReviewReasonConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemGlassReviewReason>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemGlassReviewReason> b)
+    {
+        b.ToTable("pre_quote_draft_item_glass_review_reasons", "core");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.GlassSnapshotId).HasColumnName("glass_snapshot_id").HasColumnType("uuid");
+        b.Property(x => x.Sequence).HasColumnName("sequence");
+        b.Property(x => x.Code).HasColumnName("code").HasConversion<string>().HasMaxLength(40);
+        b.HasOne<PreQuoteDraftItemGlassSnapshot>()
+            .WithMany(x => x.ReviewReasons)
+            .HasForeignKey(x => x.GlassSnapshotId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => new { x.GlassSnapshotId, x.Sequence }).IsUnique();
+        b.HasIndex(x => new { x.GlassSnapshotId, x.Code }).IsUnique();
+        b.ToTable("pre_quote_draft_item_glass_review_reasons", "core", t =>
+        {
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_review_reason_sequence", "\"sequence\" > 0");
+        });
+    }
+}
+
+public sealed class PreQuoteDraftItemGlassSourcePageConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemGlassSourcePage>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemGlassSourcePage> b)
+    {
+        b.ToTable("pre_quote_draft_item_glass_source_pages", "core");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.GlassSnapshotId).HasColumnName("glass_snapshot_id").HasColumnType("uuid");
+        b.Property(x => x.Sequence).HasColumnName("sequence");
+        b.Property(x => x.PageNumber).HasColumnName("page_number");
+        b.HasOne<PreQuoteDraftItemGlassSnapshot>()
+            .WithMany(x => x.SourcePages)
+            .HasForeignKey(x => x.GlassSnapshotId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => new { x.GlassSnapshotId, x.Sequence }).IsUnique();
+        b.HasIndex(x => new { x.GlassSnapshotId, x.PageNumber }).IsUnique();
+        b.ToTable("pre_quote_draft_item_glass_source_pages", "core", t =>
+        {
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_source_page_sequence", "\"sequence\" > 0");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_source_page_page_number", "\"page_number\" > 0");
+        });
+    }
+}
+
+public sealed class PreQuoteDraftItemGlassEvidenceConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemGlassEvidence>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemGlassEvidence> b)
+    {
+        b.ToTable("pre_quote_draft_item_glass_evidence", "core");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.GlassSnapshotId).HasColumnName("glass_snapshot_id").HasColumnType("uuid");
+        b.Property(x => x.Sequence).HasColumnName("sequence");
+        b.Property(x => x.PageNumber).HasColumnName("page_number");
+        b.Property(x => x.SourceType).HasColumnName("source_type").HasConversion<string>().HasMaxLength(10);
+        b.Property(x => x.Text).HasColumnName("text").HasMaxLength(500);
+        b.HasOne<PreQuoteDraftItemGlassSnapshot>()
+            .WithMany(x => x.Evidence)
+            .HasForeignKey(x => x.GlassSnapshotId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => new { x.GlassSnapshotId, x.Sequence }).IsUnique();
+        b.HasIndex(x => new { x.GlassSnapshotId, x.PageNumber, x.SourceType, x.Text }).IsUnique();
+        b.ToTable("pre_quote_draft_item_glass_evidence", "core", t =>
+        {
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_evidence_sequence", "\"sequence\" > 0");
+            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_evidence_page_number", "\"page_number\" > 0");
+        });
     }
 }
 

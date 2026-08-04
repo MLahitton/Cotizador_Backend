@@ -17,6 +17,46 @@ public sealed class UpdatePreQuoteDraftServiceTests
         new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task Execute_DraftNotFound_WhenOwnerIsUnauthorizedForDraft()
+    {
+        var draft = CreateDraft();
+        var user = CreateUser();
+        var currentUserId = user.Id;
+        var currentUser = Substitute.For<ICurrentUser>();
+        var identity = Substitute.For<IIdentityRepository>();
+        var repository = Substitute.For<IPreQuoteDraftRepository>();
+        currentUser.IsAuthenticated.Returns(true);
+        currentUser.UserId.Returns(currentUserId);
+        identity.FindUserByIdAsync(currentUserId, Arg.Any<CancellationToken>())
+            .Returns(user);
+        Guid? ownerFromRepository = null;
+        repository.FindForUpdateAsync(
+                PreQuoteId,
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                ownerFromRepository = call.ArgAt<Guid>(1);
+                return (PreQuoteDraft?)null;
+            });
+        var service = new UpdatePreQuoteDraftService(
+            new UpdatePreQuoteDraftCommandValidator(),
+            currentUser,
+            identity,
+            repository,
+            new FixedProvider(At.AddMinutes(1)));
+
+        var command = CreateCommand(draft);
+        var result = await service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftFailure.NotFound, result.Failure);
+        Assert.Equal(user.Id, ownerFromRepository);
+    }
+
+    [Fact]
     public async Task Execute_RealReviewEdit_SucceedsAndSavesOnce()
     {
         var draft = CreateDraft();
@@ -97,6 +137,7 @@ public sealed class UpdatePreQuoteDraftServiceTests
             .Returns(CreateUser());
         repository.FindForUpdateAsync(
                 PreQuoteId,
+                Arg.Any<Guid>(),
                 Arg.Any<CancellationToken>())
             .Returns(draft);
         var service = new UpdatePreQuoteDraftService(

@@ -42,20 +42,20 @@ public sealed class PreQuoteDraftsControllerTests
         if (scenario == "duplicate")
         {
             context.Repository.ExistsAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns(true);
         }
         if (scenario == "not_found")
         {
             context.Repository.FindSourceAsync(
                     PreQuoteId, DocumentId, ExtractionId,
-                    Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns((PreQuoteDraftSourceContext?)null);
         }
         if (scenario == "query")
         {
             context.Repository.ExistsAsync(
-                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns<Task<bool>>(_ => throw QueryException());
         }
         if (scenario == "persistence")
@@ -86,13 +86,13 @@ public sealed class PreQuoteDraftsControllerTests
         if (scenario == "not_found")
         {
             context.Repository.FindReadAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns((PreQuoteDraft?)null);
         }
         if (scenario == "query")
         {
             context.Repository.FindReadAsync(
-                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns<Task<PreQuoteDraft?>>(_ => throw QueryException());
         }
 
@@ -121,13 +121,13 @@ public sealed class PreQuoteDraftsControllerTests
         if (scenario == "not_found")
         {
             context.Repository.FindForUpdateAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns((PreQuoteDraft?)null);
         }
         if (scenario == "query")
         {
             context.Repository.FindForUpdateAsync(
-                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns<Task<PreQuoteDraft?>>(
                     _ => throw QueryException());
         }
@@ -197,25 +197,25 @@ public sealed class PreQuoteDraftsControllerTests
         if (scenario == "not_found")
         {
             context.Repository.FindForUpdateAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns((PreQuoteDraft?)null);
         }
         if (scenario == "inactive_project")
         {
             context.Repository.FindActivityAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns(new PreQuoteDraftActivityContext(false, true));
         }
         if (scenario == "inactive_client")
         {
             context.Repository.FindActivityAsync(
-                    PreQuoteId, Arg.Any<CancellationToken>())
+                    PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns(new PreQuoteDraftActivityContext(true, false));
         }
         if (scenario == "query")
         {
             context.Repository.FindActivityAsync(
-                    Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                    Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                 .Returns<Task<PreQuoteDraftActivityContext?>>(
                     _ => throw QueryException());
         }
@@ -274,7 +274,7 @@ public sealed class PreQuoteDraftsControllerTests
     {
         var context = CreateContext();
         context.Repository.FindReadAsync(
-                Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns<Task<PreQuoteDraft?>>(_ => throw QueryException());
 
         var result = await context.Controller.Get(
@@ -300,20 +300,20 @@ public sealed class PreQuoteDraftsControllerTests
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(CreateUser());
         repository.ExistsAsync(
-                Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(false);
         repository.FindSourceAsync(
                 PreQuoteId, DocumentId, ExtractionId,
-                Arg.Any<CancellationToken>())
+                Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(CreateSource());
         repository.FindReadAsync(
-                PreQuoteId, Arg.Any<CancellationToken>())
+                PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(draft);
         repository.FindForUpdateAsync(
-                PreQuoteId, Arg.Any<CancellationToken>())
+                PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(draft);
         repository.FindActivityAsync(
-                PreQuoteId, Arg.Any<CancellationToken>())
+                PreQuoteId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new PreQuoteDraftActivityContext(true, true));
         var clock = new FixedProvider(At.AddHours(1));
         var controller = new PreQuoteDraftsController(

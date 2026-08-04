@@ -17,7 +17,10 @@ public sealed class GetPreQuoteDraftService(
         if (!user.IsActive) return GetPreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveUser);
         try
         {
-            var draft = await repository.FindReadAsync(query.PreQuoteId, cancellationToken);
+            var draft = await repository.FindReadAsync(
+                query.PreQuoteId,
+                userId,
+                cancellationToken);
             return draft is null ? GetPreQuoteDraftResult.Failed(PreQuoteDraftFailure.NotFound) : GetPreQuoteDraftResult.Success(draft);
         }
         catch (PreQuoteDraftQueryException) { return GetPreQuoteDraftResult.Failed(PreQuoteDraftFailure.QueryError); }

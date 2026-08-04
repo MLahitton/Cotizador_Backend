@@ -28,6 +28,7 @@ public sealed class UpdatePreQuoteDraftCompleteRequestTests
             .Returns(CreateUser());
         repository.FindForUpdateAsync(
                 PreQuoteId,
+                Arg.Any<Guid>(),
                 Arg.Any<CancellationToken>())
             .Returns(draft);
         var service = new UpdatePreQuoteDraftService(

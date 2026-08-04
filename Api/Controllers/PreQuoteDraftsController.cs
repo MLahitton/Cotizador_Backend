@@ -235,48 +235,204 @@ public sealed class PreQuoteDraftsController(
         var references = d.DocumentReferences.OrderBy(x => x.Sequence).ToArray();
         var issues = d.Issues.OrderBy(x => x.Sequence).ToArray();
         var conflicts = d.Conflicts.OrderBy(x => x.Sequence).ToArray();
-        return new(
-            d.Id, d.PreQuoteId, d.SourceDocumentId,
-            d.SourceStructuredExtractionId, Status(d.Status), d.Version,
+
+        var itemResponses = items.Select(x => new PreQuoteDraftItemResponse(
+            x.Id,
+            x.Sequence,
+            Origin(x.Origin),
+            x.SourceItemSequence,
+            x.Reference,
+            x.Description,
+            Element(x.ElementType),
+            x.RawMeasurements,
+            x.WidthMillimeters,
+            x.HeightMillimeters,
+            x.Quantity,
+            x.IsIncluded,
+            MapGlassSnapshot(x.GlassSnapshot),
+            MapValuationSnapshot(
+                x.ValuationStatus,
+                x.ValuationSnapshot)
+            )).ToArray();
+
+        var requirementResponses = requirements.Select(x => new PreQuoteDraftRequirementResponse(
+            x.Id,
+            x.Sequence,
+            Origin(x.Origin),
+            x.SourceRequirementSequence,
+            Category(x.Category),
+            x.Value,
+            x.IsIncluded)).ToArray();
+
+        var documentReferenceResponses = references.Select(x => new PreQuoteDraftDocumentReferenceResponse(
+            x.Id,
+            x.Sequence,
+            Origin(x.Origin),
+            x.SourceDocumentReferenceSequence,
+            x.Reference,
+            x.Description,
+            x.Detail,
+            x.Quantity,
+            x.IsIncluded)).ToArray();
+
+        var issueResponses = issues.Select(x => new PreQuoteDraftIssueResponse(
+            x.Id,
+            x.Sequence,
+            x.SourceIssueSequence,
+            Issue(x.Code),
+            x.Message,
+            x.ItemSequence,
+            x.PageNumbers,
+            Resolution(x.ResolutionStatus),
+            x.ResolutionNote,
+            x.ResolvedByUserId,
+            x.ResolvedAtUtc)).ToArray();
+
+        var conflictResponses = conflicts.Select(x => new PreQuoteDraftConflictResponse(
+            x.Id,
+            x.Sequence,
+            x.SourceConflictSequence,
+            Conflict(x.Code),
+            x.Message,
+            x.ItemSequences,
+            x.PageNumbers,
+            Resolution(x.ResolutionStatus),
+            x.ResolutionNote,
+            x.ResolvedByUserId,
+            x.ResolvedAtUtc)).ToArray();
+
+        var summary = new PreQuoteDraftSummaryResponse(
+            items.Length,
+            items.Count(x => x.IsIncluded),
+            items.Count(x => !x.IsIncluded),
+            items.Count(x => x.Origin == PreQuoteDraftOrigin.Manual),
+            items.Count(x => x.IsIncluded && !x.IsCompleteForApproval),
+            items.Where(x => x.IsIncluded).Sum(x => (long)(x.Quantity ?? 0)),
+            requirements.Length,
+            requirements.Count(x => x.IsIncluded),
+            references.Length,
+            references.Count(x => x.IsIncluded),
+            issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending),
+            issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Resolved),
+            issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Dismissed),
+            conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending),
+            conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Resolved),
+            conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Dismissed));
+
+        return new PreQuoteDraftDetailsResponse(
+            d.Id,
+            d.PreQuoteId,
+            d.SourceDocumentId,
+            d.SourceStructuredExtractionId,
+            Status(d.Status),
+            d.Version,
             new(d.ProjectName, d.ClientName, d.Location),
-            items.Select(x => new PreQuoteDraftItemResponse(
-                x.Id, x.Sequence, Origin(x.Origin), x.SourceItemSequence,
-                x.Reference, x.Description, Element(x.ElementType),
-                x.RawMeasurements, x.WidthMillimeters, x.HeightMillimeters,
-                x.Quantity, x.IsIncluded)).ToArray(),
-            requirements.Select(x => new PreQuoteDraftRequirementResponse(
-                x.Id, x.Sequence, Origin(x.Origin),
-                x.SourceRequirementSequence, Category(x.Category),
-                x.Value, x.IsIncluded)).ToArray(),
-            references.Select(x => new PreQuoteDraftDocumentReferenceResponse(
-                x.Id, x.Sequence, Origin(x.Origin),
-                x.SourceDocumentReferenceSequence, x.Reference,
-                x.Description, x.Detail, x.Quantity, x.IsIncluded)).ToArray(),
-            issues.Select(x => new PreQuoteDraftIssueResponse(
-                x.Id, x.Sequence, x.SourceIssueSequence, Issue(x.Code),
-                x.Message, x.ItemSequence, x.PageNumbers,
-                Resolution(x.ResolutionStatus), x.ResolutionNote,
-                x.ResolvedByUserId, x.ResolvedAtUtc)).ToArray(),
-            conflicts.Select(x => new PreQuoteDraftConflictResponse(
-                x.Id, x.Sequence, x.SourceConflictSequence, Conflict(x.Code),
-                x.Message, x.ItemSequences, x.PageNumbers,
-                Resolution(x.ResolutionStatus), x.ResolutionNote,
-                x.ResolvedByUserId, x.ResolvedAtUtc)).ToArray(),
-            new(items.Length, items.Count(x => x.IsIncluded),
-                items.Count(x => !x.IsIncluded),
-                items.Count(x => x.Origin == PreQuoteDraftOrigin.Manual),
-                items.Count(x => x.IsIncluded && !x.IsCompleteForApproval),
-                items.Where(x => x.IsIncluded).Sum(x => (long)(x.Quantity ?? 0)),
-                requirements.Length, requirements.Count(x => x.IsIncluded),
-                references.Length, references.Count(x => x.IsIncluded),
-                issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending),
-                issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Resolved),
-                issues.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Dismissed),
-                conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending),
-                conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Resolved),
-                conflicts.Count(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Dismissed)),
-            new(d.CreatedByUserId, d.UpdatedByUserId, d.ApprovedByUserId,
-                d.CreatedAtUtc, d.UpdatedAtUtc, d.ApprovedAtUtc));
+            itemResponses,
+            requirementResponses,
+            documentReferenceResponses,
+            issueResponses,
+            conflictResponses,
+            summary,
+            MapEconomicSummary(d),
+            new PreQuoteDraftAuditResponse(
+                d.CreatedByUserId,
+                d.UpdatedByUserId,
+                d.ApprovedByUserId,
+                d.CreatedAtUtc,
+                d.UpdatedAtUtc,
+                d.ApprovedAtUtc));
+    }
+
+    private static PreQuoteDraftItemGlassResponse? MapGlassSnapshot(
+        PreQuoteDraftItemGlassSnapshot? snapshot)
+    {
+        if (snapshot is null) return null;
+        return new(
+            snapshot.GlassTypeId,
+            snapshot.RawSpecification,
+            snapshot.NormalizedCodeSnapshot,
+            snapshot.AssignmentScope.ToString(),
+            snapshot.RequiresReview,
+            snapshot.ReviewReasons
+                .OrderBy(r => r.Sequence)
+                .Select(r => r.Code.ToString())
+                .ToArray(),
+            snapshot.SourcePages
+                .OrderBy(p => p.Sequence)
+                .Select(p => p.PageNumber)
+                .ToArray(),
+            snapshot.Evidence
+                .OrderBy(e => e.Sequence)
+                .Select(e => new PreQuoteDraftItemGlassEvidenceResponse(
+                    e.Sequence, e.PageNumber, e.SourceType.ToString(),
+                    e.Text))
+                .ToArray());
+    }
+
+    private static PreQuoteDraftItemValuationResponse? MapValuationSnapshot(
+        PreQuoteDraftValuationStatus status,
+        PreQuoteDraftItemValuationSnapshot? snapshot)
+    {
+        if (snapshot is null) return null;
+        return new(
+            snapshot.SourceStructuredItemValuationId,
+            ValuationStatus(status),
+            snapshot.Reason?.ToString(),
+            snapshot.GlassTypeId,
+            snapshot.GlassPriceRangeVersionId,
+            snapshot.WidthMillimetersUsed,
+            snapshot.HeightMillimetersUsed,
+            snapshot.QuantityUsed,
+            snapshot.UnitAreaSquareMeters,
+            snapshot.TotalAreaSquareMeters,
+            snapshot.UnitPricePerSquareMeter,
+            snapshot.UnitPricePerSquareMeter,
+            snapshot.UnitAmount,
+            snapshot.TotalAmount,
+            snapshot.Currency,
+            snapshot.ValuedAtUtc,
+            snapshot.InvalidatedAtUtc,
+            snapshot.InvalidationReason?.ToString());
+    }
+
+    private static PreQuoteDraftEconomicSummaryResponse MapEconomicSummary(PreQuoteDraft draft)
+    {
+        var included = draft.Items.Where(x => x.IsIncluded).ToArray();
+        var valued = included.Where(
+            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Valued
+                && x.ValuationSnapshot is not null).ToArray();
+        var pending = included.Where(
+            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Pending).ToArray();
+        var stale = included.Where(
+            x => x.ValuationStatus == PreQuoteDraftValuationStatus.Stale).ToArray();
+        var requiringReview = included.Where(
+            x => x.ValuationStatus == PreQuoteDraftValuationStatus.RequiresReview).ToArray();
+
+        var areas = valued.Sum(x => x.ValuationSnapshot!.TotalAreaSquareMeters ?? 0m);
+        var minimum = valued.Sum(x => x.ValuationSnapshot!.TotalAmount ?? 0m);
+        var maximum = minimum;
+        var hasKnownCurrency = valued
+            .Select(x => x.ValuationSnapshot!.Currency)
+            .Where(currency => !string.IsNullOrWhiteSpace(currency))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var currency = hasKnownCurrency.Length == 1
+            ? hasKnownCurrency[0]
+            : null;
+
+        return new(
+            included.Length,
+            included.Sum(x => (int?)x.Quantity ?? 0),
+            valued.Length,
+            pending.Length,
+            stale.Length,
+            requiringReview.Length,
+            areas == 0m ? null : areas,
+            minimum == 0m ? null : minimum,
+            maximum == 0m ? null : maximum,
+            currency,
+            included.Any() && stale.Length == 0 && pending.Length == 0 &&
+                requiringReview.Length == 0 && valued.Length > 0);
     }
 
     private static PreQuoteDraftResolutionEdit IssueResolution(PreQuoteDraftIssueResolutionRequest x) => new(x.DraftIssueId, ResolutionStatus(x.ResolutionStatus), x.ResolutionNote);
@@ -289,6 +445,15 @@ public sealed class PreQuoteDraftsController(
     private static string Status(PreQuoteDraftStatus x) => x switch { PreQuoteDraftStatus.PendingReview => "PENDING_REVIEW", PreQuoteDraftStatus.InReview => "IN_REVIEW", _ => "APPROVED" };
     private static string Origin(PreQuoteDraftOrigin x) => x == PreQuoteDraftOrigin.Ai ? "AI" : "MANUAL";
     private static string Resolution(PreQuoteDraftResolutionStatus x) => x.ToString().ToUpperInvariant();
+    private static string ValuationStatus(PreQuoteDraftValuationStatus x) => x switch
+    {
+        PreQuoteDraftValuationStatus.Pending => "PENDING",
+        PreQuoteDraftValuationStatus.Valued => "VALUED",
+        PreQuoteDraftValuationStatus.Stale => "STALE",
+        PreQuoteDraftValuationStatus.RequiresReview => "REQUIRES_REVIEW",
+        PreQuoteDraftValuationStatus.NotApplicable => "PENDING",
+        _ => "PENDING"
+    };
     private static string Issue(StructuredIssueCode x) => x switch { StructuredIssueCode.ProjectNameNotFound => "PROJECT_NAME_NOT_FOUND", StructuredIssueCode.NoQuoteableItemsFound => "NO_QUOTEABLE_ITEMS_FOUND", StructuredIssueCode.IncompleteTableRow => "INCOMPLETE_TABLE_ROW", StructuredIssueCode.MissingItemReference => "MISSING_ITEM_REFERENCE", StructuredIssueCode.MissingOrInvalidMeasurements => "MISSING_OR_INVALID_MEASUREMENTS", StructuredIssueCode.MissingOrInvalidQuantity => "MISSING_OR_INVALID_QUANTITY", StructuredIssueCode.UnknownElementType => "UNKNOWN_ELEMENT_TYPE", _ => "OCR_REVIEW_REQUIRED" };
     private static string Conflict(StructuredConflictCode x) => x switch { StructuredConflictCode.ConflictingProjectName => "CONFLICTING_PROJECT_NAME", StructuredConflictCode.ConflictingClientName => "CONFLICTING_CLIENT_NAME", StructuredConflictCode.ConflictingLocation => "CONFLICTING_LOCATION", _ => "DUPLICATE_ITEM_REFERENCE" };
 }

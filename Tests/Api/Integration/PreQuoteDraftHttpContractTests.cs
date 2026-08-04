@@ -515,11 +515,11 @@ public sealed class PreQuoteDraftHttpContractTests
                 .Returns(User.CreateFromGoogle(
                     "user@example.com", "Test", "User", null, At));
             repository.FindForUpdateAsync(
-                    PreQuoteId,
+                    PreQuoteId, Arg.Any<Guid>(),
                     Arg.Any<CancellationToken>())
                 .Returns(draft);
             repository.FindReadAsync(
-                    PreQuoteId,
+                    PreQuoteId, Arg.Any<Guid>(),
                     Arg.Any<CancellationToken>())
                 .Returns(throwQueryError
                     ? Task.FromException<PreQuoteDraft?>(

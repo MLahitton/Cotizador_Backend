@@ -23,11 +23,11 @@ public sealed class PreQuoteDraftRepositoryErrorTests
 
         var exception = await Assert.ThrowsAsync<PreQuoteDraftQueryException>(
             () => tracking
-                ? repository.FindForUpdateAsync(
-                    Guid.NewGuid(),
+            ? repository.FindForUpdateAsync(
+                    Guid.NewGuid(), Guid.Empty,
                     TestContext.Current.CancellationToken)
                 : repository.FindReadAsync(
-                    Guid.NewGuid(),
+                    Guid.NewGuid(), Guid.Empty,
                     TestContext.Current.CancellationToken));
 
         Assert.NotNull(exception.InnerException);
