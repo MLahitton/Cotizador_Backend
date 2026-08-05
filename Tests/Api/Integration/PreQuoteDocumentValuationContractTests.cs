@@ -208,7 +208,7 @@ public sealed class PreQuoteDocumentValuationContractTests
                 GlassValuationStatus.NotValued,
                 GlassValuationReason.MissingQuantity,
                 null, null, null, null, null, null, null, null, null,
-                null, null, At))
+                null, null, null, null, At))
         ],
         [], [], [],
         Summary(1, 1, 4.5m, 405000m, 495000m, "COP", true, null),
@@ -249,8 +249,8 @@ public sealed class PreQuoteDocumentValuationContractTests
         decimal area) => new(
             GlassValuationStatus.Valued, null, Guid.NewGuid(), Guid.NewGuid(),
             1, GlassPriceRangeStatus.Preliminary, currency,
-            1.500000m, area, 90000m, 110000m,
-            minimum, maximum, At);
+            1.500000m, area, 90000m, 100000m, 110000m,
+            minimum, Math.Round(area * 100000m, 2), maximum, At);
 
     private static StructuredSummaryReadModel Summary(
         int valued,

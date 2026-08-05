@@ -21,6 +21,10 @@ public sealed class ApplicationDbContext(
     public DbSet<GlassType> GlassTypes => Set<GlassType>();
     public DbSet<GlassPriceRangeVersion> GlassPriceRangeVersions =>
         Set<GlassPriceRangeVersion>();
+    public DbSet<ProductSystem> ProductSystems => Set<ProductSystem>();
+    public DbSet<FrameType> FrameTypes => Set<FrameType>();
+    public DbSet<FinishType> FinishTypes => Set<FinishType>();
+    public DbSet<CatalogAlias> CatalogAliases => Set<CatalogAlias>();
 
     public DbSet<Project> Projects => Set<Project>();
 
@@ -43,10 +47,16 @@ public sealed class ApplicationDbContext(
     public DbSet<StructuredExtractionItemGlassValuation>
         StructuredExtractionItemGlassValuations =>
             Set<StructuredExtractionItemGlassValuation>();
+    public DbSet<StructuredExtractionItemTechnicalClassification>
+        StructuredExtractionItemTechnicalClassifications =>
+            Set<StructuredExtractionItemTechnicalClassification>();
 
     public DbSet<PreQuoteDraft> PreQuoteDrafts => Set<PreQuoteDraft>();
     public DbSet<PreQuoteDraftItem> PreQuoteDraftItems =>
         Set<PreQuoteDraftItem>();
+    public DbSet<PreQuoteDraftItemTechnicalSnapshot>
+        PreQuoteDraftItemTechnicalSnapshots =>
+            Set<PreQuoteDraftItemTechnicalSnapshot>();
     public DbSet<PreQuoteDraftRequirement> PreQuoteDraftRequirements =>
         Set<PreQuoteDraftRequirement>();
     public DbSet<PreQuoteDraftDocumentReference> PreQuoteDraftDocumentReferences =>

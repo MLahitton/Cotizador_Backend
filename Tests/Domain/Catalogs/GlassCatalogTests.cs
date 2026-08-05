@@ -45,18 +45,22 @@ public sealed class GlassCatalogTests
     }
 
     [Theory]
-    [InlineData(0, 1, 1)]
-    [InlineData(1, 0, 1)]
-    [InlineData(1, 1, 0)]
-    [InlineData(1, 2, 1)]
+    [InlineData(0, 1, 1, 1)]
+    [InlineData(1, 0, 1, 1)]
+    [InlineData(1, 1, 0, 1)]
+    [InlineData(1, 1, 1, 0)]
+    [InlineData(1, 2, 1, 2)]
+    [InlineData(1, 1, 3, 2)]
     public void PriceRange_RejectsInvalidNumbers(
         int version,
         decimal minimum,
+        decimal expected,
         decimal maximum)
     {
         Assert.Throws<ArgumentException>(() => CreateRange(
             version,
             minimum,
+            expected,
             maximum,
             "COP"));
     }
@@ -71,16 +75,18 @@ public sealed class GlassCatalogTests
             1,
             1,
             1,
+            1,
             currency));
     }
 
     [Fact]
     public void PriceRange_NormalizesCurrencyAndAllowsFixedRange()
     {
-        var value = CreateRange(1, 95000m, 95000m, " cop ");
+        var value = CreateRange(1, 95000m, 95000m, 95000m, " cop ");
 
         Assert.Equal("COP", value.Currency);
         Assert.Equal(95000m, value.MinimumPricePerSquareMeter);
+        Assert.Equal(95000m, value.ExpectedAmountPerM2);
         Assert.Equal(95000m, value.MaximumPricePerSquareMeter);
         Assert.Equal(GlassPriceRangeStatus.Preliminary, value.Status);
         Assert.Null(value.ValidToUtc);
@@ -91,7 +97,7 @@ public sealed class GlassCatalogTests
     {
         Assert.Throws<ArgumentException>(() =>
             GlassPriceRangeVersion.Create(
-                Guid.NewGuid(), 1, 1, 1, "COP",
+                Guid.NewGuid(), 1, 1, 1, 1, "COP",
                 GlassPriceRangeStatus.Preliminary,
                 At, At, At));
     }
@@ -101,7 +107,7 @@ public sealed class GlassCatalogTests
     {
         Assert.Throws<ArgumentException>(() =>
             GlassPriceRangeVersion.Create(
-                Guid.NewGuid(), 1, 1, 1, "COP",
+                Guid.NewGuid(), 1, 1, 1, 1, "COP",
                 (GlassPriceRangeStatus)999,
                 At, null, At));
     }
@@ -109,12 +115,14 @@ public sealed class GlassCatalogTests
     private static GlassPriceRangeVersion CreateRange(
         int version,
         decimal minimum,
+        decimal expected,
         decimal maximum,
         string currency) =>
         GlassPriceRangeVersion.Create(
             Guid.NewGuid(),
             version,
             minimum,
+            expected,
             maximum,
             currency,
             GlassPriceRangeStatus.Preliminary,

@@ -49,6 +49,36 @@ public sealed class StructuredExtractionPayloadReaderTests
         Assert.Equal(1, result.Conflicts[0].Sequence);
     }
 
+    [Fact]
+    public void Read_WithSchema3TechnicalClassificationAndComplexGlass_ReturnsCompleteDetails()
+    {
+        var fixture = CreateSchema3Fixture();
+
+        var result = Read(fixture);
+
+        Assert.Equal(2, result.Items.Count);
+        var first = result.Items[0];
+        Assert.NotNull(first.Glass);
+        Assert.Equal(
+            [GlassReviewReason.GlassTypeAmbiguous],
+            first.Glass.ReviewReasons);
+        Assert.Equal([1, 2], first.Glass.SourcePages);
+        Assert.Equal(2, first.Glass.Evidence.Count);
+        Assert.NotNull(first.TechnicalClassification);
+        Assert.Equal("K50", first.TechnicalClassification.SystemCode);
+        Assert.Equal(
+            TechnicalClassificationSource.Explicit,
+            first.TechnicalClassification.SystemSource);
+        Assert.Equal("MARCO_47", first.TechnicalClassification.FrameCode);
+        Assert.Equal("BLACK_MATTE", first.TechnicalClassification.FinishCode);
+        Assert.Contains(
+            "FINISH_REQUIRES_REVIEW",
+            first.TechnicalClassification.ReviewReasons);
+        Assert.Null(result.Items[1].TechnicalClassification);
+        Assert.Single(result.Issues);
+        Assert.Empty(result.Conflicts);
+    }
+
     [Theory]
     [InlineData("invalid_json")]
     [InlineData("schema")]
@@ -188,7 +218,8 @@ public sealed class StructuredExtractionPayloadReaderTests
             fixture.References,
             fixture.Issues,
             fixture.Conflicts,
-            []);
+            fixture.Glasses,
+            fixture.TechnicalClassifications);
 
     private static Fixture CreateFixture()
     {
@@ -228,7 +259,7 @@ public sealed class StructuredExtractionPayloadReaderTests
                     accessoriesAndSealants = new[] { Requirement("Sealant") },
                     generalNotes = new[] { Requirement("Note") }
                 },
-                items = new[]
+                items = new object[]
                 {
                     new
                     {
@@ -318,7 +349,216 @@ public sealed class StructuredExtractionPayloadReaderTests
             ],
             [new PersistedReference(1, "P-01", "Plan", "Detail", 1)],
             [new PersistedIssue(1, StructuredIssueCode.OcrReviewRequired, "Review", 1, [2])],
-            [new PersistedConflict(1, StructuredConflictCode.DuplicateItemReference, "Conflict", [1], [1])]);
+            [new PersistedConflict(1, StructuredConflictCode.DuplicateItemReference, "Conflict", [1], [1])],
+            [],
+            []);
+    }
+
+    private static Fixture CreateSchema3Fixture()
+    {
+        var documentId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        var extractionId = Guid.NewGuid();
+        var glassTypeId = Guid.NewGuid();
+        var payload = new
+        {
+            schemaVersion = "3.0",
+            documentId,
+            processingAttemptId = attemptId,
+            status = "REQUIRES_REVIEW",
+            document = new { pageCount = 2 },
+            pages = Array.Empty<object>(),
+            warnings = Array.Empty<object>(),
+            processingMetadata = new { method = "pymupdf", durationMs = 10 },
+            structuredExtraction = new
+            {
+                status = "REQUIRES_REVIEW",
+                project = new
+                {
+                    name = "Project",
+                    clientName = "Client",
+                    location = "Bogota",
+                    sourcePages = new[] { 1 },
+                    evidence = new[] { Evidence(1, "NATIVE", "Project") }
+                },
+                requirements = new
+                {
+                    glassSpecifications = Array.Empty<object>(),
+                    profileSpecifications = Array.Empty<object>(),
+                    finishes = Array.Empty<object>(),
+                    accessoriesAndSealants = Array.Empty<object>(),
+                    generalNotes = Array.Empty<object>()
+                },
+                items = new object[]
+                {
+                    new
+                    {
+                        sequence = 1,
+                        reference = "W-01",
+                        description = "Window",
+                        elementType = "WINDOW",
+                        rawMeasurements = "1000x1200",
+                        widthMillimeters = (int?)1000,
+                        heightMillimeters = (int?)1200,
+                        quantity = (int?)2,
+                        requiresReview = true,
+                        reviewReasons = new[] { "GLASS_TYPE_AMBIGUOUS" },
+                        sourcePages = new[] { 1, 2 },
+                        evidence = new[]
+                        {
+                            Evidence(1, "NATIVE", "Item native"),
+                            Evidence(2, "OCR", "Item OCR")
+                        },
+                        glass = new
+                        {
+                            rawSpecification = "Laminado 4+4",
+                            normalizedCode = "LAM_4_4",
+                            assignmentScope = "ITEM",
+                            requiresReview = true,
+                            reviewReasons = new[] { "GLASS_TYPE_AMBIGUOUS" },
+                            sourcePages = new[] { 1, 2 },
+                            evidence = new[]
+                            {
+                                Evidence(1, "NATIVE", "Vidrio native"),
+                                Evidence(2, "OCR", "Vidrio OCR")
+                            }
+                        },
+                        technicalClassification = new
+                        {
+                            systemCode = "K50",
+                            systemOriginalText = "K50",
+                            systemSource = "EXPLICIT",
+                            systemConfidence = (decimal?)1m,
+                            frameCode = "MARCO_47",
+                            frameOriginalText = "SG0047",
+                            frameSource = "ALIAS",
+                            frameConfidence = (decimal?)1m,
+                            finishCode = "BLACK_MATTE",
+                            finishOriginalText = "NEGRO MATE",
+                            finishSource = "ALIAS",
+                            finishConfidence = (decimal?)1m,
+                            requiresReview = true,
+                            reviewReasons = new[] { "FINISH_REQUIRES_REVIEW" }
+                        }
+                    },
+                    new
+                    {
+                        sequence = 2,
+                        reference = "W-02",
+                        description = "Window",
+                        elementType = "WINDOW",
+                        rawMeasurements = (string?)null,
+                        widthMillimeters = (int?)null,
+                        heightMillimeters = (int?)null,
+                        quantity = (int?)null,
+                        requiresReview = false,
+                        reviewReasons = Array.Empty<string>(),
+                        sourcePages = Array.Empty<int>(),
+                        evidence = Array.Empty<object>(),
+                        glass = new
+                        {
+                            rawSpecification = "Sin identificar",
+                            normalizedCode = (string?)null,
+                            assignmentScope = "UNASSIGNED",
+                            requiresReview = true,
+                            reviewReasons = new[] { "GLASS_TYPE_NOT_IDENTIFIED" },
+                            sourcePages = Array.Empty<int>(),
+                            evidence = Array.Empty<object>()
+                        },
+                        technicalClassification = (object?)null
+                    }
+                },
+                documentReferences = Array.Empty<object>(),
+                issues = new[]
+                {
+                    new
+                    {
+                        code = "GLASS_TYPE_AMBIGUOUS",
+                        message = "Review",
+                        itemSequence = (int?)1,
+                        pageNumbers = new[] { 1, 2 }
+                    }
+                },
+                conflicts = Array.Empty<object>(),
+                summary = new
+                {
+                    itemCount = 2,
+                    documentReferenceCount = 0,
+                    itemsRequiringReview = 1,
+                    knownQuoteableUnitCount = 2,
+                    identifiedGlassItemCount = 1,
+                    glassItemsRequiringReview = 2
+                },
+                processingMetadata = new
+                {
+                    method = "rule_based_v2",
+                    durationMs = 5
+                }
+            }
+        };
+
+        return new Fixture(
+            documentId,
+            documentId,
+            JsonSerializer.Serialize(payload),
+            new AvailableExtractionProjection(
+                attemptId, Guid.NewGuid(), "3.0", 2, string.Empty,
+                extractionId, StructuredExtractionStatus.RequiresReview,
+                "Project", "Client", "Bogota", 2, 0, 1, 2,
+                1, 2, "rule_based_v2", 5, CreatedAt),
+            [
+                new PersistedItem(
+                    1, "W-01", "Window", StructuredElementType.Window,
+                    "1000x1200", 1000, 1200, 2, true),
+                new PersistedItem(
+                    2, "W-02", "Window", StructuredElementType.Window,
+                    null, null, null, null, false)
+            ],
+            [],
+            [],
+            [
+                new PersistedIssue(
+                    1, StructuredIssueCode.GlassTypeAmbiguous,
+                    "Review", 1, [1, 2])
+            ],
+            [],
+            [
+                new PersistedGlass(
+                    1, glassTypeId, "Laminado 4+4", "LAM_4_4",
+                    GlassAssignmentScope.Item, true,
+                    [GlassReviewReason.GlassTypeAmbiguous],
+                    [1, 2],
+                    [
+                        new PersistedGlassEvidence(
+                            1, EvidenceSourceType.Native, "Vidrio native"),
+                        new PersistedGlassEvidence(
+                            2, EvidenceSourceType.Ocr, "Vidrio OCR")
+                    ]),
+                new PersistedGlass(
+                    2, null, "Sin identificar", null,
+                    GlassAssignmentScope.Unassigned, true,
+                    [GlassReviewReason.GlassTypeNotIdentified],
+                    [],
+                    [])
+            ],
+            [
+                new PersistedTechnicalClassification(
+                    1,
+                    "K50",
+                    "K50",
+                    TechnicalClassificationSource.Explicit,
+                    1m,
+                    "MARCO_47",
+                    "SG0047",
+                    TechnicalClassificationSource.Alias,
+                    1m,
+                    "BLACK_MATTE",
+                    "NEGRO MATE",
+                    TechnicalClassificationSource.Alias,
+                    1m,
+                    true,
+                    ["FINISH_REQUIRES_REVIEW"])
+            ]);
     }
 
     private static object Requirement(string value) => new
@@ -375,5 +615,7 @@ public sealed class StructuredExtractionPayloadReaderTests
         IReadOnlyList<PersistedRequirement> Requirements,
         IReadOnlyList<PersistedReference> References,
         IReadOnlyList<PersistedIssue> Issues,
-        IReadOnlyList<PersistedConflict> Conflicts);
+        IReadOnlyList<PersistedConflict> Conflicts,
+        IReadOnlyList<PersistedGlass> Glasses,
+        IReadOnlyList<PersistedTechnicalClassification> TechnicalClassifications);
 }

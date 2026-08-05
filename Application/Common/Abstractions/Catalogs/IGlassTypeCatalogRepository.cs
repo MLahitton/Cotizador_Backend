@@ -6,6 +6,7 @@ public sealed record GlassPriceRangeCatalogReadModel(
     Guid GlassPriceRangeVersionId,
     int Version,
     decimal MinimumPricePerSquareMeter,
+    decimal ExpectedAmountPerM2,
     decimal MaximumPricePerSquareMeter,
     string Currency,
     GlassPriceRangeStatus Status,

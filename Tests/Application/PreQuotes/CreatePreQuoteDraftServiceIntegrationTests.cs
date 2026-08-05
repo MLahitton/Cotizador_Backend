@@ -103,6 +103,7 @@ public sealed class CreatePreQuoteDraftServiceIntegrationTests(
                 glassType.Id,
                 1,
                 90_000.123456m,
+                100_000.123456m,
                 110_000.123456m,
                 "COP",
                 GlassPriceRangeStatus.Preliminary,
@@ -157,8 +158,10 @@ public sealed class CreatePreQuoteDraftServiceIntegrationTests(
                             1.500000m,
                             4.500000m,
                             90_000.123456m,
+                            100_000.123456m,
                             110_000.123456m,
                             270_000.370368m,
+                            450_000.555552m,
                             810_001.111104m))
                 ],
                 [],

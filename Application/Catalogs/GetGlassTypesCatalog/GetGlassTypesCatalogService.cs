@@ -39,7 +39,8 @@ public sealed class GetGlassTypesCatalogService(
             return GetGlassTypesCatalogResult.Success(
                 items.Where(item =>
                         item.IsActive
-                        && item.CurrentPriceRange is { ValidToUtc: null })
+                        && (item.CurrentPriceRange is null
+                            || item.CurrentPriceRange.ValidToUtc is null))
                     .OrderBy(item => item.Code, StringComparer.Ordinal)
                     .ToArray());
         }

@@ -104,6 +104,68 @@ public sealed class PreQuoteDraftItemConfiguration : IEntityTypeConfiguration<Pr
         b.HasOne(x => x.ValuationSnapshot).WithOne()
             .HasForeignKey<PreQuoteDraftItemValuationSnapshot>(x => x.PreQuoteDraftItemId)
             .OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.TechnicalSnapshot).WithOne()
+            .HasForeignKey<PreQuoteDraftItemTechnicalSnapshot>(
+                x => x.PreQuoteDraftItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PreQuoteDraftItemTechnicalSnapshotConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemTechnicalSnapshot>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemTechnicalSnapshot> b)
+    {
+        b.ToTable("pre_quote_draft_item_technical_snapshots", "core", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_technical_snapshot_confidence",
+                "(\"system_confidence\" IS NULL OR \"system_confidence\" >= 0 AND \"system_confidence\" <= 1) AND (\"frame_confidence\" IS NULL OR \"frame_confidence\" >= 0 AND \"frame_confidence\" <= 1) AND (\"finish_confidence\" IS NULL OR \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1)");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_technical_snapshot_review",
+                "(\"requires_review\" = false AND cardinality(\"review_reasons\") = 0) OR (\"requires_review\" = true AND cardinality(\"review_reasons\") > 0)");
+        });
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid")
+            .ValueGeneratedNever();
+        b.Property(x => x.PreQuoteDraftItemId)
+            .HasColumnName("pre_quote_draft_item_id")
+            .HasColumnType("uuid");
+        b.Property(x => x.SourceStructuredItemTechnicalClassificationId)
+            .HasColumnName("source_structured_item_technical_classification_id")
+            .HasColumnType("uuid");
+        b.Property(x => x.SystemCode).HasColumnName("system_code")
+            .HasMaxLength(30);
+        b.Property(x => x.SystemOriginalText)
+            .HasColumnName("system_original_text").HasMaxLength(500);
+        b.Property(x => x.SystemSource).HasColumnName("system_source")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.SystemConfidence)
+            .HasColumnName("system_confidence").HasPrecision(5, 4);
+        b.Property(x => x.FrameCode).HasColumnName("frame_code")
+            .HasMaxLength(30);
+        b.Property(x => x.FrameOriginalText)
+            .HasColumnName("frame_original_text").HasMaxLength(500);
+        b.Property(x => x.FrameSource).HasColumnName("frame_source")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.FrameConfidence)
+            .HasColumnName("frame_confidence").HasPrecision(5, 4);
+        b.Property(x => x.FinishCode).HasColumnName("finish_code")
+            .HasMaxLength(30);
+        b.Property(x => x.FinishOriginalText)
+            .HasColumnName("finish_original_text").HasMaxLength(500);
+        b.Property(x => x.FinishSource).HasColumnName("finish_source")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.FinishConfidence)
+            .HasColumnName("finish_confidence").HasPrecision(5, 4);
+        b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.Property(x => x.ReviewReasons).HasColumnName("review_reasons")
+            .HasColumnType("text[]");
+        b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
+        b.HasOne<StructuredExtractionItemTechnicalClassification>()
+            .WithMany()
+            .HasForeignKey(x => x.SourceStructuredItemTechnicalClassificationId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -150,7 +212,7 @@ public sealed class PreQuoteDraftItemValuationSnapshotConfiguration
             t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_currency",
                 "\"currency\" IS NULL OR char_length(\"currency\") = 3");
             t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_status",
-                "\"status\" IN ('NotApplicable', 'Pending', 'Valued', 'Stale', 'RequiresReview')");
+                "\"status\" IN ('NotApplicable', 'Pending', 'Valued', 'Stale', 'RequiresReview', 'NotPriceable')");
         });
         b.HasKey(x => x.Id);
         b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
@@ -172,6 +234,44 @@ public sealed class PreQuoteDraftItemValuationSnapshotConfiguration
         b.Property(x => x.ValuedAtUtc).HasColumnName("valued_at_utc").HasColumnType("timestamp with time zone");
         b.Property(x => x.InvalidatedAtUtc).HasColumnName("invalidated_at_utc").HasColumnType("timestamp with time zone");
         b.Property(x => x.InvalidationReason).HasColumnName("invalidation_reason").HasConversion<string>().HasMaxLength(30);
+        b.Property(x => x.BillableAreaUnitSquareMeters).HasColumnName("billable_area_unit_square_meters").HasPrecision(18, 6);
+        b.Property(x => x.GlassCode).HasColumnName("glass_code").HasMaxLength(30);
+        b.Property(x => x.GlassPriceRangeVersion).HasColumnName("glass_price_range_version");
+        b.Property(x => x.GlassMinimumPricePerSquareMeter).HasColumnName("glass_minimum_price_per_square_meter").HasPrecision(18, 2);
+        b.Property(x => x.GlassExpectedPricePerSquareMeter).HasColumnName("glass_expected_price_per_square_meter").HasPrecision(18, 2);
+        b.Property(x => x.GlassMaximumPricePerSquareMeter).HasColumnName("glass_maximum_price_per_square_meter").HasPrecision(18, 2);
+        b.Property(x => x.SystemCode).HasColumnName("system_code").HasMaxLength(30);
+        b.Property(x => x.SystemSource).HasColumnName("system_source").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.FrameCode).HasColumnName("frame_code").HasMaxLength(30);
+        b.Property(x => x.FinishCode).HasColumnName("finish_code").HasMaxLength(30);
+        b.Property(x => x.LaborProfileCode).HasColumnName("labor_profile_code").HasMaxLength(60);
+        b.Property(x => x.AssemblyProfileCode).HasColumnName("assembly_profile_code").HasMaxLength(60);
+        b.Property(x => x.FinishFactorMinimum).HasColumnName("finish_factor_minimum").HasPrecision(8, 4);
+        b.Property(x => x.FinishFactorExpected).HasColumnName("finish_factor_expected").HasPrecision(8, 4);
+        b.Property(x => x.FinishFactorMaximum).HasColumnName("finish_factor_maximum").HasPrecision(8, 4);
+        b.Property(x => x.AccessoryFactor).HasColumnName("accessory_factor").HasPrecision(8, 4);
+        b.Property(x => x.GlassMinimumAmount).HasColumnName("glass_minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.GlassExpectedAmount).HasColumnName("glass_expected_amount").HasPrecision(18, 2);
+        b.Property(x => x.GlassMaximumAmount).HasColumnName("glass_maximum_amount").HasPrecision(18, 2);
+        b.Property(x => x.LaborMinimumAmount).HasColumnName("labor_minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.LaborExpectedAmount).HasColumnName("labor_expected_amount").HasPrecision(18, 2);
+        b.Property(x => x.LaborMaximumAmount).HasColumnName("labor_maximum_amount").HasPrecision(18, 2);
+        b.Property(x => x.AssemblyMinimumAmount).HasColumnName("assembly_minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.AssemblyExpectedAmount).HasColumnName("assembly_expected_amount").HasPrecision(18, 2);
+        b.Property(x => x.AssemblyMaximumAmount).HasColumnName("assembly_maximum_amount").HasPrecision(18, 2);
+        b.Property(x => x.AccessoriesMinimumAmount).HasColumnName("accessories_minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.AccessoriesExpectedAmount).HasColumnName("accessories_expected_amount").HasPrecision(18, 2);
+        b.Property(x => x.AccessoriesMaximumAmount).HasColumnName("accessories_maximum_amount").HasPrecision(18, 2);
+        b.Property(x => x.ItemMinimumAmount).HasColumnName("item_minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.ItemExpectedAmount).HasColumnName("item_expected_amount").HasPrecision(18, 2);
+        b.Property(x => x.ItemMaximumAmount).HasColumnName("item_maximum_amount").HasPrecision(18, 2);
+        b.Property(x => x.PricingProfileVersion).HasColumnName("pricing_profile_version").HasMaxLength(40);
+        b.Property(x => x.ConfidenceScore).HasColumnName("confidence_score");
+        b.Property(x => x.ConfidenceLevel).HasColumnName("confidence_level").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.Assumptions).HasColumnName("assumptions").HasColumnType("text[]");
+        b.Property(x => x.MissingData).HasColumnName("missing_data").HasColumnType("text[]");
+        b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.Property(x => x.CalculatedAtUtc).HasColumnName("calculated_at_utc").HasColumnType("timestamp with time zone");
         b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
         b.HasOne<GlassType>().WithMany().HasForeignKey(x => x.GlassTypeId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<GlassPriceRangeVersion>().WithMany().HasForeignKey(x => x.GlassPriceRangeVersionId).OnDelete(DeleteBehavior.Restrict);

@@ -99,10 +99,31 @@ internal static class PreQuoteDocumentResponseMapper
                         item.Valuation.UnitAreaSquareMeters,
                         item.Valuation.TotalAreaSquareMeters,
                         item.Valuation.MinimumPricePerSquareMeter,
+                        item.Valuation.ExpectedPricePerSquareMeter,
                         item.Valuation.MaximumPricePerSquareMeter,
                         item.Valuation.MinimumAmount,
+                        item.Valuation.ExpectedAmount,
                         item.Valuation.MaximumAmount,
-                        item.Valuation.CalculatedAtUtc))).ToArray(),
+                        item.Valuation.CalculatedAtUtc),
+                item.TechnicalClassification is null ? null
+                    : new StructuredItemTechnicalClassificationResponse(
+                        item.TechnicalClassification.SystemCode,
+                        item.TechnicalClassification.SystemOriginalText,
+                        item.TechnicalClassification.SystemSource is { } systemSource
+                            ? Map(systemSource) : null,
+                        item.TechnicalClassification.SystemConfidence,
+                        item.TechnicalClassification.FrameCode,
+                        item.TechnicalClassification.FrameOriginalText,
+                        item.TechnicalClassification.FrameSource is { } frameSource
+                            ? Map(frameSource) : null,
+                        item.TechnicalClassification.FrameConfidence,
+                        item.TechnicalClassification.FinishCode,
+                        item.TechnicalClassification.FinishOriginalText,
+                        item.TechnicalClassification.FinishSource is { } finishSource
+                            ? Map(finishSource) : null,
+                        item.TechnicalClassification.FinishConfidence,
+                        item.TechnicalClassification.RequiresReview,
+                        item.TechnicalClassification.ReviewReasons))).ToArray(),
             value.DocumentReferences.Select(item =>
                 new StructuredDocumentReferenceResponse(
                     item.Sequence, item.Reference, item.Description,
@@ -179,8 +200,19 @@ internal static class PreQuoteDocumentResponseMapper
         PdfClassification.PdfMixed => "PDF_MIXED",
         _ => throw new InvalidOperationException()
     };
-    private static string Map(StructuredElementType value) =>
-        value.ToString().ToUpperInvariant();
+    private static string Map(StructuredElementType value) => value switch
+    {
+        StructuredElementType.ShowerDivision => "SHOWER_DIVISION",
+        _ => value.ToString().ToUpperInvariant()
+    };
+    private static string Map(TechnicalClassificationSource value) => value switch
+    {
+        TechnicalClassificationSource.Explicit => "EXPLICIT",
+        TechnicalClassificationSource.Alias => "ALIAS",
+        TechnicalClassificationSource.Inferred => "INFERRED",
+        TechnicalClassificationSource.Unresolved => "UNRESOLVED",
+        _ => throw new InvalidOperationException()
+    };
     private static string Map(RequirementCategory value) => value switch
     {
         RequirementCategory.GlassSpecification => "GLASS_SPECIFICATION",

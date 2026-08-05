@@ -98,7 +98,7 @@ public sealed class StructuredItemGlassValuationPostgreSqlTests(
                     .SetProperty(value => value.ValidToUtc,
                         At.AddDays(30)), cancellationToken);
             context.Add(GlassPriceRangeVersion.Create(
-                seeded.GlassTypeId, 2, 200000m, 250000m, "COP",
+                seeded.GlassTypeId, 2, 200000m, 225000m, 250000m, "COP",
                 GlassPriceRangeStatus.Preliminary, At.AddDays(30), null,
                 At.AddDays(30)));
             await context.SaveChangesAsync(cancellationToken);
@@ -181,7 +181,7 @@ public sealed class StructuredItemGlassValuationPostgreSqlTests(
         var glassType = GlassType.Create(
             "LAM_4_4", "Laminated 4+4", null, At);
         var priceRange = GlassPriceRangeVersion.Create(
-            glassType.Id, 1, 90000m, 110000m, "COP",
+            glassType.Id, 1, 90000m, 100000m, 110000m, "COP",
             GlassPriceRangeStatus.Preliminary, At, null, At);
         var valuation = includeValuation
             ? ValuationInput(glassType.Id, priceRange.Id, "COP")
@@ -222,8 +222,8 @@ public sealed class StructuredItemGlassValuationPostgreSqlTests(
         string currency) => new(
             GlassValuationStatus.Valued, null, glassTypeId, priceRangeId, 1,
             GlassPriceRangeStatus.Preliminary, currency,
-            1.500000m, 4.500000m, 90000.00m, 110000.00m,
-            405000.00m, 495000.00m);
+            1.500000m, 4.500000m, 90000.00m, 100000.00m, 110000.00m,
+            405000.00m, 450000.00m, 495000.00m);
 
     private static string CreatePayload(Guid documentId, Guid attemptId)
     {

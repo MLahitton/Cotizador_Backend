@@ -7,6 +7,14 @@ namespace Infrastructure.Persistence.Configurations;
 public sealed class GlassTypeConfiguration
     : IEntityTypeConfiguration<GlassType>
 {
+    internal static readonly Guid Tempered5Id =
+        Guid.Parse("10000000-0000-0000-0000-000000000005");
+    internal static readonly Guid Tempered6Id =
+        Guid.Parse("10000000-0000-0000-0000-000000000006");
+    internal static readonly Guid Tempered8Id =
+        Guid.Parse("10000000-0000-0000-0000-000000000007");
+    internal static readonly Guid Tempered10Id =
+        Guid.Parse("10000000-0000-0000-0000-000000000008");
     internal static readonly Guid Laminated44Id =
         Guid.Parse("10000000-0000-0000-0000-000000000001");
     internal static readonly Guid Laminated44GrayId =
@@ -15,6 +23,8 @@ public sealed class GlassTypeConfiguration
         Guid.Parse("10000000-0000-0000-0000-000000000003");
     internal static readonly Guid Laminated55GrayId =
         Guid.Parse("10000000-0000-0000-0000-000000000004");
+    internal static readonly Guid UnknownGlassId =
+        Guid.Parse("10000000-0000-0000-0000-000000000009");
     internal static readonly DateTimeOffset SeededAtUtc =
         new(2026, 7, 31, 0, 0, 0, TimeSpan.Zero);
 
@@ -55,10 +65,15 @@ public sealed class GlassTypeConfiguration
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasData(
-            Seed(Laminated44Id, "LAM_4_4", "Laminado 4+4"),
-            Seed(Laminated44GrayId, "LAM_4_4_GRAY", "Laminado 4+4 gris"),
-            Seed(Laminated55Id, "LAM_5_5", "Laminado 5+5"),
-            Seed(Laminated55GrayId, "LAM_5_5_GRAY", "Laminado 5+5 gris"));
+            Seed(Tempered5Id, "TEMP_5", "Vidrio templado monolitico 5 mm"),
+            Seed(Tempered6Id, "TEMP_6", "Vidrio templado monolitico 6 mm"),
+            Seed(Tempered8Id, "TEMP_8", "Vidrio templado monolitico 8 mm"),
+            Seed(Tempered10Id, "TEMP_10", "Vidrio templado monolitico 10 mm"),
+            Seed(Laminated44Id, "LAM_4_4", "Vidrio laminado 4+4"),
+            Seed(Laminated44GrayId, "LAM_4_4_GRAY", "Vidrio laminado gris 4+4"),
+            Seed(Laminated55Id, "LAM_5_5", "Vidrio laminado 5+5"),
+            Seed(Laminated55GrayId, "LAM_5_5_GRAY", "Vidrio laminado gris 5+5"),
+            Seed(UnknownGlassId, "UNKNOWN_GLASS", "Tipo de vidrio por confirmar"));
     }
 
     private static object Seed(Guid id, string code, string name) => new
@@ -90,6 +105,9 @@ public sealed class GlassPriceRangeVersionConfiguration
                 "ck_glass_price_range_versions_maximum_price",
                 "\"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
             table.HasCheckConstraint(
+                "ck_glass_price_range_versions_expected_price",
+                "\"expected_amount_per_m2\" >= \"minimum_price_per_square_meter\" AND \"expected_amount_per_m2\" <= \"maximum_price_per_square_meter\"");
+            table.HasCheckConstraint(
                 "ck_glass_price_range_versions_validity",
                 "\"valid_to_utc\" IS NULL OR \"valid_to_utc\" > \"valid_from_utc\"");
         });
@@ -105,6 +123,11 @@ public sealed class GlassPriceRangeVersionConfiguration
             .IsRequired();
         builder.Property(value => value.MinimumPricePerSquareMeter)
             .HasColumnName("minimum_price_per_square_meter")
+            .HasColumnType("numeric(18,2)")
+            .HasPrecision(18, 2)
+            .IsRequired();
+        builder.Property(value => value.ExpectedAmountPerM2)
+            .HasColumnName("expected_amount_per_m2")
             .HasColumnType("numeric(18,2)")
             .HasPrecision(18, 2)
             .IsRequired();
@@ -159,27 +182,53 @@ public sealed class GlassPriceRangeVersionConfiguration
             .HasDatabaseName("ux_glass_price_range_versions_open_type");
 
         builder.HasData(
-            Seed("20000000-0000-0000-0000-000000000001", GlassTypeConfiguration.Laminated44Id, 90000m, 110000m),
-            Seed("20000000-0000-0000-0000-000000000002", GlassTypeConfiguration.Laminated44GrayId, 95000m, 95000m),
-            Seed("20000000-0000-0000-0000-000000000003", GlassTypeConfiguration.Laminated55Id, 120000m, 140000m),
-            Seed("20000000-0000-0000-0000-000000000004", GlassTypeConfiguration.Laminated55GrayId, 125000m, 145000m));
+            Seed("20000000-0000-0000-0000-000000000005", GlassTypeConfiguration.Tempered5Id, 74000m, 74000m, 74000m),
+            Seed("20000000-0000-0000-0000-000000000006", GlassTypeConfiguration.Tempered6Id, 86000m, 86000m, 86000m),
+            Seed("20000000-0000-0000-0000-000000000007", GlassTypeConfiguration.Tempered8Id, 90000m, 90000m, 90000m),
+            Seed("20000000-0000-0000-0000-000000000008", GlassTypeConfiguration.Tempered10Id, 126000m, 126000m, 126000m),
+            Seed("20000000-0000-0000-0000-000000000001", GlassTypeConfiguration.Laminated44Id, 90000m, 100000m, 110000m),
+            RetiredSeed("20000000-0000-0000-0000-000000000002", GlassTypeConfiguration.Laminated44GrayId, 95000m, 95000m, 95000m),
+            Seed("20000000-0000-0000-0000-000000000003", GlassTypeConfiguration.Laminated55Id, 120000m, 130000m, 140000m),
+            RetiredSeed("20000000-0000-0000-0000-000000000004", GlassTypeConfiguration.Laminated55GrayId, 125000m, 135000m, 145000m));
     }
 
     private static object Seed(
         string id,
         Guid glassTypeId,
         decimal minimum,
+        decimal expected,
         decimal maximum) => new
     {
         Id = Guid.Parse(id),
         GlassTypeId = glassTypeId,
         Version = 1,
         MinimumPricePerSquareMeter = minimum,
+        ExpectedAmountPerM2 = expected,
         MaximumPricePerSquareMeter = maximum,
         Currency = "COP",
         Status = GlassPriceRangeStatus.Preliminary,
         ValidFromUtc = GlassTypeConfiguration.SeededAtUtc,
         ValidToUtc = (DateTimeOffset?)null,
+        CreatedAtUtc = GlassTypeConfiguration.SeededAtUtc
+    };
+
+    private static object RetiredSeed(
+        string id,
+        Guid glassTypeId,
+        decimal minimum,
+        decimal expected,
+        decimal maximum) => new
+    {
+        Id = Guid.Parse(id),
+        GlassTypeId = glassTypeId,
+        Version = 1,
+        MinimumPricePerSquareMeter = minimum,
+        ExpectedAmountPerM2 = expected,
+        MaximumPricePerSquareMeter = maximum,
+        Currency = "COP",
+        Status = GlassPriceRangeStatus.Retired,
+        ValidFromUtc = GlassTypeConfiguration.SeededAtUtc,
+        ValidToUtc = GlassTypeConfiguration.SeededAtUtc.AddDays(1),
         CreatedAtUtc = GlassTypeConfiguration.SeededAtUtc
     };
 }

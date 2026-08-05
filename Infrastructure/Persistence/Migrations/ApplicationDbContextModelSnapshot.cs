@@ -22,6 +22,424 @@ namespace Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Domain.Catalogs.CatalogAlias", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("alias");
+
+                    b.Property<string>("CanonicalCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("canonical_code");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("category");
+
+                    b.Property<decimal>("Confidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("MatchPolicy")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("match_policy");
+
+                    b.Property<string>("NormalizedAlias")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("normalized_alias");
+
+                    b.Property<bool>("RequiresContext")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_context");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Category", "CanonicalCode")
+                        .HasDatabaseName("ix_catalog_aliases_category_canonical_code");
+
+                    b.HasIndex("Category", "NormalizedAlias")
+                        .IsUnique()
+                        .HasDatabaseName("ux_catalog_aliases_category_normalized_alias");
+
+                    b.ToTable("catalog_aliases", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_catalog_aliases_confidence", "\"confidence\" >= 0 AND \"confidence\" <= 1");
+
+                            t.HasCheckConstraint("ck_catalog_aliases_non_numeric", "\"normalized_alias\" !~ '^[0-9]+$'");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000001"),
+                            Alias = "VENECIA SERIE 40",
+                            CanonicalCode = "K40",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "VENECIA SERIE 40",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000002"),
+                            Alias = "VENECIA_SERIE_40",
+                            CanonicalCode = "K40",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "VENECIA_SERIE_40",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000003"),
+                            Alias = "SERIE 40",
+                            CanonicalCode = "K40",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "SERIE 40",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000004"),
+                            Alias = "VENECIA SERIE 50",
+                            CanonicalCode = "K50",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "VENECIA SERIE 50",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000005"),
+                            Alias = "VENECIA_SERIE_50",
+                            CanonicalCode = "K50",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "VENECIA_SERIE_50",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000006"),
+                            Alias = "SERIE 50",
+                            CanonicalCode = "K50",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "SERIE 50",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000007"),
+                            Alias = "VENECIA SERIE 70",
+                            CanonicalCode = "K70",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "VENECIA SERIE 70",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000008"),
+                            Alias = "VENECIA_SERIE_70",
+                            CanonicalCode = "K70",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "VENECIA_SERIE_70",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000009"),
+                            Alias = "SERIE 70",
+                            CanonicalCode = "K70",
+                            Category = "SYSTEM",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "SERIE 70",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000010"),
+                            Alias = "SG0047",
+                            CanonicalCode = "MARCO_47",
+                            Category = "FRAME",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "SG0047",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000011"),
+                            Alias = "MARCO SG0047",
+                            CanonicalCode = "MARCO_47",
+                            Category = "FRAME",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "MARCO SG0047",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000012"),
+                            Alias = "SG0058",
+                            CanonicalCode = "MARCO_58",
+                            Category = "FRAME",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "SG0058",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000013"),
+                            Alias = "MARCO SG0058",
+                            CanonicalCode = "MARCO_58",
+                            Category = "FRAME",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "MARCO SG0058",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000014"),
+                            Alias = "NEGRO MATE",
+                            CanonicalCode = "BLACK_MATTE",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "NEGRO MATE",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000015"),
+                            Alias = "ALUCOLOR POLIESTER NEGRO MATE",
+                            CanonicalCode = "BLACK_MATTE",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "ALUCOLOR POLIESTER NEGRO MATE",
+                            RequiresContext = false
+                        });
+                });
+
+            modelBuilder.Entity("Domain.Catalogs.FinishType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_finish_types_code");
+
+                    b.ToTable("finish_types", "core");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000001"),
+                            Code = "STANDARD_NATURAL",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Acabado natural estandar",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000002"),
+                            Code = "ANODIZED_GRAY",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Anodizado gris",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000003"),
+                            Code = "BLACK_MATTE",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Negro mate",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000004"),
+                            Code = "SPECIAL",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Acabado especial",
+                            RequiresReview = true
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000005"),
+                            Code = "UNKNOWN",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Acabado por confirmar",
+                            RequiresReview = true
+                        });
+                });
+
+            modelBuilder.Entity("Domain.Catalogs.FrameType", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_frame_types_code");
+
+                    b.ToTable("frame_types", "core");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("40000000-0000-0000-0000-000000000001"),
+                            Code = "MARCO_47",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Marco 47 mm"
+                        },
+                        new
+                        {
+                            Id = new Guid("40000000-0000-0000-0000-000000000002"),
+                            Code = "MARCO_58",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Marco 58 mm"
+                        });
+                });
+
             modelBuilder.Entity("Domain.Catalogs.GlassPriceRangeVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -37,6 +455,11 @@ namespace Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)")
                         .HasColumnName("currency");
+
+                    b.Property<decimal>("ExpectedAmountPerM2")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("expected_amount_per_m2");
 
                     b.Property<Guid>("GlassTypeId")
                         .HasColumnType("uuid")
@@ -86,6 +509,8 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.ToTable("glass_price_range_versions", "core", t =>
                         {
+                            t.HasCheckConstraint("ck_glass_price_range_versions_expected_price", "\"expected_amount_per_m2\" >= \"minimum_price_per_square_meter\" AND \"expected_amount_per_m2\" <= \"maximum_price_per_square_meter\"");
+
                             t.HasCheckConstraint("ck_glass_price_range_versions_maximum_price", "\"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
 
                             t.HasCheckConstraint("ck_glass_price_range_versions_minimum_price", "\"minimum_price_per_square_meter\" > 0");
@@ -98,9 +523,62 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
+                            Id = new Guid("20000000-0000-0000-0000-000000000005"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "COP",
+                            ExpectedAmountPerM2 = 74000m,
+                            GlassTypeId = new Guid("10000000-0000-0000-0000-000000000005"),
+                            MaximumPricePerSquareMeter = 74000m,
+                            MinimumPricePerSquareMeter = 74000m,
+                            Status = "PRELIMINARY",
+                            ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("20000000-0000-0000-0000-000000000006"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "COP",
+                            ExpectedAmountPerM2 = 86000m,
+                            GlassTypeId = new Guid("10000000-0000-0000-0000-000000000006"),
+                            MaximumPricePerSquareMeter = 86000m,
+                            MinimumPricePerSquareMeter = 86000m,
+                            Status = "PRELIMINARY",
+                            ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("20000000-0000-0000-0000-000000000007"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "COP",
+                            ExpectedAmountPerM2 = 90000m,
+                            GlassTypeId = new Guid("10000000-0000-0000-0000-000000000007"),
+                            MaximumPricePerSquareMeter = 90000m,
+                            MinimumPricePerSquareMeter = 90000m,
+                            Status = "PRELIMINARY",
+                            ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
+                            Id = new Guid("20000000-0000-0000-0000-000000000008"),
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Currency = "COP",
+                            ExpectedAmountPerM2 = 126000m,
+                            GlassTypeId = new Guid("10000000-0000-0000-0000-000000000008"),
+                            MaximumPricePerSquareMeter = 126000m,
+                            MinimumPricePerSquareMeter = 126000m,
+                            Status = "PRELIMINARY",
+                            ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Version = 1
+                        },
+                        new
+                        {
                             Id = new Guid("20000000-0000-0000-0000-000000000001"),
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "COP",
+                            ExpectedAmountPerM2 = 100000m,
                             GlassTypeId = new Guid("10000000-0000-0000-0000-000000000001"),
                             MaximumPricePerSquareMeter = 110000m,
                             MinimumPricePerSquareMeter = 90000m,
@@ -113,11 +591,13 @@ namespace Infrastructure.Persistence.Migrations
                             Id = new Guid("20000000-0000-0000-0000-000000000002"),
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "COP",
+                            ExpectedAmountPerM2 = 95000m,
                             GlassTypeId = new Guid("10000000-0000-0000-0000-000000000002"),
                             MaximumPricePerSquareMeter = 95000m,
                             MinimumPricePerSquareMeter = 95000m,
-                            Status = "PRELIMINARY",
+                            Status = "RETIRED",
                             ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            ValidToUtc = new DateTimeOffset(new DateTime(2026, 8, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Version = 1
                         },
                         new
@@ -125,6 +605,7 @@ namespace Infrastructure.Persistence.Migrations
                             Id = new Guid("20000000-0000-0000-0000-000000000003"),
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "COP",
+                            ExpectedAmountPerM2 = 130000m,
                             GlassTypeId = new Guid("10000000-0000-0000-0000-000000000003"),
                             MaximumPricePerSquareMeter = 140000m,
                             MinimumPricePerSquareMeter = 120000m,
@@ -137,11 +618,13 @@ namespace Infrastructure.Persistence.Migrations
                             Id = new Guid("20000000-0000-0000-0000-000000000004"),
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Currency = "COP",
+                            ExpectedAmountPerM2 = 135000m,
                             GlassTypeId = new Guid("10000000-0000-0000-0000-000000000004"),
                             MaximumPricePerSquareMeter = 145000m,
                             MinimumPricePerSquareMeter = 125000m,
-                            Status = "PRELIMINARY",
+                            Status = "RETIRED",
                             ValidFromUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            ValidToUtc = new DateTimeOffset(new DateTime(2026, 8, 1, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Version = 1
                         });
                 });
@@ -192,11 +675,43 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasData(
                         new
                         {
+                            Id = new Guid("10000000-0000-0000-0000-000000000005"),
+                            Code = "TEMP_5",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Vidrio templado monolitico 5 mm"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000006"),
+                            Code = "TEMP_6",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Vidrio templado monolitico 6 mm"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000007"),
+                            Code = "TEMP_8",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Vidrio templado monolitico 8 mm"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000008"),
+                            Code = "TEMP_10",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Vidrio templado monolitico 10 mm"
+                        },
+                        new
+                        {
                             Id = new Guid("10000000-0000-0000-0000-000000000001"),
                             Code = "LAM_4_4",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Laminado 4+4"
+                            Name = "Vidrio laminado 4+4"
                         },
                         new
                         {
@@ -204,7 +719,7 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "LAM_4_4_GRAY",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Laminado 4+4 gris"
+                            Name = "Vidrio laminado gris 4+4"
                         },
                         new
                         {
@@ -212,7 +727,7 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "LAM_5_5",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Laminado 5+5"
+                            Name = "Vidrio laminado 5+5"
                         },
                         new
                         {
@@ -220,7 +735,228 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "LAM_5_5_GRAY",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Laminado 5+5 gris"
+                            Name = "Vidrio laminado gris 5+5"
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000009"),
+                            Code = "UNKNOWN_GLASS",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            Name = "Tipo de vidrio por confirmar"
+                        });
+                });
+
+            modelBuilder.Entity("Domain.Catalogs.ProductSystem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("ActiveForRecognition")
+                        .HasColumnType("boolean")
+                        .HasColumnName("active_for_recognition");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("FuturePriceable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("future_priceable");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("Priceable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("priceable");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.Property<DateTimeOffset?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_product_systems_code");
+
+                    b.ToTable("product_systems", "core");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000001"),
+                            ActiveForRecognition = true,
+                            Code = "K40",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K40",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000002"),
+                            ActiveForRecognition = true,
+                            Code = "K50",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K50",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000003"),
+                            ActiveForRecognition = true,
+                            Code = "K55",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K55",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000004"),
+                            ActiveForRecognition = true,
+                            Code = "K70",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K70",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000005"),
+                            ActiveForRecognition = true,
+                            Code = "K90",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K90",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000006"),
+                            ActiveForRecognition = true,
+                            Code = "K100",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema K100",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000007"),
+                            ActiveForRecognition = true,
+                            Code = "S35",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema S35",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000008"),
+                            ActiveForRecognition = true,
+                            Code = "S50",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema S50",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000009"),
+                            ActiveForRecognition = true,
+                            Code = "S80",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema S80",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000010"),
+                            ActiveForRecognition = true,
+                            Code = "3890",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema 3890",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000011"),
+                            ActiveForRecognition = true,
+                            Code = "SG45",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema SG45",
+                            Priceable = true,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000012"),
+                            ActiveForRecognition = true,
+                            Code = "BARANDA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema para barandas",
+                            Priceable = false,
+                            RequiresReview = true
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000013"),
+                            ActiveForRecognition = true,
+                            Code = "DIVISION_BANO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
+                            IsActive = true,
+                            Name = "Sistema para divisiones de bano",
+                            Priceable = false,
+                            RequiresReview = true
                         });
                 });
 
@@ -1270,16 +2006,241 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.PreQuoteDraftItemTechnicalSnapshot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FinishCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("finish_code");
+
+                    b.Property<decimal?>("FinishConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("finish_confidence");
+
+                    b.Property<string>("FinishOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("finish_original_text");
+
+                    b.Property<string>("FinishSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("finish_source");
+
+                    b.Property<string>("FrameCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("frame_code");
+
+                    b.Property<decimal?>("FrameConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("frame_confidence");
+
+                    b.Property<string>("FrameOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("frame_original_text");
+
+                    b.Property<string>("FrameSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("frame_source");
+
+                    b.Property<Guid>("PreQuoteDraftItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pre_quote_draft_item_id");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.PrimitiveCollection<string[]>("ReviewReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("review_reasons");
+
+                    b.Property<Guid>("SourceStructuredItemTechnicalClassificationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_structured_item_technical_classification_id");
+
+                    b.Property<string>("SystemCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("system_code");
+
+                    b.Property<decimal?>("SystemConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("system_confidence");
+
+                    b.Property<string>("SystemOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("system_original_text");
+
+                    b.Property<string>("SystemSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("system_source");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PreQuoteDraftItemId")
+                        .IsUnique();
+
+                    b.HasIndex("SourceStructuredItemTechnicalClassificationId");
+
+                    b.ToTable("pre_quote_draft_item_technical_snapshots", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_pre_quote_draft_item_technical_snapshot_confidence", "(\"system_confidence\" IS NULL OR \"system_confidence\" >= 0 AND \"system_confidence\" <= 1) AND (\"frame_confidence\" IS NULL OR \"frame_confidence\" >= 0 AND \"frame_confidence\" <= 1) AND (\"finish_confidence\" IS NULL OR \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1)");
+
+                            t.HasCheckConstraint("ck_pre_quote_draft_item_technical_snapshot_review", "(\"requires_review\" = false AND cardinality(\"review_reasons\") = 0) OR (\"requires_review\" = true AND cardinality(\"review_reasons\") > 0)");
+                        });
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.PreQuoteDraftItemValuationSnapshot", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("AccessoriesExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("accessories_expected_amount");
+
+                    b.Property<decimal?>("AccessoriesMaximumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("accessories_maximum_amount");
+
+                    b.Property<decimal?>("AccessoriesMinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("accessories_minimum_amount");
+
+                    b.Property<decimal?>("AccessoryFactor")
+                        .HasPrecision(8, 4)
+                        .HasColumnType("numeric(8,4)")
+                        .HasColumnName("accessory_factor");
+
+                    b.Property<decimal?>("AssemblyExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("assembly_expected_amount");
+
+                    b.Property<decimal?>("AssemblyMaximumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("assembly_maximum_amount");
+
+                    b.Property<decimal?>("AssemblyMinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("assembly_minimum_amount");
+
+                    b.Property<string>("AssemblyProfileCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("assembly_profile_code");
+
+                    b.PrimitiveCollection<string[]>("Assumptions")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("assumptions");
+
+                    b.Property<decimal?>("BillableAreaUnitSquareMeters")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("billable_area_unit_square_meters");
+
+                    b.Property<DateTimeOffset?>("CalculatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("calculated_at_utc");
+
+                    b.Property<string>("ConfidenceLevel")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("confidence_level");
+
+                    b.Property<int?>("ConfidenceScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("confidence_score");
+
                     b.Property<string>("Currency")
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)")
                         .HasColumnName("currency");
+
+                    b.Property<string>("FinishCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("finish_code");
+
+                    b.Property<decimal?>("FinishFactorExpected")
+                        .HasPrecision(8, 4)
+                        .HasColumnType("numeric(8,4)")
+                        .HasColumnName("finish_factor_expected");
+
+                    b.Property<decimal?>("FinishFactorMaximum")
+                        .HasPrecision(8, 4)
+                        .HasColumnType("numeric(8,4)")
+                        .HasColumnName("finish_factor_maximum");
+
+                    b.Property<decimal?>("FinishFactorMinimum")
+                        .HasPrecision(8, 4)
+                        .HasColumnType("numeric(8,4)")
+                        .HasColumnName("finish_factor_minimum");
+
+                    b.Property<string>("FrameCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("frame_code");
+
+                    b.Property<string>("GlassCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("glass_code");
+
+                    b.Property<decimal?>("GlassExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_expected_amount");
+
+                    b.Property<decimal?>("GlassExpectedPricePerSquareMeter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_expected_price_per_square_meter");
+
+                    b.Property<decimal?>("GlassMaximumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_maximum_amount");
+
+                    b.Property<decimal?>("GlassMaximumPricePerSquareMeter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_maximum_price_per_square_meter");
+
+                    b.Property<decimal?>("GlassMinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_minimum_amount");
+
+                    b.Property<decimal?>("GlassMinimumPricePerSquareMeter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("glass_minimum_price_per_square_meter");
+
+                    b.Property<int?>("GlassPriceRangeVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("glass_price_range_version");
 
                     b.Property<Guid?>("GlassPriceRangeVersionId")
                         .HasColumnType("uuid")
@@ -1302,9 +2263,54 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("invalidation_reason");
 
+                    b.Property<decimal?>("ItemExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("item_expected_amount");
+
+                    b.Property<decimal?>("ItemMaximumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("item_maximum_amount");
+
+                    b.Property<decimal?>("ItemMinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("item_minimum_amount");
+
+                    b.Property<decimal?>("LaborExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("labor_expected_amount");
+
+                    b.Property<decimal?>("LaborMaximumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("labor_maximum_amount");
+
+                    b.Property<decimal?>("LaborMinimumAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("labor_minimum_amount");
+
+                    b.Property<string>("LaborProfileCode")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("labor_profile_code");
+
+                    b.PrimitiveCollection<string[]>("MissingData")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("missing_data");
+
                     b.Property<Guid>("PreQuoteDraftItemId")
                         .HasColumnType("uuid")
                         .HasColumnName("pre_quote_draft_item_id");
+
+                    b.Property<string>("PricingProfileVersion")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("pricing_profile_version");
 
                     b.Property<int?>("QuantityUsed")
                         .HasColumnType("integer")
@@ -1315,6 +2321,10 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("reason");
 
+                    b.Property<bool?>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
                     b.Property<Guid>("SourceStructuredItemValuationId")
                         .HasColumnType("uuid")
                         .HasColumnName("source_structured_item_valuation_id");
@@ -1324,6 +2334,16 @@ namespace Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
+
+                    b.Property<string>("SystemCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("system_code");
+
+                    b.Property<string>("SystemSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("system_source");
 
                     b.Property<decimal?>("TotalAmount")
                         .HasPrecision(18, 6)
@@ -1377,7 +2397,7 @@ namespace Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_prices", "\"unit_price_per_square_meter\" IS NULL OR \"unit_price_per_square_meter\" > 0");
 
-                            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_status", "\"status\" IN ('NotApplicable', 'Pending', 'Valued', 'Stale', 'RequiresReview')");
+                            t.HasCheckConstraint("ck_pre_quote_draft_item_valuation_snapshot_status", "\"status\" IN ('NotApplicable', 'Pending', 'Valued', 'Stale', 'RequiresReview', 'NotPriceable')");
                         });
                 });
 
@@ -1936,6 +2956,16 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(3)")
                         .HasColumnName("currency");
 
+                    b.Property<decimal?>("ExpectedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("expected_amount");
+
+                    b.Property<decimal?>("ExpectedPricePerSquareMeter")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("expected_price_per_square_meter");
+
                     b.Property<Guid?>("GlassPriceRangeVersionId")
                         .HasColumnType("uuid")
                         .HasColumnName("glass_price_range_version_id");
@@ -2015,7 +3045,105 @@ namespace Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_structured_glass_valuation_currency", "\"currency\" IS NULL OR char_length(\"currency\") = 3");
 
-                            t.HasCheckConstraint("ck_structured_glass_valuation_prices", "\"minimum_price_per_square_meter\" IS NULL OR \"minimum_price_per_square_meter\" > 0 AND \"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
+                            t.HasCheckConstraint("ck_structured_glass_valuation_expected_amount", "\"expected_amount\" IS NULL OR \"expected_amount\" >= \"minimum_amount\" AND \"expected_amount\" <= \"maximum_amount\"");
+
+                            t.HasCheckConstraint("ck_structured_glass_valuation_prices", "\"minimum_price_per_square_meter\" IS NULL OR \"minimum_price_per_square_meter\" > 0 AND \"expected_price_per_square_meter\" >= \"minimum_price_per_square_meter\" AND \"expected_price_per_square_meter\" <= \"maximum_price_per_square_meter\" AND \"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemTechnicalClassification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("FinishCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("finish_code");
+
+                    b.Property<decimal?>("FinishConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("finish_confidence");
+
+                    b.Property<string>("FinishOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("finish_original_text");
+
+                    b.Property<string>("FinishSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("finish_source");
+
+                    b.Property<string>("FrameCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("frame_code");
+
+                    b.Property<decimal?>("FrameConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("frame_confidence");
+
+                    b.Property<string>("FrameOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("frame_original_text");
+
+                    b.Property<string>("FrameSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("frame_source");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.PrimitiveCollection<string[]>("ReviewReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("review_reasons");
+
+                    b.Property<Guid>("StructuredExtractionItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("structured_extraction_item_id");
+
+                    b.Property<string>("SystemCode")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("system_code");
+
+                    b.Property<decimal?>("SystemConfidence")
+                        .HasPrecision(5, 4)
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("system_confidence");
+
+                    b.Property<string>("SystemOriginalText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("system_original_text");
+
+                    b.Property<string>("SystemSource")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("system_source");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StructuredExtractionItemId")
+                        .IsUnique();
+
+                    b.ToTable("structured_extraction_item_technical_classifications", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_structured_item_technical_confidence", "(\"system_confidence\" IS NULL OR \"system_confidence\" >= 0 AND \"system_confidence\" <= 1) AND (\"frame_confidence\" IS NULL OR \"frame_confidence\" >= 0 AND \"frame_confidence\" <= 1) AND (\"finish_confidence\" IS NULL OR \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1)");
+
+                            t.HasCheckConstraint("ck_structured_item_technical_review", "(\"requires_review\" = false AND cardinality(\"review_reasons\") = 0) OR (\"requires_review\" = true AND cardinality(\"review_reasons\") > 0)");
                         });
                 });
 
@@ -2407,6 +3535,21 @@ namespace Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.PreQuoteDraftItemTechnicalSnapshot", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.PreQuoteDraftItem", null)
+                        .WithOne("TechnicalSnapshot")
+                        .HasForeignKey("Domain.PreQuotes.PreQuoteDraftItemTechnicalSnapshot", "PreQuoteDraftItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.StructuredExtractionItemTechnicalClassification", null)
+                        .WithMany()
+                        .HasForeignKey("SourceStructuredItemTechnicalClassificationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.PreQuoteDraftItemValuationSnapshot", b =>
                 {
                     b.HasOne("Domain.Catalogs.GlassPriceRangeVersion", null)
@@ -2573,6 +3716,17 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("StructuredExtractionItem");
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemTechnicalClassification", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.StructuredExtractionItem", "StructuredExtractionItem")
+                        .WithOne("TechnicalClassification")
+                        .HasForeignKey("Domain.PreQuotes.StructuredExtractionItemTechnicalClassification", "StructuredExtractionItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("StructuredExtractionItem");
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionRequirement", b =>
                 {
                     b.HasOne("Domain.PreQuotes.StructuredDocumentExtraction", "StructuredDocumentExtraction")
@@ -2650,6 +3804,8 @@ namespace Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("GlassSnapshot");
 
+                    b.Navigation("TechnicalSnapshot");
+
                     b.Navigation("ValuationSnapshot");
                 });
 
@@ -2680,6 +3836,8 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("GlassDetection");
 
                     b.Navigation("GlassValuation");
+
+                    b.Navigation("TechnicalClassification");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.StructuredExtractionItemGlassDetection", b =>

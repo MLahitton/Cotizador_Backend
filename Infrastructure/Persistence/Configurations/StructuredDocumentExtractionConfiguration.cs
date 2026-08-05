@@ -44,6 +44,43 @@ public sealed class StructuredDocumentExtractionConfiguration :
     }
 }
 
+public sealed class StructuredExtractionItemTechnicalClassificationConfiguration
+    : IEntityTypeConfiguration<StructuredExtractionItemTechnicalClassification>
+{
+    public void Configure(EntityTypeBuilder<StructuredExtractionItemTechnicalClassification> b)
+    {
+        b.ToTable("structured_extraction_item_technical_classifications", "core", t =>
+        {
+            t.HasCheckConstraint("ck_structured_item_technical_confidence",
+                "(\"system_confidence\" IS NULL OR \"system_confidence\" >= 0 AND \"system_confidence\" <= 1) AND (\"frame_confidence\" IS NULL OR \"frame_confidence\" >= 0 AND \"frame_confidence\" <= 1) AND (\"finish_confidence\" IS NULL OR \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1)");
+            t.HasCheckConstraint("ck_structured_item_technical_review",
+                "(\"requires_review\" = false AND cardinality(\"review_reasons\") = 0) OR (\"requires_review\" = true AND cardinality(\"review_reasons\") > 0)");
+        });
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid").ValueGeneratedNever();
+        b.Property(x => x.StructuredExtractionItemId).HasColumnName("structured_extraction_item_id").HasColumnType("uuid");
+        b.Property(x => x.SystemCode).HasColumnName("system_code").HasMaxLength(30);
+        b.Property(x => x.SystemOriginalText).HasColumnName("system_original_text").HasMaxLength(500);
+        b.Property(x => x.SystemSource).HasColumnName("system_source").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.SystemConfidence).HasColumnName("system_confidence").HasPrecision(5, 4);
+        b.Property(x => x.FrameCode).HasColumnName("frame_code").HasMaxLength(30);
+        b.Property(x => x.FrameOriginalText).HasColumnName("frame_original_text").HasMaxLength(500);
+        b.Property(x => x.FrameSource).HasColumnName("frame_source").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.FrameConfidence).HasColumnName("frame_confidence").HasPrecision(5, 4);
+        b.Property(x => x.FinishCode).HasColumnName("finish_code").HasMaxLength(30);
+        b.Property(x => x.FinishOriginalText).HasColumnName("finish_original_text").HasMaxLength(500);
+        b.Property(x => x.FinishSource).HasColumnName("finish_source").HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.FinishConfidence).HasColumnName("finish_confidence").HasPrecision(5, 4);
+        b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.Property(x => x.ReviewReasons).HasColumnName("review_reasons").HasColumnType("text[]");
+        b.Property(x => x.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp with time zone");
+        b.HasOne(x => x.StructuredExtractionItem).WithOne(x => x.TechnicalClassification)
+            .HasForeignKey<StructuredExtractionItemTechnicalClassification>(x => x.StructuredExtractionItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+        b.HasIndex(x => x.StructuredExtractionItemId).IsUnique();
+    }
+}
+
 public abstract class StructuredChildConfiguration<T> : IEntityTypeConfiguration<T> where T : class
 {
     protected abstract string Table { get; }

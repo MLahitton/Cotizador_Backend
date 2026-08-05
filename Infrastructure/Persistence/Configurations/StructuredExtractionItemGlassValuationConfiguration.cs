@@ -13,7 +13,8 @@ public sealed class StructuredExtractionItemGlassValuationConfiguration
         {
             t.HasCheckConstraint("ck_structured_glass_valuation_areas", "\"unit_area_square_meters\" IS NULL OR \"unit_area_square_meters\" >= 0 AND \"total_area_square_meters\" >= 0");
             t.HasCheckConstraint("ck_structured_glass_valuation_amounts", "\"minimum_amount\" IS NULL OR \"minimum_amount\" >= 0 AND \"maximum_amount\" >= \"minimum_amount\"");
-            t.HasCheckConstraint("ck_structured_glass_valuation_prices", "\"minimum_price_per_square_meter\" IS NULL OR \"minimum_price_per_square_meter\" > 0 AND \"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
+            t.HasCheckConstraint("ck_structured_glass_valuation_prices", "\"minimum_price_per_square_meter\" IS NULL OR \"minimum_price_per_square_meter\" > 0 AND \"expected_price_per_square_meter\" >= \"minimum_price_per_square_meter\" AND \"expected_price_per_square_meter\" <= \"maximum_price_per_square_meter\" AND \"maximum_price_per_square_meter\" >= \"minimum_price_per_square_meter\"");
+            t.HasCheckConstraint("ck_structured_glass_valuation_expected_amount", "\"expected_amount\" IS NULL OR \"expected_amount\" >= \"minimum_amount\" AND \"expected_amount\" <= \"maximum_amount\"");
             t.HasCheckConstraint("ck_structured_glass_valuation_currency", "\"currency\" IS NULL OR char_length(\"currency\") = 3");
         });
         b.HasKey(x => x.Id);
@@ -29,8 +30,10 @@ public sealed class StructuredExtractionItemGlassValuationConfiguration
         b.Property(x => x.UnitAreaSquareMeters).HasColumnName("unit_area_square_meters").HasPrecision(18, 6);
         b.Property(x => x.TotalAreaSquareMeters).HasColumnName("total_area_square_meters").HasPrecision(18, 6);
         b.Property(x => x.MinimumPricePerSquareMeter).HasColumnName("minimum_price_per_square_meter").HasPrecision(18, 2);
+        b.Property(x => x.ExpectedPricePerSquareMeter).HasColumnName("expected_price_per_square_meter").HasPrecision(18, 2);
         b.Property(x => x.MaximumPricePerSquareMeter).HasColumnName("maximum_price_per_square_meter").HasPrecision(18, 2);
         b.Property(x => x.MinimumAmount).HasColumnName("minimum_amount").HasPrecision(18, 2);
+        b.Property(x => x.ExpectedAmount).HasColumnName("expected_amount").HasPrecision(18, 2);
         b.Property(x => x.MaximumAmount).HasColumnName("maximum_amount").HasPrecision(18, 2);
         b.Property(x => x.CalculatedAtUtc).HasColumnName("calculated_at_utc").HasColumnType("timestamp with time zone");
         b.HasIndex(x => x.StructuredExtractionItemId).IsUnique();

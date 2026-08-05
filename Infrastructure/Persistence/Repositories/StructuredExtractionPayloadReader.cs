@@ -23,7 +23,8 @@ internal static class StructuredExtractionPayloadReader
         IReadOnlyList<PersistedReference> references,
         IReadOnlyList<PersistedIssue> issues,
         IReadOnlyList<PersistedConflict> conflicts,
-        IReadOnlyList<PersistedGlass> glasses)
+        IReadOnlyList<PersistedGlass> glasses,
+        IReadOnlyList<PersistedTechnicalClassification>? technicalClassifications = null)
     {
         try
         {
@@ -36,7 +37,8 @@ internal static class StructuredExtractionPayloadReader
                 references,
                 issues,
                 conflicts,
-                glasses);
+                glasses,
+                technicalClassifications ?? []);
         }
         catch (PreQuoteDocumentQueryException)
         {
@@ -58,7 +60,8 @@ internal static class StructuredExtractionPayloadReader
         IReadOnlyList<PersistedReference> references,
         IReadOnlyList<PersistedIssue> issues,
         IReadOnlyList<PersistedConflict> conflicts,
-        IReadOnlyList<PersistedGlass> glasses)
+        IReadOnlyList<PersistedGlass> glasses,
+        IReadOnlyList<PersistedTechnicalClassification> technicalClassifications)
     {
         var payload = JsonSerializer.Deserialize<Payload>(persisted.PayloadJson, Options)
             ?? throw Invalid();
@@ -125,9 +128,12 @@ internal static class StructuredExtractionPayloadReader
             || payload.SchemaVersion == "3.0" && glasses.Count != items.Count)
             throw Invalid();
         var glassByItem = glasses.ToDictionary(value => value.ItemSequence);
+        var technicalByItem = technicalClassifications.ToDictionary(
+            value => value.ItemSequence);
         var mappedItems = items.Select((row, index) =>
             MapItem(row, structured.Items[index], persisted.PageCount,
                 glassByItem.GetValueOrDefault(row.Sequence),
+                technicalByItem.GetValueOrDefault(row.Sequence),
                 payload.SchemaVersion)).ToArray();
         var mappedRequirements = requirements.Select((row, index) =>
             MapRequirement(row, payloadRequirements[index], persisted.PageCount))
@@ -174,6 +180,7 @@ internal static class StructuredExtractionPayloadReader
         ItemDto dto,
         int pageCount,
         PersistedGlass? glass,
+        PersistedTechnicalClassification? technical,
         string schemaVersion)
     {
         var reasons = dto.ReviewReasons?.Select(MapIssueCode).ToArray()
@@ -203,8 +210,69 @@ internal static class StructuredExtractionPayloadReader
                     ? null
                     : throw Invalid()
                 : MapGlass(dto.Glass, glass, pageCount),
-            null);
+            null,
+            MapTechnicalClassification(dto.TechnicalClassification, technical));
     }
+
+    private static StructuredItemTechnicalClassificationReadModel?
+        MapTechnicalClassification(
+            TechnicalClassificationDto? dto,
+            PersistedTechnicalClassification? persisted)
+    {
+        if (dto is null)
+        {
+            return persisted is null ? null : ToReadModel(persisted);
+        }
+
+        if (persisted is null)
+        {
+            throw Invalid();
+        }
+
+        var systemSource = MapTechnicalSource(dto.SystemSource);
+        var frameSource = MapTechnicalSource(dto.FrameSource);
+        var finishSource = MapTechnicalSource(dto.FinishSource);
+        var reasons = dto.ReviewReasons ?? throw Invalid();
+        if (dto.SystemCode != persisted.SystemCode
+            || dto.SystemOriginalText != persisted.SystemOriginalText
+            || systemSource != persisted.SystemSource
+            || dto.SystemConfidence != persisted.SystemConfidence
+            || dto.FrameCode != persisted.FrameCode
+            || dto.FrameOriginalText != persisted.FrameOriginalText
+            || frameSource != persisted.FrameSource
+            || dto.FrameConfidence != persisted.FrameConfidence
+            || dto.FinishCode != persisted.FinishCode
+            || dto.FinishOriginalText != persisted.FinishOriginalText
+            || finishSource != persisted.FinishSource
+            || dto.FinishConfidence != persisted.FinishConfidence
+            || dto.RequiresReview != persisted.RequiresReview
+            || reasons.Any(string.IsNullOrWhiteSpace)
+            || !reasons.All(reason => persisted.ReviewReasons.Contains(
+                reason!, StringComparer.Ordinal)))
+        {
+            throw Invalid();
+        }
+
+        return ToReadModel(persisted);
+    }
+
+    private static StructuredItemTechnicalClassificationReadModel ToReadModel(
+        PersistedTechnicalClassification persisted) =>
+        new(
+            persisted.SystemCode,
+            persisted.SystemOriginalText,
+            persisted.SystemSource,
+            persisted.SystemConfidence,
+            persisted.FrameCode,
+            persisted.FrameOriginalText,
+            persisted.FrameSource,
+            persisted.FrameConfidence,
+            persisted.FinishCode,
+            persisted.FinishOriginalText,
+            persisted.FinishSource,
+            persisted.FinishConfidence,
+            persisted.RequiresReview,
+            persisted.ReviewReasons);
 
     private static StructuredItemGlassReadModel MapGlass(
         GlassDto? dto,
@@ -430,11 +498,12 @@ internal static class StructuredExtractionPayloadReader
         {
             "WINDOW" => StructuredElementType.Window,
             "DOOR" => StructuredElementType.Door,
-            "FACADE" => StructuredElementType.Facade,
-            "PARTITION" => StructuredElementType.Partition,
-            "RAILING" => StructuredElementType.Railing,
-            "SKYLIGHT" => StructuredElementType.Skylight,
-            "OTHER" => StructuredElementType.Other,
+        "FACADE" => StructuredElementType.Facade,
+        "PARTITION" => StructuredElementType.Partition,
+        "RAILING" => StructuredElementType.Railing,
+        "SKYLIGHT" => StructuredElementType.Skylight,
+        "SHOWER_DIVISION" => StructuredElementType.ShowerDivision,
+        "OTHER" => StructuredElementType.Other,
             _ => throw Invalid()
         };
     private static StructuredIssueCode MapIssueCode(string? value) =>
@@ -460,6 +529,16 @@ internal static class StructuredExtractionPayloadReader
             "CONFLICTING_CLIENT_NAME" => StructuredConflictCode.ConflictingClientName,
             "CONFLICTING_LOCATION" => StructuredConflictCode.ConflictingLocation,
             "DUPLICATE_ITEM_REFERENCE" => StructuredConflictCode.DuplicateItemReference,
+            _ => throw Invalid()
+        };
+    private static TechnicalClassificationSource? MapTechnicalSource(
+        string? value) => value switch
+        {
+            null => null,
+            "EXPLICIT" => TechnicalClassificationSource.Explicit,
+            "ALIAS" => TechnicalClassificationSource.Alias,
+            "INFERRED" => TechnicalClassificationSource.Inferred,
+            "UNRESOLVED" => TechnicalClassificationSource.Unresolved,
             _ => throw Invalid()
         };
     private static InvalidDataException Invalid() =>
@@ -535,6 +614,24 @@ internal static class StructuredExtractionPayloadReader
         public int[]? SourcePages { get; init; }
         public EvidenceDto[]? Evidence { get; init; }
         public GlassDto? Glass { get; init; }
+        public TechnicalClassificationDto? TechnicalClassification { get; init; }
+    }
+    private sealed class TechnicalClassificationDto
+    {
+        public string? SystemCode { get; init; }
+        public string? SystemOriginalText { get; init; }
+        public string? SystemSource { get; init; }
+        public decimal? SystemConfidence { get; init; }
+        public string? FrameCode { get; init; }
+        public string? FrameOriginalText { get; init; }
+        public string? FrameSource { get; init; }
+        public decimal? FrameConfidence { get; init; }
+        public string? FinishCode { get; init; }
+        public string? FinishOriginalText { get; init; }
+        public string? FinishSource { get; init; }
+        public decimal? FinishConfidence { get; init; }
+        public bool RequiresReview { get; init; }
+        public string[]? ReviewReasons { get; init; }
     }
     private sealed class ReferenceDto
     {

@@ -15,7 +15,9 @@ internal sealed record PersistedValuation(
     decimal? UnitAreaSquareMeters,
     decimal? TotalAreaSquareMeters,
     decimal? MinimumPricePerSquareMeter,
+    decimal? ExpectedPricePerSquareMeter,
     decimal? MaximumPricePerSquareMeter,
     decimal? MinimumAmount,
+    decimal? ExpectedAmount,
     decimal? MaximumAmount,
     DateTimeOffset CalculatedAtUtc);

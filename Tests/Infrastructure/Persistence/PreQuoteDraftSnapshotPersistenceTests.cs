@@ -108,6 +108,8 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(version => version.MinimumPricePerSquareMeter,
                         1_500.000000m)
+                    .SetProperty(version => version.ExpectedAmountPerM2,
+                        1_750.000000m)
                     .SetProperty(version => version.MaximumPricePerSquareMeter,
                         2_000.000000m),
                     cancellationToken);
@@ -426,6 +428,7 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                 glassType.Id,
                 1,
                 90000.123456m,
+                100000.123456m,
                 110000.123456m,
                 "COP",
                 GlassPriceRangeStatus.Active,
@@ -443,6 +446,7 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                     glassType.Id,
                     2,
                     120000.123456m,
+                    125000.123456m,
                     130000.123456m,
                     "COP",
                     GlassPriceRangeStatus.Active,
@@ -491,8 +495,10 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
                         1.500000m,
                         3.000000m,
                         90000.123456m,
+                        100000.123456m,
                         110000.123456m,
                         270000.370368m,
+                        300000.370368m,
                         810001.111104m)
                     : null;
 

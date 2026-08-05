@@ -1,6 +1,7 @@
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Storage;
+using Domain.Catalogs;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
@@ -27,6 +28,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
     IFileStorage fileStorage,
     IDocumentProcessingClient client,
     IGlassTypeCatalogRepository glassCatalogRepository,
+    IProductSystemCatalogRepository productSystemCatalogRepository,
+    IFrameTypeCatalogRepository frameTypeCatalogRepository,
+    IFinishTypeCatalogRepository finishTypeCatalogRepository,
+    ICatalogAliasRepository catalogAliasRepository,
     TimeProvider timeProvider,
     IDocumentProcessingDiagnostics? diagnostics = null)
     : IClaimedDocumentProcessingService
@@ -154,14 +159,18 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                 value => value.Code,
                 value => value,
                 StringComparer.Ordinal);
-            if (structured.Items.Any(item => item.Glass is null
-                || item.Glass.NormalizedCode is { } code
-                    && !glassTypes.ContainsKey(code)))
-            {
-                var unknownCode = structured.Items
-                    .Select(item => item.Glass?.NormalizedCode)
-                    .FirstOrDefault(code => code is not null
+            var invalidGlassContractItem = structured.Items.FirstOrDefault(
+                item => item.Glass is null
+                    || item.Glass.NormalizedCode is { } code
                         && !glassTypes.ContainsKey(code));
+            if (invalidGlassContractItem is not null)
+            {
+                var unknownCode = invalidGlassContractItem.Glass?.NormalizedCode;
+                var acceptedNormalizedCodes = unknownCode is null
+                    ? null
+                    : glassTypes.Keys
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray();
                 diagnostics?.CatalogResolutionFailed(
                     response.DocumentId,
                     response.ProcessingAttemptId,
@@ -169,7 +178,9 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                     unknownCode is null
                         ? "missing_glass_contract"
                         : "unknown_code",
-                    unknownCode);
+                    unknownCode,
+                    invalidGlassContractItem.Sequence,
+                    acceptedNormalizedCodes);
                 return await FailAsync(
                     attempt, AiInvalidResponseCode, cancellationToken);
             }
@@ -179,6 +190,46 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             return await FailAsync(
                 attempt, AiInvalidResponseCode, cancellationToken);
         }
+
+        IReadOnlyDictionary<string, ProductSystemCatalogReadModel> systems;
+        IReadOnlyDictionary<string, FrameTypeCatalogReadModel> frames;
+        IReadOnlyDictionary<string, FinishTypeCatalogReadModel> finishes;
+        IReadOnlyDictionary<(CatalogAliasCategory, string), CatalogAliasReadModel>
+            aliases;
+        try
+        {
+            systems = (await productSystemCatalogRepository
+                    .ListActiveAsync(cancellationToken))
+                .Where(value => value.ActiveForRecognition)
+                .ToDictionary(value => value.Code, StringComparer.Ordinal);
+            frames = (await frameTypeCatalogRepository
+                    .ListActiveAsync(cancellationToken))
+                .ToDictionary(value => value.Code, StringComparer.Ordinal);
+            finishes = (await finishTypeCatalogRepository
+                    .ListActiveAsync(cancellationToken))
+                .ToDictionary(value => value.Code, StringComparer.Ordinal);
+            aliases = (await catalogAliasRepository
+                    .ListActiveAsync(cancellationToken))
+                .ToDictionary(
+                    value => (value.Category, value.NormalizedAlias),
+                    value => value);
+        }
+        catch (CanonicalCatalogQueryException)
+        {
+            diagnostics?.CatalogResolutionFailed(
+                response.DocumentId,
+                response.ProcessingAttemptId,
+                attempt.CorrelationId,
+                "canonical_query_error",
+                null);
+            return await FailAsync(
+                attempt, AiInvalidResponseCode, cancellationToken);
+        }
+
+        var enrichedItems = structured.Items
+            .Select(item => ResolveTechnicalClassification(
+                item, systems, frames, finishes, aliases))
+            .ToArray();
 
         var completedAtUtc = timeProvider.GetUtcNow();
         var extractionResult = DocumentExtractionResult.Create(
@@ -202,32 +253,52 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             structured.Location,
             structured.ItemCount,
             structured.DocumentReferenceCount,
-            structured.ItemsRequiringReview,
+            enrichedItems.Count(x => x.RequiresReview),
             structured.KnownQuoteableUnitCount,
             structured.ProcessingMethod,
             structured.DurationMs,
-            structured.Items.Select(x => new StructuredItemInput(
-                x.Sequence, x.Reference, x.Description, x.ElementType,
-                x.RawMeasurements, x.WidthMillimeters,
-                x.HeightMillimeters, x.Quantity, x.RequiresReview,
-                x.Glass is null ? null : new StructuredItemGlassInput(
-                    x.Glass.NormalizedCode is { } code
+            enrichedItems.Select(resolved => new StructuredItemInput(
+                resolved.Item.Sequence, resolved.Item.Reference,
+                resolved.Item.Description, resolved.Item.ElementType,
+                resolved.Item.RawMeasurements, resolved.Item.WidthMillimeters,
+                resolved.Item.HeightMillimeters, resolved.Item.Quantity,
+                resolved.RequiresReview,
+                resolved.Item.Glass is null ? null : new StructuredItemGlassInput(
+                    resolved.Item.Glass.NormalizedCode is { } code
                         && glassTypes.TryGetValue(code, out var glassType)
                         ? glassType.GlassTypeId
                         : null,
-                    x.Glass.RawSpecification,
-                    x.Glass.NormalizedCode,
-                    x.Glass.AssignmentScope,
-                    x.Glass.RequiresReview,
-                    x.Glass.ReviewReasons,
-                    x.Glass.SourcePages,
-                    x.Glass.Evidence.Select((value, index) =>
+                    resolved.Item.Glass.RawSpecification,
+                    resolved.Item.Glass.NormalizedCode,
+                    resolved.Item.Glass.AssignmentScope,
+                    resolved.Item.Glass.RequiresReview,
+                    resolved.Item.Glass.ReviewReasons,
+                    resolved.Item.Glass.SourcePages,
+                    resolved.Item.Glass.Evidence.Select((value, index) =>
                         new StructuredItemGlassEvidenceInput(
                             index + 1, value.PageNumber,
                             value.SourceType, value.Text)).ToArray()),
-                response.SchemaVersion == "3.0"
-                    ? CreateValuation(x, glassTypes)
-                    : null)).ToArray(),
+                response.SchemaVersion == "3.0" && !resolved.IsNotPriceable
+                    ? CreateValuation(resolved.Item, glassTypes)
+                    : null,
+                resolved.TechnicalClassification is null
+                    ? null
+                    : new StructuredItemTechnicalClassificationInput(
+                        resolved.TechnicalClassification.SystemCode,
+                        resolved.TechnicalClassification.SystemOriginalText,
+                        resolved.TechnicalClassification.SystemSource,
+                        resolved.TechnicalClassification.SystemConfidence,
+                        resolved.TechnicalClassification.FrameCode,
+                        resolved.TechnicalClassification.FrameOriginalText,
+                        resolved.TechnicalClassification.FrameSource,
+                        resolved.TechnicalClassification.FrameConfidence,
+                        resolved.TechnicalClassification.FinishCode,
+                        resolved.TechnicalClassification.FinishOriginalText,
+                        resolved.TechnicalClassification.FinishSource,
+                        resolved.TechnicalClassification.FinishConfidence,
+                        resolved.TechnicalClassification.RequiresReview,
+                        resolved.TechnicalClassification.ReviewReasons)))
+                .ToArray(),
             structured.Requirements.Select((x, index) =>
                 new StructuredRequirementInput(
                     index + 1, x.Category, x.Value)).ToArray(),
@@ -271,7 +342,8 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             return new(GlassValuationStatus.NotValued, notValuedReason,
                 item.Glass?.NormalizedCode is { } code
                     && catalog.TryGetValue(code, out var known) ? known.GlassTypeId : null,
-                null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null,
+                null, null);
 
         var resolved = catalog[item.Glass!.NormalizedCode!];
         var range = resolved.CurrentPriceRange!;
@@ -283,8 +355,194 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             range.GlassPriceRangeVersionId, range.Version, range.Status,
             range.Currency,
             range.MinimumPricePerSquareMeter,
+            range.ExpectedAmountPerM2,
             range.MaximumPricePerSquareMeter);
     }
+
+    private static ResolvedStructuredItem ResolveTechnicalClassification(
+        StructuredItemData item,
+        IReadOnlyDictionary<string, ProductSystemCatalogReadModel> systems,
+        IReadOnlyDictionary<string, FrameTypeCatalogReadModel> frames,
+        IReadOnlyDictionary<string, FinishTypeCatalogReadModel> finishes,
+        IReadOnlyDictionary<(CatalogAliasCategory, string), CatalogAliasReadModel>
+            aliases)
+    {
+        var input = item.TechnicalClassification;
+        var reasons = new List<string>();
+        var system = ResolveCatalogPart(
+            CatalogAliasCategory.System,
+            input?.SystemCode,
+            input?.SystemOriginalText,
+            input?.SystemConfidence,
+            systems.ContainsKey,
+            aliases,
+            "UNKNOWN_SYSTEM_CODE");
+        var frame = ResolveCatalogPart(
+            CatalogAliasCategory.Frame,
+            input?.FrameCode,
+            input?.FrameOriginalText,
+            input?.FrameConfidence,
+            frames.ContainsKey,
+            aliases,
+            "UNKNOWN_FRAME_CODE");
+        var finish = ResolveCatalogPart(
+            CatalogAliasCategory.Finish,
+            input?.FinishCode,
+            input?.FinishOriginalText,
+            input?.FinishConfidence,
+            finishes.ContainsKey,
+            aliases,
+            "UNKNOWN_FINISH_CODE");
+
+        reasons.AddRange(system.ReviewReasons);
+        reasons.AddRange(frame.ReviewReasons);
+        reasons.AddRange(finish.ReviewReasons);
+        reasons.AddRange(input?.ReviewReasons ?? []);
+
+        if (system.Code is null)
+        {
+            var inferredCode = item.ElementType switch
+            {
+                StructuredElementType.Railing => "BARANDA",
+                StructuredElementType.ShowerDivision => "DIVISION_BANO",
+                _ => null
+            };
+            if (inferredCode is not null && systems.ContainsKey(inferredCode))
+            {
+                system = system with
+                {
+                    Code = inferredCode,
+                    Source = TechnicalClassificationSource.Inferred,
+                    Confidence = 1m
+                };
+                reasons.Add("ELEMENT_TYPE_INFERRED_SYSTEM");
+            }
+        }
+
+        var notPriceable = system.Code is ("BARANDA" or "DIVISION_BANO")
+            && systems.TryGetValue(system.Code, out var productSystem)
+            && !productSystem.Priceable;
+        if (notPriceable)
+        {
+            reasons.Add("SYSTEM_NOT_CURRENTLY_PRICEABLE");
+        }
+        if (system.Code is { } systemCode
+            && systems.TryGetValue(systemCode, out var resolvedSystem)
+            && resolvedSystem.RequiresReview)
+        {
+            reasons.Add("SYSTEM_REQUIRES_REVIEW");
+        }
+        if (finish.Code is { } finishCode
+            && finishes.TryGetValue(finishCode, out var resolvedFinish)
+            && resolvedFinish.RequiresReview)
+        {
+            reasons.Add("FINISH_REQUIRES_REVIEW");
+        }
+
+        var distinctReasons = reasons
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var hasTechnicalData = system.HasData || frame.HasData
+            || finish.HasData || distinctReasons.Length > 0;
+        var technical = hasTechnicalData
+            ? new StructuredItemTechnicalClassificationData(
+                system.Code,
+                system.OriginalText,
+                system.Source,
+                system.Confidence,
+                frame.Code,
+                frame.OriginalText,
+                frame.Source,
+                frame.Confidence,
+                finish.Code,
+                finish.OriginalText,
+                finish.Source,
+                finish.Confidence,
+                distinctReasons.Length > 0,
+                distinctReasons)
+            : null;
+
+        return new ResolvedStructuredItem(
+            item,
+            technical,
+            notPriceable,
+            item.RequiresReview || distinctReasons.Length > 0);
+    }
+
+    private static ResolvedCatalogPart ResolveCatalogPart(
+        CatalogAliasCategory category,
+        string? code,
+        string? originalText,
+        decimal? confidence,
+        Func<string, bool> exists,
+        IReadOnlyDictionary<(CatalogAliasCategory, string), CatalogAliasReadModel>
+            aliases,
+        string unknownReason)
+    {
+        var normalizedCode = NormalizeCode(code);
+        var normalizedOriginal = NormalizeText(originalText);
+        if (normalizedCode is not null)
+        {
+            return exists(normalizedCode)
+                ? new ResolvedCatalogPart(
+                    normalizedCode,
+                    normalizedOriginal,
+                    TechnicalClassificationSource.Explicit,
+                    confidence ?? 1m,
+                    [])
+                : new ResolvedCatalogPart(
+                    null,
+                    normalizedOriginal,
+                    TechnicalClassificationSource.Unresolved,
+                    0m,
+                    [unknownReason]);
+        }
+
+        if (normalizedOriginal is null)
+        {
+            return new ResolvedCatalogPart(
+                null, null, null, null, []);
+        }
+
+        var normalizedAlias = CatalogAliasNormalizer.Normalize(normalizedOriginal);
+        if (aliases.TryGetValue((category, normalizedAlias), out var alias)
+            && exists(alias.CanonicalCode))
+        {
+            return new ResolvedCatalogPart(
+                alias.CanonicalCode,
+                normalizedOriginal,
+                TechnicalClassificationSource.Alias,
+                alias.Confidence,
+                []);
+        }
+
+        return new ResolvedCatalogPart(
+            null,
+            normalizedOriginal,
+            TechnicalClassificationSource.Unresolved,
+            0m,
+            [unknownReason]);
+    }
+
+    private static string? NormalizeCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var code = value.Trim().ToUpperInvariant();
+        return code.Length <= 30
+            && code.All(character =>
+                character is >= 'A' and <= 'Z'
+                || character is >= '0' and <= '9'
+                || character is '_' or '-')
+            ? code
+            : null;
+    }
+
+    private static string? NormalizeText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private async Task<ProcessClaimedDocumentProcessingAttemptResult> FailAsync(
         DocumentProcessingAttempt attempt,
@@ -350,5 +608,23 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
             or "PDF_PAGE_LIMIT_EXCEEDED"
             or "FILE_TOO_LARGE"
             or "UNSUPPORTED_FILE_TYPE";
+    }
+
+    private sealed record ResolvedStructuredItem(
+        StructuredItemData Item,
+        StructuredItemTechnicalClassificationData? TechnicalClassification,
+        bool IsNotPriceable,
+        bool RequiresReview);
+
+    private sealed record ResolvedCatalogPart(
+        string? Code,
+        string? OriginalText,
+        TechnicalClassificationSource? Source,
+        decimal? Confidence,
+        IReadOnlyList<string> ReviewReasons)
+    {
+        public bool HasData => Code is not null || OriginalText is not null
+            || Source is not null || Confidence is not null
+            || ReviewReasons.Count > 0;
     }
 }

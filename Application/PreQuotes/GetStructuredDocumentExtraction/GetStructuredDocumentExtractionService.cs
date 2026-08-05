@@ -1,6 +1,7 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using FluentValidation;
+using Microsoft.Extensions.Logging;
 
 namespace Application.PreQuotes.GetStructuredDocumentExtraction;
 
@@ -8,7 +9,8 @@ public sealed class GetStructuredDocumentExtractionService(
     IValidator<GetStructuredDocumentExtractionQuery> validator,
     ICurrentUser currentUser,
     IIdentityRepository identityRepository,
-    IPreQuoteDocumentQueryRepository repository)
+    IPreQuoteDocumentQueryRepository repository,
+    ILogger<GetStructuredDocumentExtractionService>? logger = null)
 {
     public async Task<GetStructuredDocumentExtractionResult> ExecuteAsync(
         GetStructuredDocumentExtractionQuery query,
@@ -55,8 +57,12 @@ public sealed class GetStructuredDocumentExtractionService(
                     GetStructuredDocumentExtractionFailure.NotFound)
                 : GetStructuredDocumentExtractionResult.Success(details);
         }
-        catch (PreQuoteDocumentQueryException)
+        catch (PreQuoteDocumentQueryException exception)
         {
+            logger?.LogError(
+                exception,
+                "Structured extraction query failed for document {DocumentId}.",
+                query.DocumentId);
             return GetStructuredDocumentExtractionResult.Failed(
                 GetStructuredDocumentExtractionFailure.QueryError);
         }

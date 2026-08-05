@@ -76,6 +76,16 @@ public static class DependencyInjection
             IGlassTypeCatalogRepository,
             GlassTypeCatalogRepository>();
         services.AddScoped<
+            IProductSystemCatalogRepository,
+            ProductSystemCatalogRepository>();
+        services.AddScoped<
+            IFrameTypeCatalogRepository,
+            FrameTypeCatalogRepository>();
+        services.AddScoped<
+            IFinishTypeCatalogRepository,
+            FinishTypeCatalogRepository>();
+        services.AddScoped<ICatalogAliasRepository, CatalogAliasRepository>();
+        services.AddScoped<
             IDocumentProcessingRepository,
             DocumentProcessingRepository>();
         services.AddScoped<IPreQuoteRepository, PreQuoteRepository>();

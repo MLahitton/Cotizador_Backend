@@ -316,10 +316,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             StringComparer.Ordinal);
         var rangeIds = codes.ToDictionary(
             code => code, _ => Guid.NewGuid(), StringComparer.Ordinal);
-        var prices = new (decimal Minimum, decimal Maximum)[]
+        var prices = new (decimal Minimum, decimal Expected, decimal Maximum)[]
         {
-            (90000m, 110000m), (95000m, 95000m),
-            (120000m, 140000m), (125000m, 145000m)
+            (90000m, 100000m, 110000m), (95000m, 95000m, 95000m),
+            (120000m, 130000m, 140000m), (125000m, 135000m, 145000m)
         };
         context.GlassCatalog.GetActiveWithCurrentPriceRangesAsync(
                 Arg.Any<CancellationToken>())
@@ -327,6 +327,7 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                 glassTypeIds[code], code, code, null, true,
                 new GlassPriceRangeCatalogReadModel(
                     rangeIds[code], 1, prices[index].Minimum,
+                    prices[index].Expected,
                     prices[index].Maximum, "COP",
                     global::Domain.Catalogs.GlassPriceRangeStatus.Preliminary,
                     CreatedAt, null))).ToArray());
@@ -494,7 +495,11 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             result);
         context.Diagnostics.Received(1).CatalogResolutionFailed(
             DocumentId, AttemptId, context.Attempt.CorrelationId,
-            "unknown_code", "UNKNOWN");
+            "unknown_code",
+            "UNKNOWN",
+            1,
+            Arg.Is<IReadOnlyList<string>>(codes =>
+                codes != null && codes.Count == 0));
         context.Repository.DidNotReceive().AddStructuredExtraction(
             Arg.Any<StructuredDocumentExtraction>());
     }
@@ -660,6 +665,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             Storage = Substitute.For<IFileStorage>();
             Client = Substitute.For<IDocumentProcessingClient>();
             GlassCatalog = Substitute.For<IGlassTypeCatalogRepository>();
+            ProductSystems = Substitute.For<IProductSystemCatalogRepository>();
+            Frames = Substitute.For<IFrameTypeCatalogRepository>();
+            Finishes = Substitute.For<IFinishTypeCatalogRepository>();
+            Aliases = Substitute.For<ICatalogAliasRepository>();
             Diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
             Attempt = DocumentProcessingAttempt.Create(
                 DocumentId,
@@ -699,11 +708,23 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                     Arg.Any<CancellationToken>())
                 .Returns(DocumentProcessingClientResult.Failed(
                     DocumentProcessingClientFailure.Timeout));
+            ProductSystems.ListActiveAsync(Arg.Any<CancellationToken>())
+                .Returns([]);
+            Frames.ListActiveAsync(Arg.Any<CancellationToken>())
+                .Returns([]);
+            Finishes.ListActiveAsync(Arg.Any<CancellationToken>())
+                .Returns([]);
+            Aliases.ListActiveAsync(Arg.Any<CancellationToken>())
+                .Returns([]);
             Service = new ProcessClaimedDocumentProcessingAttemptService(
                 Repository,
                 Storage,
                 Client,
                 GlassCatalog,
+                ProductSystems,
+                Frames,
+                Finishes,
+                Aliases,
                 new FixedTimeProvider(CompletedAt),
                 Diagnostics);
         }
@@ -712,6 +733,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
         public IFileStorage Storage { get; }
         public IDocumentProcessingClient Client { get; }
         public IGlassTypeCatalogRepository GlassCatalog { get; }
+        public IProductSystemCatalogRepository ProductSystems { get; }
+        public IFrameTypeCatalogRepository Frames { get; }
+        public IFinishTypeCatalogRepository Finishes { get; }
+        public ICatalogAliasRepository Aliases { get; }
         public IDocumentProcessingDiagnostics Diagnostics { get; }
         public DocumentProcessingAttempt Attempt { get; }
         public DocumentProcessingSource Source { get; }

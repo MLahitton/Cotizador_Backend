@@ -56,6 +56,7 @@ public sealed class GlassTypeCatalogRepository(ApplicationDbContext dbContext)
                         range.Id,
                         range.Version,
                         range.MinimumPricePerSquareMeter,
+                        range.ExpectedAmountPerM2,
                         range.MaximumPricePerSquareMeter,
                         range.Currency,
                         range.Status,

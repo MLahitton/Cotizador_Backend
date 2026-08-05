@@ -107,6 +107,124 @@ public sealed class CotizadorAiV3VersionContractTests
         Assert.True(glass.RequiresReview);
     }
 
+    [Theory]
+    [InlineData("TEMP_5")]
+    [InlineData("TEMP_6")]
+    [InlineData("TEMP_8")]
+    [InlineData("TEMP_10")]
+    [InlineData("LAM_4_4")]
+    [InlineData("LAM_4_4_GRAY")]
+    [InlineData("LAM_5_5")]
+    [InlineData("LAM_5_5_GRAY")]
+    [InlineData("UNKNOWN_GLASS")]
+    public async Task ProcessAsync_WithCanonicalGlassCode_AcceptsContract(
+        string normalizedCode)
+    {
+        var root = JsonNode.Parse(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                schemaVersion: "3.0"))!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var item = structured["items"]![0]!.AsObject();
+        var glass = item["glass"]!.AsObject();
+        glass["normalizedCode"] = normalizedCode;
+
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var result = await ExecuteAsync(root.ToJsonString(), diagnostics);
+
+        Assert.True(result.IsSuccess);
+        diagnostics.DidNotReceive().ContractRejected(
+            Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
+            Arg.Any<Guid>(),
+            Arg.Any<int?>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            Arg.Any<string?>(),
+            Arg.Any<IReadOnlyList<string>?>());
+        Assert.Equal(normalizedCode, Assert.Single(
+            result.Response!.StructuredExtraction!.Items).Glass!.NormalizedCode);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithUnknownGlassCode_ReportsRejectedCodeAndItemSequence()
+    {
+        var root = JsonNode.Parse(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                schemaVersion: "3.0"))!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var item = structured["items"]![0]!.AsObject();
+        var glass = item["glass"]!.AsObject();
+        glass["normalizedCode"] = "UNKNOWN_CODE";
+
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var result = await ExecuteAsync(root.ToJsonString(), diagnostics);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
+            result.Failure);
+        diagnostics.Received(1).ContractRejected(
+            DocumentId,
+            AttemptId,
+            CorrelationId,
+            200,
+            "glass_contract",
+            "unknown_code",
+            1,
+            "UNKNOWN_CODE",
+            Arg.Is<IReadOnlyList<string>>(codes =>
+                codes != null
+                && codes.Count == 9
+                && codes[0] == "LAM_4_4"
+                && codes[1] == "LAM_4_4_GRAY"
+                && codes[2] == "LAM_5_5"
+                && codes[3] == "LAM_5_5_GRAY"
+                && codes[4] == "TEMP_10"
+                && codes[5] == "TEMP_5"
+                && codes[6] == "TEMP_6"
+                && codes[7] == "TEMP_8"
+                && codes[8] == "UNKNOWN_GLASS"));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithInvalidItemMeasurements_ReportsInvalidDataContext()
+    {
+        var root = JsonNode.Parse(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                schemaVersion: "3.0"))!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var item = structured["items"]![0]!.AsObject();
+        item["heightMillimeters"] = null;
+
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var result = await ExecuteAsync(root.ToJsonString(), diagnostics);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
+            result.Failure);
+        diagnostics.Received(1).ContractRejected(
+            DocumentId,
+            AttemptId,
+            CorrelationId,
+            null,
+            "response_contract",
+            "invalid_data",
+            null,
+            null,
+            null,
+            "ResponseContractValidationException",
+            "structuredExtraction item width and height must both be present or both be null.",
+            "structuredExtraction.items[0].heightMillimeters",
+            "structuredExtraction.items[0].heightMillimeters",
+            "width=1200;height=null");
+    }
+
     private static async Task<DocumentProcessingClientResult> ExecuteAsync(
         string payload,
         IDocumentProcessingDiagnostics? diagnostics)

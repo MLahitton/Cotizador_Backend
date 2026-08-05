@@ -1,4 +1,4 @@
-﻿using Api.ErrorHandling;
+using Api.ErrorHandling;
 using Application.PreQuotes;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.CreatePreQuoteDraft;
@@ -253,7 +253,8 @@ public sealed class PreQuoteDraftsController(
             MapGlassSnapshot(x.GlassSnapshot),
             MapValuationSnapshot(
                 x.ValuationStatus,
-                x.ValuationSnapshot)
+                x.ValuationSnapshot),
+            MapTechnicalSnapshot(x.TechnicalSnapshot)
         )).ToArray();
 
         var requirementResponses = requirements.Select(x => new PreQuoteDraftRequirementResponse(
@@ -394,9 +395,67 @@ public sealed class PreQuoteDraftsController(
             snapshot.Currency,
             snapshot.ValuedAtUtc,
             snapshot.InvalidatedAtUtc,
-            snapshot.InvalidationReason?.ToString());
+            snapshot.InvalidationReason?.ToString(),
+            snapshot.BillableAreaUnitSquareMeters,
+            snapshot.GlassPriceRangeVersion,
+            snapshot.GlassMinimumPricePerSquareMeter,
+            snapshot.GlassExpectedPricePerSquareMeter,
+            snapshot.GlassMaximumPricePerSquareMeter,
+            snapshot.SystemCode,
+            TechnicalSource(snapshot.SystemSource),
+            snapshot.FrameCode,
+            snapshot.FinishCode,
+            snapshot.LaborProfileCode,
+            snapshot.AssemblyProfileCode,
+            snapshot.FinishFactorMinimum,
+            snapshot.FinishFactorExpected,
+            snapshot.FinishFactorMaximum,
+            snapshot.AccessoryFactor,
+            snapshot.GlassMinimumAmount,
+            snapshot.GlassExpectedAmount,
+            snapshot.GlassMaximumAmount,
+            snapshot.LaborMinimumAmount,
+            snapshot.LaborExpectedAmount,
+            snapshot.LaborMaximumAmount,
+            snapshot.AssemblyMinimumAmount,
+            snapshot.AssemblyExpectedAmount,
+            snapshot.AssemblyMaximumAmount,
+            snapshot.AccessoriesMinimumAmount,
+            snapshot.AccessoriesExpectedAmount,
+            snapshot.AccessoriesMaximumAmount,
+            snapshot.ItemMinimumAmount,
+            snapshot.ItemExpectedAmount,
+            snapshot.ItemMaximumAmount,
+            snapshot.PricingProfileVersion,
+            snapshot.ConfidenceScore,
+            snapshot.ConfidenceLevel?.ToString().ToUpperInvariant(),
+            snapshot.Assumptions,
+            snapshot.MissingData,
+            snapshot.RequiresReview,
+            snapshot.CalculatedAtUtc);
     }
 
+    private static PreQuoteDraftItemTechnicalSnapshotResponse? MapTechnicalSnapshot(
+        PreQuoteDraftItemTechnicalSnapshot? snapshot)
+    {
+        if (snapshot is null) return null;
+        return new(
+            snapshot.SourceStructuredItemTechnicalClassificationId,
+            snapshot.SystemCode,
+            snapshot.SystemOriginalText,
+            TechnicalSource(snapshot.SystemSource),
+            snapshot.SystemConfidence,
+            snapshot.FrameCode,
+            snapshot.FrameOriginalText,
+            TechnicalSource(snapshot.FrameSource),
+            snapshot.FrameConfidence,
+            snapshot.FinishCode,
+            snapshot.FinishOriginalText,
+            TechnicalSource(snapshot.FinishSource),
+            snapshot.FinishConfidence,
+            snapshot.RequiresReview,
+            snapshot.ReviewReasons);
+    }
     private static PreQuoteDraftEconomicSummaryResponse MapEconomicSummary(PreQuoteDraft draft) =>
         new(
             draft.EconomicSummary.IncludedItemCount,
@@ -404,17 +463,44 @@ public sealed class PreQuoteDraftsController(
             draft.EconomicSummary.ValuedItemCount,
             draft.EconomicSummary.PendingValuationItemCount,
             draft.EconomicSummary.StaleValuationItemCount,
+            draft.EconomicSummary.NotPriceableItemCount,
             draft.EconomicSummary.ItemsRequiringReviewCount,
             draft.EconomicSummary.TotalAreaSquareMeters,
             draft.EconomicSummary.GlassSubtotal,
             draft.EconomicSummary.Currency,
-            draft.EconomicSummary.IsEconomicallyComplete);
+            draft.EconomicSummary.IsEconomicallyComplete,
+            draft.EconomicSummary.MinimumTechnicalSubtotal,
+            draft.EconomicSummary.ExpectedTechnicalSubtotal,
+            draft.EconomicSummary.MaximumTechnicalSubtotal,
+            draft.EconomicSummary.TransportMinimum,
+            draft.EconomicSummary.TransportExpected,
+            draft.EconomicSummary.TransportMaximum,
+            draft.EconomicSummary.AdministrationMinimum,
+            draft.EconomicSummary.AdministrationExpected,
+            draft.EconomicSummary.AdministrationMaximum,
+            draft.EconomicSummary.ContingencyMinimum,
+            draft.EconomicSummary.ContingencyExpected,
+            draft.EconomicSummary.ContingencyMaximum,
+            draft.EconomicSummary.ProfitMinimum,
+            draft.EconomicSummary.ProfitExpected,
+            draft.EconomicSummary.ProfitMaximum,
+            draft.EconomicSummary.VatMinimum,
+            draft.EconomicSummary.VatExpected,
+            draft.EconomicSummary.VatMaximum,
+            draft.EconomicSummary.FinalMinimum,
+            draft.EconomicSummary.FinalExpected,
+            draft.EconomicSummary.FinalMaximum,
+            draft.EconomicSummary.OverallConfidence,
+            draft.EconomicSummary.ConfidenceLevel?.ToString().ToUpperInvariant(),
+            draft.EconomicSummary.Assumptions ?? [],
+            draft.EconomicSummary.MissingData ?? [],
+            draft.EconomicSummary.HasLimitedPricingScope);
 
     private static PreQuoteDraftResolutionEdit IssueResolution(PreQuoteDraftIssueResolutionRequest x) => new(x.DraftIssueId, ResolutionStatus(x.ResolutionStatus), x.ResolutionNote);
     private static PreQuoteDraftResolutionEdit ConflictResolution(PreQuoteDraftConflictResolutionRequest x) => new(x.DraftConflictId, ResolutionStatus(x.ResolutionStatus), x.ResolutionNote);
     private static PreQuoteDraftResolutionStatus ResolutionStatus(string x) => x switch { "PENDING" => PreQuoteDraftResolutionStatus.Pending, "RESOLVED" => PreQuoteDraftResolutionStatus.Resolved, "DISMISSED" => PreQuoteDraftResolutionStatus.Dismissed, _ => throw new ArgumentException() };
-    private static StructuredElementType Element(string x) => x switch { "WINDOW" => StructuredElementType.Window, "DOOR" => StructuredElementType.Door, "FACADE" => StructuredElementType.Facade, "PARTITION" => StructuredElementType.Partition, "RAILING" => StructuredElementType.Railing, "SKYLIGHT" => StructuredElementType.Skylight, "OTHER" => StructuredElementType.Other, _ => throw new ArgumentException() };
-    private static string Element(StructuredElementType x) => x.ToString().ToUpperInvariant();
+    private static StructuredElementType Element(string x) => x switch { "WINDOW" => StructuredElementType.Window, "DOOR" => StructuredElementType.Door, "FACADE" => StructuredElementType.Facade, "PARTITION" => StructuredElementType.Partition, "RAILING" => StructuredElementType.Railing, "SKYLIGHT" => StructuredElementType.Skylight, "SHOWER_DIVISION" => StructuredElementType.ShowerDivision, "OTHER" => StructuredElementType.Other, _ => throw new ArgumentException() };
+    private static string Element(StructuredElementType x) => x == StructuredElementType.ShowerDivision ? "SHOWER_DIVISION" : x.ToString().ToUpperInvariant();
     private static RequirementCategory Category(string x) => x switch { "GLASS_SPECIFICATION" => RequirementCategory.GlassSpecification, "PROFILE_SPECIFICATION" => RequirementCategory.ProfileSpecification, "FINISH" => RequirementCategory.Finish, "ACCESSORIES_AND_SEALANTS" => RequirementCategory.AccessoriesAndSealants, "GENERAL_NOTE" => RequirementCategory.GeneralNote, _ => throw new ArgumentException() };
     private static string Category(RequirementCategory x) => x switch { RequirementCategory.GlassSpecification => "GLASS_SPECIFICATION", RequirementCategory.ProfileSpecification => "PROFILE_SPECIFICATION", RequirementCategory.Finish => "FINISH", RequirementCategory.AccessoriesAndSealants => "ACCESSORIES_AND_SEALANTS", _ => "GENERAL_NOTE" };
     private static string Status(PreQuoteDraftStatus x) => x switch { PreQuoteDraftStatus.PendingReview => "PENDING_REVIEW", PreQuoteDraftStatus.InReview => "IN_REVIEW", _ => "APPROVED" };
@@ -426,8 +512,18 @@ public sealed class PreQuoteDraftsController(
         PreQuoteDraftValuationStatus.Valued => "VALUED",
         PreQuoteDraftValuationStatus.Stale => "STALE",
         PreQuoteDraftValuationStatus.RequiresReview => "REQUIRES_REVIEW",
+        PreQuoteDraftValuationStatus.NotPriceable => "NOT_PRICEABLE",
         PreQuoteDraftValuationStatus.NotApplicable => "PENDING",
         _ => "PENDING"
+    };
+    private static string? TechnicalSource(TechnicalClassificationSource? x) => x switch
+    {
+        TechnicalClassificationSource.Explicit => "EXPLICIT",
+        TechnicalClassificationSource.Alias => "ALIAS",
+        TechnicalClassificationSource.Inferred => "INFERRED",
+        TechnicalClassificationSource.Unresolved => "UNRESOLVED",
+        null => null,
+        _ => throw new ArgumentException()
     };
     private static string Issue(StructuredIssueCode x) =>
         PreQuoteDraftIssueCodeMap.MapContractCode(x);

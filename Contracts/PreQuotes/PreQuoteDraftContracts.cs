@@ -93,10 +93,28 @@ public sealed record PreQuoteDraftItemResponse(
     int? Quantity,
     bool IsIncluded,
     PreQuoteDraftItemGlassResponse? Glass,
-    PreQuoteDraftItemValuationResponse? Valuation)
+    PreQuoteDraftItemValuationResponse? Valuation,
+    PreQuoteDraftItemTechnicalSnapshotResponse? TechnicalSnapshot = null)
 {
     public int? SourceSequence => SourceItemSequence;
 }
+
+public sealed record PreQuoteDraftItemTechnicalSnapshotResponse(
+    Guid SourceStructuredItemTechnicalClassificationId,
+    string? SystemCode,
+    string? SystemOriginalText,
+    string? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    string? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    string? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
 
 public sealed record PreQuoteDraftItemGlassResponse(
     Guid? SourceStructuredItemGlassId,
@@ -132,7 +150,44 @@ public sealed record PreQuoteDraftItemValuationResponse(
     string? Currency,
     DateTimeOffset ValuedAtUtc,
     DateTimeOffset? InvalidatedAtUtc,
-    string? InvalidationReason);
+    string? InvalidationReason,
+    decimal? BillableAreaUnitSquareMeters = null,
+    int? GlassPriceRangeVersion = null,
+    decimal? GlassMinimumPricePerSquareMeter = null,
+    decimal? GlassExpectedPricePerSquareMeter = null,
+    decimal? GlassMaximumPricePerSquareMeter = null,
+    string? SystemCode = null,
+    string? SystemSource = null,
+    string? FrameCode = null,
+    string? FinishCode = null,
+    string? LaborProfileCode = null,
+    string? AssemblyProfileCode = null,
+    decimal? FinishFactorMinimum = null,
+    decimal? FinishFactorExpected = null,
+    decimal? FinishFactorMaximum = null,
+    decimal? AccessoryFactor = null,
+    decimal? GlassMinimumAmount = null,
+    decimal? GlassExpectedAmount = null,
+    decimal? GlassMaximumAmount = null,
+    decimal? LaborMinimumAmount = null,
+    decimal? LaborExpectedAmount = null,
+    decimal? LaborMaximumAmount = null,
+    decimal? AssemblyMinimumAmount = null,
+    decimal? AssemblyExpectedAmount = null,
+    decimal? AssemblyMaximumAmount = null,
+    decimal? AccessoriesMinimumAmount = null,
+    decimal? AccessoriesExpectedAmount = null,
+    decimal? AccessoriesMaximumAmount = null,
+    decimal? ItemMinimumAmount = null,
+    decimal? ItemExpectedAmount = null,
+    decimal? ItemMaximumAmount = null,
+    string? PricingProfileVersion = null,
+    int? ConfidenceScore = null,
+    string? ConfidenceLevel = null,
+    IReadOnlyList<string>? Assumptions = null,
+    IReadOnlyList<string>? MissingData = null,
+    bool? RequiresReview = null,
+    DateTimeOffset? CalculatedAtUtc = null);
 
 public sealed record PreQuoteDraftRequirementResponse(
     Guid DraftRequirementId,
@@ -204,11 +259,41 @@ public sealed record PreQuoteDraftEconomicSummaryResponse(
     int ValuedItemCount,
     int PendingValuationItemCount,
     int StaleValuationItemCount,
+    int NotPriceableItemCount,
     int ItemsRequiringReviewCount,
     decimal? TotalAreaSquareMeters,
     decimal? GlassSubtotal,
     string? Currency,
-    bool IsEconomicallyComplete);
+    bool IsEconomicallyComplete,
+    decimal? MinimumTechnicalSubtotal = null,
+    decimal? ExpectedTechnicalSubtotal = null,
+    decimal? MaximumTechnicalSubtotal = null,
+    decimal? TransportMinimum = null,
+    decimal? TransportExpected = null,
+    decimal? TransportMaximum = null,
+    decimal? AdministrationMinimum = null,
+    decimal? AdministrationExpected = null,
+    decimal? AdministrationMaximum = null,
+    decimal? ContingencyMinimum = null,
+    decimal? ContingencyExpected = null,
+    decimal? ContingencyMaximum = null,
+    decimal? ProfitMinimum = null,
+    decimal? ProfitExpected = null,
+    decimal? ProfitMaximum = null,
+    decimal? VatMinimum = null,
+    decimal? VatExpected = null,
+    decimal? VatMaximum = null,
+    decimal? FinalMinimum = null,
+    decimal? FinalExpected = null,
+    decimal? FinalMaximum = null,
+    int? OverallConfidence = null,
+    string? ConfidenceLevel = null,
+    IReadOnlyList<string>? Assumptions = null,
+    IReadOnlyList<string>? MissingData = null,
+    bool HasLimitedPricingScope = false)
+{
+    public bool HasNotPriceableItems => NotPriceableItemCount > 0;
+}
 
 public sealed record PreQuoteDraftAuditResponse(
     Guid CreatedByUserId,

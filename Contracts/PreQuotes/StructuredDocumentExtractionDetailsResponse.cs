@@ -5,6 +5,22 @@ public sealed record StructuredEvidenceResponse(
     string SourceType,
     string Text);
 
+public sealed record StructuredItemTechnicalClassificationResponse(
+    string? SystemCode,
+    string? SystemOriginalText,
+    string? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    string? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    string? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
+
 public sealed record StructuredProjectResponse(
     string? Name,
     string? ClientName,
@@ -32,7 +48,8 @@ public sealed record StructuredItemResponse(
     IReadOnlyList<int> SourcePages,
     IReadOnlyList<StructuredEvidenceResponse> Evidence,
     StructuredExtractionItemGlassResponse? Glass,
-    StructuredExtractionItemGlassValuationResponse? Valuation = null);
+    StructuredExtractionItemGlassValuationResponse? Valuation = null,
+    StructuredItemTechnicalClassificationResponse? TechnicalClassification = null);
 
 public sealed record StructuredExtractionItemGlassValuationResponse(
     string Status,
@@ -45,8 +62,10 @@ public sealed record StructuredExtractionItemGlassValuationResponse(
     decimal? UnitAreaSquareMeters,
     decimal? TotalAreaSquareMeters,
     decimal? MinimumPricePerSquareMeter,
+    decimal? ExpectedPricePerSquareMeter,
     decimal? MaximumPricePerSquareMeter,
     decimal? MinimumAmount,
+    decimal? ExpectedAmount,
     decimal? MaximumAmount,
     DateTimeOffset CalculatedAtUtc);
 

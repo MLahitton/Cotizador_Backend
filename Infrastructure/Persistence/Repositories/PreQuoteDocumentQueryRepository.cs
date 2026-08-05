@@ -2,11 +2,14 @@ using System.Data.Common;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Persistence.Repositories;
 
 public sealed class PreQuoteDocumentQueryRepository(
-    ApplicationDbContext dbContext) : IPreQuoteDocumentQueryRepository
+    ApplicationDbContext dbContext,
+    ILogger<PreQuoteDocumentQueryRepository>? logger = null)
+    : IPreQuoteDocumentQueryRepository
 {
     public async Task<PreQuoteDocumentsPageReadModel?> GetDocumentsAsync(
         Guid preQuoteId,
@@ -122,6 +125,8 @@ public sealed class PreQuoteDocumentQueryRepository(
             Guid userId,
             CancellationToken cancellationToken)
     {
+        AvailableExtractionProjection? extraction = null;
+        var assemblyStage = "document_lookup";
         try
         {
             var document = await dbContext.PreQuoteDocuments
@@ -142,14 +147,17 @@ public sealed class PreQuoteDocumentQueryRepository(
                 return null;
             }
 
+            assemblyStage = "latest_attempt_query";
             var latest = await LatestAttemptQuery(documentId)
                 .FirstOrDefaultAsync(cancellationToken);
-            var extraction = await AvailableExtractionQuery(documentId)
+            assemblyStage = "available_extraction_query";
+            extraction = await AvailableExtractionQuery(documentId)
                 .FirstOrDefaultAsync(cancellationToken);
             StructuredExtractionDetailsReadModel? details = null;
 
             if (extraction is not null)
             {
+                assemblyStage = "load_structured_extraction_details";
                 details = await LoadDetailsAsync(
                     document.DocumentId,
                     extraction,
@@ -170,8 +178,15 @@ public sealed class PreQuoteDocumentQueryRepository(
         catch (Exception exception) when (
             exception is DbException
                 or InvalidDataException
+                or InvalidOperationException
                 or System.Text.Json.JsonException)
         {
+            logger?.LogError(
+                exception,
+                "Structured extraction query failed for document {DocumentId}, structured extraction {StructuredExtractionId}, stage {Stage}.",
+                documentId,
+                extraction?.ExtractionId,
+                assemblyStage);
             throw new PreQuoteDocumentQueryException(exception);
         }
     }
@@ -326,9 +341,33 @@ public sealed class PreQuoteDocumentQueryRepository(
                 value.PriceRangeStatus, value.Currency,
                 value.UnitAreaSquareMeters, value.TotalAreaSquareMeters,
                 value.MinimumPricePerSquareMeter,
+                value.ExpectedPricePerSquareMeter,
                 value.MaximumPricePerSquareMeter,
-                value.MinimumAmount, value.MaximumAmount,
+                value.MinimumAmount, value.ExpectedAmount, value.MaximumAmount,
                 value.CalculatedAtUtc))
+            .ToArrayAsync(cancellationToken);
+        var technicalClassifications = await dbContext
+            .StructuredExtractionItemTechnicalClassifications
+            .AsNoTracking()
+            .Where(value => value.StructuredExtractionItem
+                .StructuredDocumentExtractionId == extraction.ExtractionId)
+            .OrderBy(value => value.StructuredExtractionItem.Sequence)
+            .Select(value => new PersistedTechnicalClassification(
+                value.StructuredExtractionItem.Sequence,
+                value.SystemCode,
+                value.SystemOriginalText,
+                value.SystemSource,
+                value.SystemConfidence,
+                value.FrameCode,
+                value.FrameOriginalText,
+                value.FrameSource,
+                value.FrameConfidence,
+                value.FinishCode,
+                value.FinishOriginalText,
+                value.FinishSource,
+                value.FinishConfidence,
+                value.RequiresReview,
+                value.ReviewReasons))
             .ToArrayAsync(cancellationToken);
 
         var details = StructuredExtractionPayloadReader.Read(
@@ -340,8 +379,13 @@ public sealed class PreQuoteDocumentQueryRepository(
             references,
             issues,
             conflicts,
-            glasses);
-        var valuationBySequence = valuations.ToDictionary(x => x.ItemSequence);
+            glasses,
+            technicalClassifications);
+        var valuationBySequence = valuations
+            .GroupBy(x => x.ItemSequence)
+            .ToDictionary(x => x.Key, x => x.Single());
+        var technicalBySequence = technicalClassifications.ToDictionary(
+            x => x.ItemSequence);
         var mappedItems = details.Items.Select(item => item with
         {
             Valuation = valuationBySequence.TryGetValue(
@@ -352,9 +396,29 @@ public sealed class PreQuoteDocumentQueryRepository(
                     value.PriceRangeStatus, value.Currency,
                     value.UnitAreaSquareMeters, value.TotalAreaSquareMeters,
                     value.MinimumPricePerSquareMeter,
+                    value.ExpectedPricePerSquareMeter,
                     value.MaximumPricePerSquareMeter,
-                    value.MinimumAmount, value.MaximumAmount,
+                    value.MinimumAmount, value.ExpectedAmount,
+                    value.MaximumAmount,
                     value.CalculatedAtUtc)
+                : null,
+            TechnicalClassification = technicalBySequence.TryGetValue(
+                item.Sequence, out var technical)
+                ? new StructuredItemTechnicalClassificationReadModel(
+                    technical.SystemCode,
+                    technical.SystemOriginalText,
+                    technical.SystemSource,
+                    technical.SystemConfidence,
+                    technical.FrameCode,
+                    technical.FrameOriginalText,
+                    technical.FrameSource,
+                    technical.FrameConfidence,
+                    technical.FinishCode,
+                    technical.FinishOriginalText,
+                    technical.FinishSource,
+                    technical.FinishConfidence,
+                    technical.RequiresReview,
+                    technical.ReviewReasons)
                 : null
         }).ToArray();
         var valued = mappedItems.Where(x =>
@@ -548,3 +612,19 @@ internal sealed record PersistedGlass(
     PersistedGlassEvidence[] Evidence);
 internal sealed record PersistedGlassEvidence(
     int PageNumber, EvidenceSourceType SourceType, string Text);
+internal sealed record PersistedTechnicalClassification(
+    int ItemSequence,
+    string? SystemCode,
+    string? SystemOriginalText,
+    TechnicalClassificationSource? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    TechnicalClassificationSource? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    TechnicalClassificationSource? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    string[] ReviewReasons);

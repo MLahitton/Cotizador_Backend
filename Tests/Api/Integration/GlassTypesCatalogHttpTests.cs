@@ -41,24 +41,45 @@ public sealed class GlassTypesCatalogHttpTests
             TestContext.Current.CancellationToken);
         using var json = JsonDocument.Parse(raw);
         var items = json.RootElement.GetProperty("items");
-        Assert.Equal(4, items.GetArrayLength());
+        Assert.Equal(9, items.GetArrayLength());
         Assert.Equal(
-            ["LAM_4_4", "LAM_4_4_GRAY", "LAM_5_5", "LAM_5_5_GRAY"],
+            [
+                "LAM_4_4",
+                "LAM_4_4_GRAY",
+                "LAM_5_5",
+                "LAM_5_5_GRAY",
+                "TEMP_10",
+                "TEMP_5",
+                "TEMP_6",
+                "TEMP_8",
+                "UNKNOWN_GLASS"
+            ],
             items.EnumerateArray().Select(value =>
                 value.GetProperty("code").GetString()));
-        Assert.All(items.EnumerateArray(), item =>
+        foreach (var item in items.EnumerateArray())
         {
+            var code = item.GetProperty("code").GetString();
             var range = item.GetProperty("currentPriceRange");
-            Assert.Equal(
-                JsonValueKind.Number,
-                range.GetProperty("minimumPricePerSquareMeter").ValueKind);
-            Assert.Equal("COP", range.GetProperty("currency").GetString());
-            Assert.Equal(
-                "PRELIMINARY",
-                range.GetProperty("status").GetString());
+            if (code is "LAM_4_4_GRAY" or "LAM_5_5_GRAY" or "UNKNOWN_GLASS")
+            {
+                Assert.Equal(JsonValueKind.Null, range.ValueKind);
+            }
+            else
+            {
+                Assert.Equal(
+                    JsonValueKind.Number,
+                    range.GetProperty("minimumPricePerSquareMeter").ValueKind);
+                Assert.Equal(
+                    JsonValueKind.Number,
+                    range.GetProperty("expectedAmountPerM2").ValueKind);
+                Assert.Equal("COP", range.GetProperty("currency").GetString());
+                Assert.Equal(
+                    "PRELIMINARY",
+                    range.GetProperty("status").GetString());
+            }
             Assert.False(item.TryGetProperty("createdAtUtc", out _));
             Assert.False(item.TryGetProperty("priceRangeVersions", out _));
-        });
+        }
     }
 
     [Fact]
@@ -175,20 +196,29 @@ public sealed class GlassTypesCatalogHttpTests
 
         private static IReadOnlyList<GlassTypeCatalogReadModel> Items() =>
         [
-            Item("LAM_5_5_GRAY", 125000m, 145000m),
-            Item("LAM_4_4_GRAY", 95000m, 95000m),
-            Item("LAM_5_5", 120000m, 140000m),
-            Item("LAM_4_4", 90000m, 110000m)
+            Item("UNKNOWN_GLASS"),
+            Item("TEMP_8", 90000m, 90000m, 90000m),
+            Item("TEMP_6", 86000m, 86000m, 86000m),
+            Item("TEMP_5", 74000m, 74000m, 74000m),
+            Item("TEMP_10", 126000m, 126000m, 126000m),
+            Item("LAM_5_5_GRAY"),
+            Item("LAM_5_5", 120000m, 130000m, 140000m),
+            Item("LAM_4_4_GRAY"),
+            Item("LAM_4_4", 90000m, 100000m, 110000m)
         ];
 
         private static GlassTypeCatalogReadModel Item(
             string code,
-            decimal minimum,
-            decimal maximum) =>
+            decimal? minimum = null,
+            decimal? expected = null,
+            decimal? maximum = null) =>
             new(
                 Guid.NewGuid(), code, code, null, true,
-                new GlassPriceRangeCatalogReadModel(
-                    Guid.NewGuid(), 1, minimum, maximum, "COP",
-                    GlassPriceRangeStatus.Preliminary, At, null));
+                minimum is null || expected is null || maximum is null
+                    ? null
+                    : new GlassPriceRangeCatalogReadModel(
+                        Guid.NewGuid(), 1, minimum.Value, expected.Value,
+                        maximum.Value, "COP",
+                        GlassPriceRangeStatus.Preliminary, At, null));
     }
 }

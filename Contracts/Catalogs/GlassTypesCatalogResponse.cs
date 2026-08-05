@@ -4,6 +4,7 @@ public sealed record GlassPriceRangeResponse(
     Guid GlassPriceRangeVersionId,
     int Version,
     decimal MinimumPricePerSquareMeter,
+    decimal ExpectedAmountPerM2,
     decimal MaximumPricePerSquareMeter,
     string Currency,
     string Status,
@@ -16,7 +17,7 @@ public sealed record GlassTypeCatalogItemResponse(
     string Name,
     string? Description,
     bool IsActive,
-    GlassPriceRangeResponse CurrentPriceRange);
+    GlassPriceRangeResponse? CurrentPriceRange);
 
 public sealed record GetGlassTypesCatalogResponse(
     IReadOnlyList<GlassTypeCatalogItemResponse> Items);

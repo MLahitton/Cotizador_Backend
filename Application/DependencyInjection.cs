@@ -6,6 +6,7 @@ using Application.Clients.GetClients;
 using Application.Clients.SetClientActivation;
 using Application.Clients.UpdateClient;
 using Application.Catalogs.GetGlassTypesCatalog;
+using Application.Catalogs.GetCanonicalCatalog;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
 using Application.PreQuotes.ClaimDocumentProcessingAttempt;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
@@ -49,6 +50,7 @@ public static class DependencyInjection
         services.AddScoped<SetClientActivationService>();
         services.AddScoped<UpdateClientService>();
         services.AddScoped<GetGlassTypesCatalogService>();
+        services.AddScoped<GetCanonicalCatalogService>();
         services.AddScoped<CreateDocumentProcessingAttemptService>();
         services.AddScoped<GetDocumentProcessingAttemptService>();
         services.AddScoped<

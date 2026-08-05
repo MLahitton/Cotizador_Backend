@@ -20,6 +20,32 @@ public sealed class CotizadorAiDocumentProcessingClient(
     private const string CorrelationHeaderName = "X-Correlation-ID";
     private const long MaximumPdfSizeBytes = 20_971_520;
 
+    private static readonly string[] AiV3ContractGlassNormalizedCodes =
+    [
+        "LAM_4_4",
+        "LAM_4_4_GRAY",
+        "LAM_5_5",
+        "LAM_5_5_GRAY",
+        "TEMP_10",
+        "TEMP_5",
+        "TEMP_6",
+        "TEMP_8",
+        "UNKNOWN_GLASS"
+    ];
+
+    private static readonly HashSet<string> AiV3ContractGlassNormalizedCodeSet =
+    [
+        "LAM_4_4",
+        "LAM_4_4_GRAY",
+        "LAM_5_5",
+        "LAM_5_5_GRAY",
+        "TEMP_10",
+        "TEMP_5",
+        "TEMP_6",
+        "TEMP_8",
+        "UNKNOWN_GLASS"
+    ];
+
     private static readonly UTF8Encoding StrictUtf8Encoding = new(
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
@@ -75,16 +101,46 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 request.CorrelationId,
                 exception.HttpStatusCode,
                 exception.Stage,
-                exception.Category);
+                exception.Category,
+                exception.ItemSequence,
+                exception.RejectedNormalizedCode,
+                exception.AcceptedNormalizedCodes,
+                exception.GetType().Name,
+                exception.Message,
+                exception.JsonPath,
+                exception.FieldName,
+                exception.RejectedValue);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
-        catch (InvalidDataException)
+        catch (ResponseContractValidationException exception)
         {
             diagnostics?.ContractRejected(
                 request.DocumentId, request.ProcessingAttemptId,
                 request.CorrelationId, null,
-                "response_contract", "invalid_data");
+                "response_contract", "invalid_data",
+                exception.ItemSequence,
+                null,
+                null,
+                exception.GetType().Name,
+                exception.Message,
+                exception.JsonPath,
+                exception.FieldName,
+                exception.RejectedValue);
+            return DocumentProcessingClientResult.Failed(
+                DocumentProcessingClientFailure.InvalidResponse);
+        }
+        catch (InvalidDataException exception)
+        {
+            diagnostics?.ContractRejected(
+                request.DocumentId, request.ProcessingAttemptId,
+                request.CorrelationId, null,
+                "response_contract", "invalid_data",
+                null,
+                null,
+                null,
+                exception.GetType().Name,
+                exception.Message);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
@@ -801,6 +857,16 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 "sourcePages", "evidence"
             };
             if (schemaVersion == "3.0") properties.Add("glass");
+            if (item.TryGetProperty("technicalClassification", out var technical))
+            {
+                properties.Add("technicalClassification");
+                ValidateExactObjectProperties(technical,
+                    "systemCode", "systemOriginalText", "systemSource",
+                    "systemConfidence", "frameCode", "frameOriginalText",
+                    "frameSource", "frameConfidence", "finishCode",
+                    "finishOriginalText", "finishSource", "finishConfidence",
+                    "requiresReview", "reviewReasons");
+            }
             ValidateExactObjectProperties(item, [.. properties]);
             if (schemaVersion == "3.0")
             {
@@ -863,23 +929,98 @@ public sealed class CotizadorAiDocumentProcessingClient(
         var items = new List<StructuredItemData>();
         for (var index = 0; index < dto.Items.Count; index++)
         {
-            var x = dto.Items[index] ?? throw new InvalidDataException();
-            if (x.Sequence != index + 1 || string.IsNullOrWhiteSpace(x.Description)
-                || (x.WidthMillimeters is null) != (x.HeightMillimeters is null)
-                || x.WidthMillimeters is <= 0 || x.HeightMillimeters is <= 0
-                || x.Quantity is <= 0 || x.ReviewReasons is null
-                || schemaVersion == "3.0" && x.Glass is null
-                || schemaVersion == "2.0" && x.Glass is not null)
-                throw new InvalidDataException();
+            var x = dto.Items[index]
+                ?? throw Invalid(
+                    $"structuredExtraction.items[{index}]",
+                    null,
+                    "structuredExtraction item is required.",
+                    index + 1);
+            if (x.Sequence != index + 1)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].sequence",
+                    x.Sequence,
+                    "structuredExtraction item sequence must match index plus one.",
+                    index + 1);
+            }
+            if (string.IsNullOrWhiteSpace(x.Description))
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].description",
+                    x.Description,
+                    "structuredExtraction item description is required.",
+                    x.Sequence);
+            }
+            if ((x.WidthMillimeters is null)
+                != (x.HeightMillimeters is null))
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].heightMillimeters",
+                    $"width={x.WidthMillimeters?.ToString() ?? "null"};height={x.HeightMillimeters?.ToString() ?? "null"}",
+                    "structuredExtraction item width and height must both be present or both be null.",
+                    x.Sequence);
+            }
+            if (x.WidthMillimeters is <= 0)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].widthMillimeters",
+                    x.WidthMillimeters,
+                    "structuredExtraction item width must be positive.",
+                    x.Sequence);
+            }
+            if (x.HeightMillimeters is <= 0)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].heightMillimeters",
+                    x.HeightMillimeters,
+                    "structuredExtraction item height must be positive.",
+                    x.Sequence);
+            }
+            if (x.Quantity is <= 0)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].quantity",
+                    x.Quantity,
+                    "structuredExtraction item quantity must be positive.",
+                    x.Sequence);
+            }
+            if (x.ReviewReasons is null)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].reviewReasons",
+                    null,
+                    "structuredExtraction item reviewReasons is required.",
+                    x.Sequence);
+            }
+            if (schemaVersion == "3.0" && x.Glass is null)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].glass",
+                    null,
+                    "structuredExtraction item glass is required for schema 3.0.",
+                    x.Sequence);
+            }
+            if (schemaVersion == "2.0" && x.Glass is not null)
+            {
+                throw Invalid(
+                    $"structuredExtraction.items[{index}].glass",
+                    "present",
+                    "structuredExtraction item glass is not allowed for schema 2.0.",
+                    x.Sequence);
+            }
             ValidateNumbers(x.SourcePages, pageCount);
             var glass = x.Glass is null
                 ? null
-                : MapGlass(x.Glass, pageCount);
+                : MapGlass(x.Glass, pageCount, x.Sequence);
+            var technical = x.TechnicalClassification is null
+                ? null
+                : MapTechnicalClassification(x.TechnicalClassification);
             items.Add(new StructuredItemData(x.Sequence, x.Reference,
                 x.Description, MapElementType(x.ElementType), x.RawMeasurements,
                 x.WidthMillimeters, x.HeightMillimeters, x.Quantity,
                 x.RequiresReview, x.ReviewReasons.Select(MapIssueCode).ToArray(),
-                x.SourcePages!, MapEvidence(x.Evidence, pageCount), glass));
+                x.SourcePages!, MapEvidence(x.Evidence, pageCount), glass,
+                technical));
         }
 
         var references = new List<StructuredDocumentReferenceData>();
@@ -948,7 +1089,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
                     || x.ElementType == StructuredElementType.Other
                     || x.ReviewReasons.Count != 0))
         {
-            throw new InvalidDataException();
+            throw Invalid(
+                "structuredExtraction.status",
+                dto.Status,
+                "structuredExtraction.status is inconsistent with review requirements.");
         }
 
         return new(status, dto.Project.Name, dto.Project.ClientName,
@@ -962,16 +1106,24 @@ public sealed class CotizadorAiDocumentProcessingClient(
     }
 
     private static StructuredItemGlassData MapGlass(
-        GlassDto dto, int pageCount)
+        GlassDto dto, int pageCount, int itemSequence)
     {
         if (dto.RawSpecification is { } raw
             && (string.IsNullOrWhiteSpace(raw) || raw.Length > 500
                 || raw != raw.Trim()))
             throw Contract("glass_contract", "invalid_raw_specification", 200);
         if (dto.NormalizedCode is not null
-            && dto.NormalizedCode is not ("LAM_4_4" or "LAM_4_4_GRAY"
-                or "LAM_5_5" or "LAM_5_5_GRAY"))
-            throw Contract("glass_contract", "unknown_code", 200);
+            && !AiV3ContractGlassNormalizedCodeSet.Contains(
+                dto.NormalizedCode))
+        {
+            throw Contract(
+                "glass_contract",
+                "unknown_code",
+                200,
+                itemSequence: itemSequence,
+                rejectedNormalizedCode: dto.NormalizedCode,
+                acceptedNormalizedCodes: AiV3ContractGlassNormalizedCodes);
+        }
         var scope = dto.AssignmentScope switch
         {
             "ITEM" => GlassAssignmentScope.Item,
@@ -1015,6 +1167,47 @@ public sealed class CotizadorAiDocumentProcessingClient(
             throw Contract("glass_contract", "inconsistent_assignment", 200);
         return new(dto.RawSpecification, dto.NormalizedCode, scope,
             dto.RequiresReview, reasons, dto.SourcePages!, evidence);
+    }
+
+    private static StructuredItemTechnicalClassificationData
+        MapTechnicalClassification(TechnicalClassificationDto dto)
+    {
+        if (dto.ReviewReasons is null
+            || dto.ReviewReasons.Any(string.IsNullOrWhiteSpace)
+            || dto.RequiresReview != (dto.ReviewReasons.Count > 0))
+        {
+            throw Contract("technical_classification_contract",
+                "invalid_review_reasons", 200);
+        }
+
+        ValidateTechnicalCode(dto.SystemCode);
+        ValidateTechnicalCode(dto.FrameCode);
+        ValidateTechnicalCode(dto.FinishCode);
+        ValidateTechnicalText(dto.SystemOriginalText);
+        ValidateTechnicalText(dto.FrameOriginalText);
+        ValidateTechnicalText(dto.FinishOriginalText);
+        ValidateConfidence(dto.SystemConfidence);
+        ValidateConfidence(dto.FrameConfidence);
+        ValidateConfidence(dto.FinishConfidence);
+
+        return new(
+            dto.SystemCode?.Trim().ToUpperInvariant(),
+            NormalizeTechnicalText(dto.SystemOriginalText),
+            MapTechnicalSource(dto.SystemSource),
+            dto.SystemConfidence,
+            dto.FrameCode?.Trim().ToUpperInvariant(),
+            NormalizeTechnicalText(dto.FrameOriginalText),
+            MapTechnicalSource(dto.FrameSource),
+            dto.FrameConfidence,
+            dto.FinishCode?.Trim().ToUpperInvariant(),
+            NormalizeTechnicalText(dto.FinishOriginalText),
+            MapTechnicalSource(dto.FinishSource),
+            dto.FinishConfidence,
+            dto.RequiresReview,
+            dto.ReviewReasons
+                .Select(value => value!.Trim().ToUpperInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .ToArray());
     }
 
     private static void AddRequirements(List<StructuredRequirementData> target,
@@ -1069,8 +1262,59 @@ public sealed class CotizadorAiDocumentProcessingClient(
         "WINDOW" => StructuredElementType.Window, "DOOR" => StructuredElementType.Door,
         "FACADE" => StructuredElementType.Facade, "PARTITION" => StructuredElementType.Partition,
         "RAILING" => StructuredElementType.Railing, "SKYLIGHT" => StructuredElementType.Skylight,
+        "SHOWER_DIVISION" => StructuredElementType.ShowerDivision,
         "OTHER" => StructuredElementType.Other, _ => throw new InvalidDataException()
     };
+    private static TechnicalClassificationSource? MapTechnicalSource(
+        string? value) => value switch
+    {
+        null => null,
+        "EXPLICIT" => TechnicalClassificationSource.Explicit,
+        "ALIAS" => TechnicalClassificationSource.Alias,
+        "INFERRED" => TechnicalClassificationSource.Inferred,
+        "UNRESOLVED" => TechnicalClassificationSource.Unresolved,
+        _ => throw Contract("technical_classification_contract",
+            "unknown_source", 200)
+    };
+
+    private static void ValidateTechnicalCode(string? value)
+    {
+        if (value is null) return;
+        var code = value.Trim().ToUpperInvariant();
+        if (code.Length == 0 || code.Length > 30
+            || !code.All(character =>
+                character is >= 'A' and <= 'Z'
+                || character is >= '0' and <= '9'
+                || character is '_' or '-'))
+        {
+            throw Contract("technical_classification_contract",
+                "invalid_code", 200);
+        }
+    }
+
+    private static void ValidateTechnicalText(string? value)
+    {
+        if (value is null) return;
+        if (string.IsNullOrWhiteSpace(value)
+            || value != value.Trim()
+            || value.Length > 500)
+        {
+            throw Contract("technical_classification_contract",
+                "invalid_original_text", 200);
+        }
+    }
+
+    private static string? NormalizeTechnicalText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void ValidateConfidence(decimal? value)
+    {
+        if (value is < 0 or > 1)
+        {
+            throw Contract("technical_classification_contract",
+                "invalid_confidence", 200);
+        }
+    }
     private static StructuredIssueCode MapIssueCode(string? value) => value switch
     {
         "PROJECT_NAME_NOT_FOUND" => StructuredIssueCode.ProjectNameNotFound,
@@ -1356,8 +1600,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
     private sealed class RequirementsDto { public List<RequirementDto?>? GlassSpecifications { get; init; } public List<RequirementDto?>? ProfileSpecifications { get; init; } public List<RequirementDto?>? Finishes { get; init; } public List<RequirementDto?>? AccessoriesAndSealants { get; init; } public List<RequirementDto?>? GeneralNotes { get; init; } }
     private sealed class EvidenceDto { public int PageNumber { get; init; } public string? SourceType { get; init; } public string? Text { get; init; } }
     private sealed class RequirementDto { public string? Value { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
-    private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } public GlassDto? Glass { get; init; } }
+    private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } public GlassDto? Glass { get; init; } public TechnicalClassificationDto? TechnicalClassification { get; init; } }
     private sealed class GlassDto { public string? RawSpecification { get; init; } public string? NormalizedCode { get; init; } public string? AssignmentScope { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
+    private sealed class TechnicalClassificationDto { public string? SystemCode { get; init; } public string? SystemOriginalText { get; init; } public string? SystemSource { get; init; } public decimal? SystemConfidence { get; init; } public string? FrameCode { get; init; } public string? FrameOriginalText { get; init; } public string? FrameSource { get; init; } public decimal? FrameConfidence { get; init; } public string? FinishCode { get; init; } public string? FinishOriginalText { get; init; } public string? FinishSource { get; init; } public decimal? FinishConfidence { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } }
     private sealed class DocumentReferenceDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? Detail { get; init; } public int? Quantity { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
     private sealed class IssueDto { public string? Code { get; init; } public string? Message { get; init; } public int? ItemSequence { get; init; } public List<int>? PageNumbers { get; init; } }
     private sealed class ConflictDto { public string? Code { get; init; } public string? Message { get; init; } public List<int>? ItemSequences { get; init; } public List<int>? PageNumbers { get; init; } }
@@ -1376,14 +1621,21 @@ public sealed class CotizadorAiDocumentProcessingClient(
         string stage,
         string category,
         int? httpStatusCode,
-        Exception? innerException = null) =>
-        new(stage, category, httpStatusCode, innerException);
+        Exception? innerException = null,
+        int? itemSequence = null,
+        string? rejectedNormalizedCode = null,
+        IReadOnlyList<string>? acceptedNormalizedCodes = null) =>
+        new(stage, category, httpStatusCode, innerException, itemSequence,
+            rejectedNormalizedCode, acceptedNormalizedCodes);
 
     private sealed class ContractValidationException(
         string stage,
         string category,
         int? httpStatusCode,
-        Exception? innerException = null)
+        Exception? innerException = null,
+        int? itemSequence = null,
+        string? rejectedNormalizedCode = null,
+        IReadOnlyList<string>? acceptedNormalizedCodes = null)
         : Exception(
             $"Contract validation failed at {stage}: {category}.",
             innerException)
@@ -1391,6 +1643,39 @@ public sealed class CotizadorAiDocumentProcessingClient(
         public string Stage { get; } = stage;
         public string Category { get; } = category;
         public int? HttpStatusCode { get; } = httpStatusCode;
+        public int? ItemSequence { get; } = itemSequence;
+        public string? RejectedNormalizedCode { get; } = rejectedNormalizedCode;
+        public IReadOnlyList<string>? AcceptedNormalizedCodes { get; } =
+            acceptedNormalizedCodes;
+        public string? JsonPath { get; } = null;
+        public string? FieldName { get; } = null;
+        public string? RejectedValue { get; } = null;
+    }
+
+    private static ResponseContractValidationException Invalid(
+        string fieldName,
+        object? rejectedValue,
+        string message,
+        int? itemSequence = null) =>
+        new(
+            fieldName,
+            fieldName,
+            itemSequence,
+            rejectedValue?.ToString(),
+            message);
+
+    private sealed class ResponseContractValidationException(
+        string jsonPath,
+        string fieldName,
+        int? itemSequence,
+        string? rejectedValue,
+        string message)
+        : Exception(message)
+    {
+        public string JsonPath { get; } = jsonPath;
+        public string FieldName { get; } = fieldName;
+        public int? ItemSequence { get; } = itemSequence;
+        public string? RejectedValue { get; } = rejectedValue;
     }
 
     private sealed class NonDisposingStream(Stream innerStream) : Stream

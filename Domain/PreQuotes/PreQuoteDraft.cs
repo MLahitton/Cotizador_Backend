@@ -9,7 +9,8 @@ public enum PreQuoteDraftValuationStatus
     Pending,
     Valued,
     Stale,
-    RequiresReview
+    RequiresReview,
+    NotPriceable
 }
 public enum PreQuoteDraftValuationInvalidationReason
 {
@@ -50,7 +51,27 @@ public sealed record PreQuoteDraftItemValuationSnapshotSource(
     string? Currency,
     DateTimeOffset ValuedAtUtc,
     DateTimeOffset? InvalidatedAtUtc,
-    PreQuoteDraftValuationInvalidationReason? InvalidationReason);
+    PreQuoteDraftValuationInvalidationReason? InvalidationReason,
+    int? PriceRangeVersion = null,
+    decimal? ExpectedPricePerSquareMeter = null,
+    decimal? ExpectedAmount = null,
+    decimal? MaximumPricePerSquareMeter = null);
+public sealed record PreQuoteDraftItemTechnicalSnapshotSource(
+    Guid SourceStructuredItemTechnicalClassificationId,
+    string? SystemCode,
+    string? SystemOriginalText,
+    TechnicalClassificationSource? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    TechnicalClassificationSource? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    TechnicalClassificationSource? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
 
 public sealed class PreQuoteDraftItemGlassSnapshot
 {
@@ -129,6 +150,44 @@ public sealed class PreQuoteDraftItemValuationSnapshot
     public DateTimeOffset ValuedAtUtc { get; private set; }
     public DateTimeOffset? InvalidatedAtUtc { get; private set; }
     public PreQuoteDraftValuationInvalidationReason? InvalidationReason { get; private set; }
+    public decimal? BillableAreaUnitSquareMeters { get; private set; }
+    public string? GlassCode { get; private set; }
+    public int? GlassPriceRangeVersion { get; private set; }
+    public decimal? GlassMinimumPricePerSquareMeter { get; private set; }
+    public decimal? GlassExpectedPricePerSquareMeter { get; private set; }
+    public decimal? GlassMaximumPricePerSquareMeter { get; private set; }
+    public string? SystemCode { get; private set; }
+    public TechnicalClassificationSource? SystemSource { get; private set; }
+    public string? FrameCode { get; private set; }
+    public string? FinishCode { get; private set; }
+    public string? LaborProfileCode { get; private set; }
+    public string? AssemblyProfileCode { get; private set; }
+    public decimal? FinishFactorMinimum { get; private set; }
+    public decimal? FinishFactorExpected { get; private set; }
+    public decimal? FinishFactorMaximum { get; private set; }
+    public decimal? AccessoryFactor { get; private set; }
+    public decimal? GlassMinimumAmount { get; private set; }
+    public decimal? GlassExpectedAmount { get; private set; }
+    public decimal? GlassMaximumAmount { get; private set; }
+    public decimal? LaborMinimumAmount { get; private set; }
+    public decimal? LaborExpectedAmount { get; private set; }
+    public decimal? LaborMaximumAmount { get; private set; }
+    public decimal? AssemblyMinimumAmount { get; private set; }
+    public decimal? AssemblyExpectedAmount { get; private set; }
+    public decimal? AssemblyMaximumAmount { get; private set; }
+    public decimal? AccessoriesMinimumAmount { get; private set; }
+    public decimal? AccessoriesExpectedAmount { get; private set; }
+    public decimal? AccessoriesMaximumAmount { get; private set; }
+    public decimal? ItemMinimumAmount { get; private set; }
+    public decimal? ItemExpectedAmount { get; private set; }
+    public decimal? ItemMaximumAmount { get; private set; }
+    public string? PricingProfileVersion { get; private set; }
+    public int? ConfidenceScore { get; private set; }
+    public PreQuoteDraftPricingConfidenceLevel? ConfidenceLevel { get; private set; }
+    public string[] Assumptions { get; private set; } = [];
+    public string[] MissingData { get; private set; } = [];
+    public bool? RequiresReview { get; private set; }
+    public DateTimeOffset? CalculatedAtUtc { get; private set; }
 
     private PreQuoteDraftItemValuationSnapshot() { }
 
@@ -141,7 +200,8 @@ public sealed class PreQuoteDraftItemValuationSnapshot
         decimal? totalAreaSquareMeters, decimal? unitPricePerSquareMeter,
         decimal? unitAmount, decimal? totalAmount, string? currency,
         DateTimeOffset valuedAtUtc, DateTimeOffset? invalidatedAtUtc,
-        PreQuoteDraftValuationInvalidationReason? invalidationReason)
+        PreQuoteDraftValuationInvalidationReason? invalidationReason,
+        PreQuotePreliminaryPricingResult? preliminaryPricing = null)
     {
         return new()
         {
@@ -163,7 +223,52 @@ public sealed class PreQuoteDraftItemValuationSnapshot
             Currency = currency,
             ValuedAtUtc = valuedAtUtc,
             InvalidatedAtUtc = invalidatedAtUtc,
-            InvalidationReason = invalidationReason
+            InvalidationReason = invalidationReason,
+            BillableAreaUnitSquareMeters =
+                preliminaryPricing?.BillableAreaUnitSquareMeters,
+            GlassCode = preliminaryPricing?.GlassCode,
+            GlassPriceRangeVersion = preliminaryPricing?.GlassPriceRangeVersion,
+            GlassMinimumPricePerSquareMeter =
+                preliminaryPricing?.GlassMinimumPricePerSquareMeter,
+            GlassExpectedPricePerSquareMeter =
+                preliminaryPricing?.GlassExpectedPricePerSquareMeter,
+            GlassMaximumPricePerSquareMeter =
+                preliminaryPricing?.GlassMaximumPricePerSquareMeter,
+            SystemCode = preliminaryPricing?.SystemCode,
+            SystemSource = preliminaryPricing?.SystemSource,
+            FrameCode = preliminaryPricing?.FrameCode,
+            FinishCode = preliminaryPricing?.FinishCode,
+            LaborProfileCode = preliminaryPricing?.LaborProfileCode,
+            AssemblyProfileCode = preliminaryPricing?.AssemblyProfileCode,
+            FinishFactorMinimum = preliminaryPricing?.FinishFactorMinimum,
+            FinishFactorExpected = preliminaryPricing?.FinishFactorExpected,
+            FinishFactorMaximum = preliminaryPricing?.FinishFactorMaximum,
+            AccessoryFactor = preliminaryPricing?.AccessoryFactor,
+            GlassMinimumAmount = preliminaryPricing?.GlassMinimumAmount,
+            GlassExpectedAmount = preliminaryPricing?.GlassExpectedAmount,
+            GlassMaximumAmount = preliminaryPricing?.GlassMaximumAmount,
+            LaborMinimumAmount = preliminaryPricing?.LaborMinimumAmount,
+            LaborExpectedAmount = preliminaryPricing?.LaborExpectedAmount,
+            LaborMaximumAmount = preliminaryPricing?.LaborMaximumAmount,
+            AssemblyMinimumAmount = preliminaryPricing?.AssemblyMinimumAmount,
+            AssemblyExpectedAmount = preliminaryPricing?.AssemblyExpectedAmount,
+            AssemblyMaximumAmount = preliminaryPricing?.AssemblyMaximumAmount,
+            AccessoriesMinimumAmount =
+                preliminaryPricing?.AccessoriesMinimumAmount,
+            AccessoriesExpectedAmount =
+                preliminaryPricing?.AccessoriesExpectedAmount,
+            AccessoriesMaximumAmount =
+                preliminaryPricing?.AccessoriesMaximumAmount,
+            ItemMinimumAmount = preliminaryPricing?.ItemMinimumAmount,
+            ItemExpectedAmount = preliminaryPricing?.ItemExpectedAmount,
+            ItemMaximumAmount = preliminaryPricing?.ItemMaximumAmount,
+            PricingProfileVersion = preliminaryPricing?.PricingProfileVersion,
+            ConfidenceScore = preliminaryPricing?.ConfidenceScore,
+            ConfidenceLevel = preliminaryPricing?.ConfidenceLevel,
+            Assumptions = preliminaryPricing?.Assumptions.ToArray() ?? [],
+            MissingData = preliminaryPricing?.MissingData.ToArray() ?? [],
+            RequiresReview = preliminaryPricing?.RequiresReview,
+            CalculatedAtUtc = preliminaryPricing is null ? null : valuedAtUtc
         };
     }
 
@@ -179,6 +284,57 @@ public sealed class PreQuoteDraftItemValuationSnapshot
         Status = PreQuoteDraftValuationStatus.Stale;
         InvalidatedAtUtc = invalidatedAtUtc;
         InvalidationReason = reason;
+    }
+}
+
+public sealed class PreQuoteDraftItemTechnicalSnapshot
+{
+    private PreQuoteDraftItemTechnicalSnapshot() { }
+    public Guid Id { get; private set; }
+    public Guid PreQuoteDraftItemId { get; private set; }
+    public Guid SourceStructuredItemTechnicalClassificationId { get; private set; }
+    public string? SystemCode { get; private set; }
+    public string? SystemOriginalText { get; private set; }
+    public TechnicalClassificationSource? SystemSource { get; private set; }
+    public decimal? SystemConfidence { get; private set; }
+    public string? FrameCode { get; private set; }
+    public string? FrameOriginalText { get; private set; }
+    public TechnicalClassificationSource? FrameSource { get; private set; }
+    public decimal? FrameConfidence { get; private set; }
+    public string? FinishCode { get; private set; }
+    public string? FinishOriginalText { get; private set; }
+    public TechnicalClassificationSource? FinishSource { get; private set; }
+    public decimal? FinishConfidence { get; private set; }
+    public bool RequiresReview { get; private set; }
+    public string[] ReviewReasons { get; private set; } = [];
+
+    public static PreQuoteDraftItemTechnicalSnapshot Create(
+        Guid preQuoteDraftItemId,
+        PreQuoteDraftItemTechnicalSnapshotSource source)
+    {
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            PreQuoteDraftItemId = preQuoteDraftItemId,
+            SourceStructuredItemTechnicalClassificationId =
+                source.SourceStructuredItemTechnicalClassificationId,
+            SystemCode = source.SystemCode,
+            SystemOriginalText = source.SystemOriginalText,
+            SystemSource = source.SystemSource,
+            SystemConfidence = source.SystemConfidence,
+            FrameCode = source.FrameCode,
+            FrameOriginalText = source.FrameOriginalText,
+            FrameSource = source.FrameSource,
+            FrameConfidence = source.FrameConfidence,
+            FinishCode = source.FinishCode,
+            FinishOriginalText = source.FinishOriginalText,
+            FinishSource = source.FinishSource,
+            FinishConfidence = source.FinishConfidence,
+            RequiresReview = source.RequiresReview,
+            ReviewReasons = source.ReviewReasons
+                .Distinct(StringComparer.Ordinal)
+                .ToArray()
+        };
     }
 }
 
@@ -244,7 +400,8 @@ public sealed record PreQuoteDraftItemSource(
     StructuredElementType ElementType, string? RawMeasurements,
     int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
     PreQuoteDraftItemGlassSnapshotSource? Glass = null,
-    PreQuoteDraftItemValuationSnapshotSource? Valuation = null);
+    PreQuoteDraftItemValuationSnapshotSource? Valuation = null,
+    PreQuoteDraftItemTechnicalSnapshotSource? TechnicalSnapshot = null);
 public sealed record PreQuoteDraftRequirementSource(
     Guid SourceId, int Sequence, RequirementCategory Category, string Value);
 public sealed record PreQuoteDraftReferenceSource(
@@ -321,11 +478,41 @@ public sealed record PreQuoteDraftEconomicSummary(
     int ValuedItemCount,
     int PendingValuationItemCount,
     int StaleValuationItemCount,
+    int NotPriceableItemCount,
     int ItemsRequiringReviewCount,
     decimal? TotalAreaSquareMeters,
     decimal? GlassSubtotal,
     string? Currency,
-    bool IsEconomicallyComplete);
+    bool IsEconomicallyComplete,
+    decimal? MinimumTechnicalSubtotal = null,
+    decimal? ExpectedTechnicalSubtotal = null,
+    decimal? MaximumTechnicalSubtotal = null,
+    decimal? TransportMinimum = null,
+    decimal? TransportExpected = null,
+    decimal? TransportMaximum = null,
+    decimal? AdministrationMinimum = null,
+    decimal? AdministrationExpected = null,
+    decimal? AdministrationMaximum = null,
+    decimal? ContingencyMinimum = null,
+    decimal? ContingencyExpected = null,
+    decimal? ContingencyMaximum = null,
+    decimal? ProfitMinimum = null,
+    decimal? ProfitExpected = null,
+    decimal? ProfitMaximum = null,
+    decimal? VatMinimum = null,
+    decimal? VatExpected = null,
+    decimal? VatMaximum = null,
+    decimal? FinalMinimum = null,
+    decimal? FinalExpected = null,
+    decimal? FinalMaximum = null,
+    int? OverallConfidence = null,
+    PreQuoteDraftPricingConfidenceLevel? ConfidenceLevel = null,
+    IReadOnlyList<string>? Assumptions = null,
+    IReadOnlyList<string>? MissingData = null,
+    bool HasLimitedPricingScope = false)
+{
+    public bool HasNotPriceableItems => NotPriceableItemCount > 0;
+}
 
 public sealed class PreQuoteDraft
 {
@@ -492,6 +679,9 @@ public sealed class PreQuoteDraft
             x => x.ValuationStatus == PreQuoteDraftValuationStatus.Pending).ToArray();
         var stale = included.Where(
             x => x.ValuationStatus == PreQuoteDraftValuationStatus.Stale).ToArray();
+        var notPriceable = included.Where(
+            x => x.ValuationStatus == PreQuoteDraftValuationStatus.NotPriceable)
+            .ToArray();
         var requiringReview = included.Where(
             x => x.ValuationStatus == PreQuoteDraftValuationStatus.RequiresReview)
             .ToArray();
@@ -523,6 +713,16 @@ public sealed class PreQuoteDraft
             ? validValuedItems.Sum(
                 x => x.ValuationSnapshot!.TotalAmount!)
             : 0;
+        var preliminarySnapshots = hasCurrencyCompatibility
+            ? validValuedItems
+                .Select(x => x.ValuationSnapshot!)
+                .Where(x => x.ItemExpectedAmount is not null)
+                .ToArray()
+            : [];
+        var totals = preliminarySnapshots.Length > 0
+            ? PreQuotePreliminaryPricing.CalculateTotals(
+                preliminarySnapshots, Location)
+            : null;
 
         return new(
             included.Length,
@@ -530,15 +730,43 @@ public sealed class PreQuoteDraft
             valued.Length,
             pending.Length,
             stale.Length,
+            notPriceable.Length,
             requiringReview.Length,
             valuedArea == 0 ? null : valuedArea,
             valuedSubtotal == 0 ? null : valuedSubtotal,
             currency,
             valued.Length > 0 && stale.Length == 0 && pending.Length == 0 &&
+                notPriceable.Length == 0 &&
                 requiringReview.Length == 0 && currency is not null &&
                 valued.All(x => x.ValuationSnapshot is not null &&
                     x.ValuationSnapshot.Currency is not null &&
-                    !string.IsNullOrWhiteSpace(x.ValuationSnapshot.Currency)));
+                    !string.IsNullOrWhiteSpace(x.ValuationSnapshot.Currency)),
+            totals?.MinimumTechnicalSubtotal,
+            totals?.ExpectedTechnicalSubtotal,
+            totals?.MaximumTechnicalSubtotal,
+            totals?.TransportMinimum,
+            totals?.TransportExpected,
+            totals?.TransportMaximum,
+            totals?.AdministrationMinimum,
+            totals?.AdministrationExpected,
+            totals?.AdministrationMaximum,
+            totals?.ContingencyMinimum,
+            totals?.ContingencyExpected,
+            totals?.ContingencyMaximum,
+            totals?.ProfitMinimum,
+            totals?.ProfitExpected,
+            totals?.ProfitMaximum,
+            totals?.VatMinimum,
+            totals?.VatExpected,
+            totals?.VatMaximum,
+            totals?.FinalMinimum,
+            totals?.FinalExpected,
+            totals?.FinalMaximum,
+            totals?.OverallConfidence,
+            totals?.ConfidenceLevel,
+            totals?.Assumptions,
+            totals?.MissingData,
+            totals?.HasLimitedPricingScope ?? false);
     }
 
     public void Update(
@@ -667,25 +895,27 @@ public sealed class PreQuoteDraftItem
     public PreQuoteDraftValuationStatus ValuationStatus { get; private set; }
     public PreQuoteDraftItemGlassSnapshot? GlassSnapshot { get; private set; }
     public PreQuoteDraftItemValuationSnapshot? ValuationSnapshot { get; private set; }
+    public PreQuoteDraftItemTechnicalSnapshot? TechnicalSnapshot { get; private set; }
     public Guid CreatedByUserId { get; private set; } public Guid UpdatedByUserId { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; } public DateTimeOffset UpdatedAtUtc { get; private set; }
     public PreQuoteDraft Draft { get; private set; } = null!;
     public bool IsCompleteForApproval => !string.IsNullOrWhiteSpace(Description) && ElementType != StructuredElementType.Other && WidthMillimeters > 0 && HeightMillimeters > 0 && Quantity > 0;
     internal static PreQuoteDraftItem FromAi(Guid draftId, PreQuoteDraftItemSource x, Guid user, DateTimeOffset at) =>
-        Create(draftId, x.Sequence, PreQuoteDraftOrigin.Ai, x.SourceId, x.Sequence, x.Reference, x.Description, x.ElementType, x.RawMeasurements, x.WidthMillimeters, x.HeightMillimeters, x.Quantity, true, user, at, x.Glass, x.Valuation);
+        Create(draftId, x.Sequence, PreQuoteDraftOrigin.Ai, x.SourceId, x.Sequence, x.Reference, x.Description, x.ElementType, x.RawMeasurements, x.WidthMillimeters, x.HeightMillimeters, x.Quantity, true, user, at, x.Glass, x.Valuation, x.TechnicalSnapshot);
     internal static PreQuoteDraftItem Manual(
         Guid draftId, PreQuoteDraftItemEdit x, Guid user, DateTimeOffset at) =>
         Create(draftId, x.Sequence, PreQuoteDraftOrigin.Manual, null, null,
             x.Reference, x.Description, x.ElementType, x.RawMeasurements,
             x.WidthMillimeters, x.HeightMillimeters, x.Quantity, x.IsIncluded,
-            user, at, null, null);
+            user, at, null, null, null);
     private static PreQuoteDraftItem Create(
         Guid draftId, int sequence, PreQuoteDraftOrigin origin, Guid? sourceId,
         int? sourceSequence, string? reference, string description,
         StructuredElementType type, string? raw, int? width, int? height,
         int? quantity, bool included, Guid user, DateTimeOffset at,
         PreQuoteDraftItemGlassSnapshotSource? glass,
-        PreQuoteDraftItemValuationSnapshotSource? valuation)
+        PreQuoteDraftItemValuationSnapshotSource? valuation,
+        PreQuoteDraftItemTechnicalSnapshotSource? technical)
     {
         PreQuoteDraft.Dimensions(width, height); PreQuoteDraft.Quantity(quantity);
         if (!Enum.IsDefined(type)) throw new ArgumentException("Tipo inválido.");
@@ -703,6 +933,13 @@ public sealed class PreQuoteDraftItem
                 glass.ReviewReasons,
                 glass.SourcePages,
                 glass.Evidence);
+        var technicalSnapshot = technical is null
+            ? null
+            : PreQuoteDraftItemTechnicalSnapshot.Create(itemId, technical);
+        var preliminaryPricing = valuation is null
+            ? null
+            : PreQuotePreliminaryPricing.TryCalculate(
+                type, description, valuation, technicalSnapshot);
         var valuationSnapshot = valuation is null
             ? null
             : PreQuoteDraftItemValuationSnapshot.Create(
@@ -723,11 +960,17 @@ public sealed class PreQuoteDraftItem
                 valuation.Currency,
                 valuation.ValuedAtUtc,
                 valuation.InvalidatedAtUtc,
-                valuation.InvalidationReason);
+                valuation.InvalidationReason,
+                preliminaryPricing);
+        var isNotPriceable = technicalSnapshot?.ReviewReasons
+            .Contains("SYSTEM_NOT_CURRENTLY_PRICEABLE",
+                StringComparer.Ordinal) == true;
         var valuationStatus = valuationSnapshot?.Status
-            ?? (glassSnapshot?.RequiresReview is true
-                ? PreQuoteDraftValuationStatus.RequiresReview
-                : PreQuoteDraftValuationStatus.Pending);
+            ?? (isNotPriceable
+                ? PreQuoteDraftValuationStatus.NotPriceable
+                : glassSnapshot?.RequiresReview is true
+                    ? PreQuoteDraftValuationStatus.RequiresReview
+                    : PreQuoteDraftValuationStatus.Pending);
         return new()
         {
             Id = itemId,
@@ -747,6 +990,7 @@ public sealed class PreQuoteDraftItem
             ValuationStatus = valuationStatus,
             GlassSnapshot = glassSnapshot,
             ValuationSnapshot = valuationSnapshot,
+            TechnicalSnapshot = technicalSnapshot,
             CreatedByUserId = user,
             UpdatedByUserId = user,
             CreatedAtUtc = at,

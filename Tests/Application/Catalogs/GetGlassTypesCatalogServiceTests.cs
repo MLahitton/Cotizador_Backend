@@ -22,12 +22,12 @@ public sealed class GetGlassTypesCatalogServiceTests
                 Arg.Any<CancellationToken>())
             .Returns(
             [
-                Item("LAM_5_5_GRAY", 125000m, 145000m),
-                Item("INACTIVE", 1m, 2m, isActive: false),
-                Item("LAM_4_4_GRAY", 95000m, 95000m),
-                Item("CLOSED", 1m, 2m, validToUtc: At.AddDays(1)),
-                Item("LAM_5_5", 120000m, 140000m),
-                Item("LAM_4_4", 90000m, 110000m)
+                Item("LAM_5_5_GRAY", 125000m, 135000m, 145000m),
+                Item("INACTIVE", 1m, 1.5m, 2m, isActive: false),
+                Item("LAM_4_4_GRAY", 95000m, 95000m, 95000m),
+                Item("CLOSED", 1m, 1.5m, 2m, validToUtc: At.AddDays(1)),
+                Item("LAM_5_5", 120000m, 130000m, 140000m),
+                Item("LAM_4_4", 90000m, 100000m, 110000m)
             ]);
 
         var result = await context.Service.ExecuteAsync(
@@ -38,10 +38,10 @@ public sealed class GetGlassTypesCatalogServiceTests
         Assert.Equal(
             ["LAM_4_4", "LAM_4_4_GRAY", "LAM_5_5", "LAM_5_5_GRAY"],
             result.Items.Select(value => value.Code));
-        AssertRange(result, "LAM_4_4", 90000m, 110000m);
-        AssertRange(result, "LAM_4_4_GRAY", 95000m, 95000m);
-        AssertRange(result, "LAM_5_5", 120000m, 140000m);
-        AssertRange(result, "LAM_5_5_GRAY", 125000m, 145000m);
+        AssertRange(result, "LAM_4_4", 90000m, 100000m, 110000m);
+        AssertRange(result, "LAM_4_4_GRAY", 95000m, 95000m, 95000m);
+        AssertRange(result, "LAM_5_5", 120000m, 130000m, 140000m);
+        AssertRange(result, "LAM_5_5_GRAY", 125000m, 135000m, 145000m);
         Assert.All(result.Items, value =>
         {
             Assert.Equal("COP", value.CurrentPriceRange!.Currency);
@@ -92,10 +92,12 @@ public sealed class GetGlassTypesCatalogServiceTests
         GetGlassTypesCatalogResult result,
         string code,
         decimal minimum,
+        decimal expected,
         decimal maximum)
     {
         var item = result.Items.Single(value => value.Code == code);
         Assert.Equal(minimum, item.CurrentPriceRange!.MinimumPricePerSquareMeter);
+        Assert.Equal(expected, item.CurrentPriceRange.ExpectedAmountPerM2);
         Assert.Equal(maximum, item.CurrentPriceRange.MaximumPricePerSquareMeter);
     }
 
@@ -126,6 +128,7 @@ public sealed class GetGlassTypesCatalogServiceTests
     internal static GlassTypeCatalogReadModel Item(
         string code,
         decimal minimum,
+        decimal expected,
         decimal maximum,
         bool isActive = true,
         DateTimeOffset? validToUtc = null) =>
@@ -139,6 +142,7 @@ public sealed class GetGlassTypesCatalogServiceTests
                 Guid.NewGuid(),
                 1,
                 minimum,
+                expected,
                 maximum,
                 "COP",
                 GlassPriceRangeStatus.Preliminary,

@@ -21,6 +21,28 @@ public enum GlassValuationReason
     PriceRangeNotAvailable,
     CurrencyMismatch
 }
+public enum TechnicalClassificationSource
+{
+    Explicit = 1,
+    Alias,
+    Inferred,
+    Unresolved
+}
+public sealed record StructuredItemTechnicalClassificationInput(
+    string? SystemCode,
+    string? SystemOriginalText,
+    TechnicalClassificationSource? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    TechnicalClassificationSource? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    TechnicalClassificationSource? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
 public sealed record StructuredItemGlassValuationInput(
     GlassValuationStatus Status,
     GlassValuationReason? Reason,
@@ -32,12 +54,14 @@ public sealed record StructuredItemGlassValuationInput(
     decimal? UnitAreaSquareMeters,
     decimal? TotalAreaSquareMeters,
     decimal? MinimumPricePerSquareMeter,
+    decimal? ExpectedPricePerSquareMeter,
     decimal? MaximumPricePerSquareMeter,
     decimal? MinimumAmount,
+    decimal? ExpectedAmount,
     decimal? MaximumAmount);
 public enum StructuredElementType
 {
-    Window = 1, Door, Facade, Partition, Railing, Skylight, Other
+    Window = 1, Door, Facade, Partition, Railing, Skylight, ShowerDivision, Other
 }
 public enum RequirementCategory
 {
@@ -75,7 +99,8 @@ public sealed record StructuredItemInput(
     int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
     bool RequiresReview,
     StructuredItemGlassInput? Glass = null,
-    StructuredItemGlassValuationInput? Valuation = null);
+    StructuredItemGlassValuationInput? Valuation = null,
+    StructuredItemTechnicalClassificationInput? TechnicalClassification = null);
 public sealed record StructuredItemGlassEvidenceInput(
     int Sequence, int PageNumber, EvidenceSourceType SourceType, string Text);
 public sealed record StructuredItemGlassInput(
@@ -245,6 +270,7 @@ public sealed class StructuredExtractionItem
     public StructuredDocumentExtraction StructuredDocumentExtraction { get; private set; } = null!;
     public StructuredExtractionItemGlassDetection? GlassDetection { get; private set; }
     public StructuredExtractionItemGlassValuation? GlassValuation { get; private set; }
+    public StructuredExtractionItemTechnicalClassification? TechnicalClassification { get; private set; }
     internal static StructuredExtractionItem Create(Guid parentId, StructuredItemInput x, DateTimeOffset at)
     {
         if (x.Sequence < 1 || string.IsNullOrWhiteSpace(x.Description)
@@ -266,9 +292,127 @@ public sealed class StructuredExtractionItem
             ? null
             : StructuredExtractionItemGlassValuation.Create(
                 item.Id, x.Valuation, at);
+        item.TechnicalClassification = x.TechnicalClassification is null
+            ? null
+            : StructuredExtractionItemTechnicalClassification.Create(
+                item.Id, x.TechnicalClassification, at);
         return item;
     }
     private static string? Trim(string? x) => string.IsNullOrWhiteSpace(x) ? null : x.Trim();
+}
+
+public sealed class StructuredExtractionItemTechnicalClassification
+{
+    private StructuredExtractionItemTechnicalClassification() { }
+    public Guid Id { get; private set; }
+    public Guid StructuredExtractionItemId { get; private set; }
+    public string? SystemCode { get; private set; }
+    public string? SystemOriginalText { get; private set; }
+    public TechnicalClassificationSource? SystemSource { get; private set; }
+    public decimal? SystemConfidence { get; private set; }
+    public string? FrameCode { get; private set; }
+    public string? FrameOriginalText { get; private set; }
+    public TechnicalClassificationSource? FrameSource { get; private set; }
+    public decimal? FrameConfidence { get; private set; }
+    public string? FinishCode { get; private set; }
+    public string? FinishOriginalText { get; private set; }
+    public TechnicalClassificationSource? FinishSource { get; private set; }
+    public decimal? FinishConfidence { get; private set; }
+    public bool RequiresReview { get; private set; }
+    public string[] ReviewReasons { get; private set; } = [];
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+    public StructuredExtractionItem StructuredExtractionItem { get; private set; } = null!;
+
+    internal static StructuredExtractionItemTechnicalClassification Create(
+        Guid itemId,
+        StructuredItemTechnicalClassificationInput input,
+        DateTimeOffset createdAtUtc)
+    {
+        if (itemId == Guid.Empty || createdAtUtc.Offset != TimeSpan.Zero
+            || InvalidSource(input.SystemSource)
+            || InvalidSource(input.FrameSource)
+            || InvalidSource(input.FinishSource)
+            || InvalidConfidence(input.SystemConfidence)
+            || InvalidConfidence(input.FrameConfidence)
+            || InvalidConfidence(input.FinishConfidence)
+            || input.ReviewReasons.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new ArgumentException("Clasificacion tecnica invalida.");
+        }
+
+        var reasons = input.ReviewReasons
+            .Select(value => NormalizeCode(value, 100))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        if (input.RequiresReview != (reasons.Length > 0))
+        {
+            throw new ArgumentException("Clasificacion tecnica incoherente.");
+        }
+
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            StructuredExtractionItemId = itemId,
+            SystemCode = NormalizeOptionalCode(input.SystemCode),
+            SystemOriginalText = NormalizeOptionalText(input.SystemOriginalText),
+            SystemSource = input.SystemSource,
+            SystemConfidence = input.SystemConfidence,
+            FrameCode = NormalizeOptionalCode(input.FrameCode),
+            FrameOriginalText = NormalizeOptionalText(input.FrameOriginalText),
+            FrameSource = input.FrameSource,
+            FrameConfidence = input.FrameConfidence,
+            FinishCode = NormalizeOptionalCode(input.FinishCode),
+            FinishOriginalText = NormalizeOptionalText(input.FinishOriginalText),
+            FinishSource = input.FinishSource,
+            FinishConfidence = input.FinishConfidence,
+            RequiresReview = input.RequiresReview,
+            ReviewReasons = reasons,
+            CreatedAtUtc = createdAtUtc
+        };
+    }
+
+    private static bool InvalidSource(TechnicalClassificationSource? value) =>
+        value is not null && !Enum.IsDefined(value.Value);
+
+    private static bool InvalidConfidence(decimal? value) =>
+        value is < 0 or > 1;
+
+    private static string? NormalizeOptionalCode(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : NormalizeCode(value, 30);
+
+    private static string NormalizeCode(string value, int maximum)
+    {
+        var code = value.Trim().ToUpperInvariant();
+        if (code.Length == 0 || code.Length > maximum
+            || !code.All(character =>
+                character is >= 'A' and <= 'Z'
+                || character is >= '0' and <= '9'
+                || character is '_' or '-'))
+        {
+            throw new ArgumentException("Codigo tecnico invalido.");
+        }
+
+        return code;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var text = value.Trim();
+        if (text.Length > 500)
+        {
+            throw new ArgumentException("Texto tecnico invalido.");
+        }
+
+        return text;
+    }
 }
 
 public sealed class StructuredExtractionItemGlassValuation
@@ -286,8 +430,10 @@ public sealed class StructuredExtractionItemGlassValuation
     public decimal? UnitAreaSquareMeters { get; private set; }
     public decimal? TotalAreaSquareMeters { get; private set; }
     public decimal? MinimumPricePerSquareMeter { get; private set; }
+    public decimal? ExpectedPricePerSquareMeter { get; private set; }
     public decimal? MaximumPricePerSquareMeter { get; private set; }
     public decimal? MinimumAmount { get; private set; }
+    public decimal? ExpectedAmount { get; private set; }
     public decimal? MaximumAmount { get; private set; }
     public DateTimeOffset CalculatedAtUtc { get; private set; }
     public StructuredExtractionItem StructuredExtractionItem { get; private set; } = null!;
@@ -298,13 +444,14 @@ public sealed class StructuredExtractionItemGlassValuation
         int widthMillimeters, int heightMillimeters, int quantity,
         Guid glassTypeId, Guid priceRangeId, int priceRangeVersion,
         GlassPriceRangeStatus priceRangeStatus, string currency,
-        decimal minimumPrice, decimal maximumPrice)
+        decimal minimumPrice, decimal expectedPrice, decimal maximumPrice)
     {
         if (widthMillimeters <= 0 || heightMillimeters <= 0
             || quantity <= 0 || glassTypeId == Guid.Empty
             || priceRangeId == Guid.Empty || priceRangeVersion <= 0
-            || minimumPrice <= 0 || maximumPrice <= 0
-            || maximumPrice < minimumPrice
+            || minimumPrice <= 0 || expectedPrice <= 0
+            || maximumPrice <= 0 || expectedPrice < minimumPrice
+            || expectedPrice > maximumPrice
             || string.IsNullOrWhiteSpace(currency)
             || currency.Trim().Length != 3)
             throw new ArgumentException("Datos de valoracion invalidos.");
@@ -314,8 +461,10 @@ public sealed class StructuredExtractionItemGlassValuation
         return new(GlassValuationStatus.Valued, null, glassTypeId,
             priceRangeId, priceRangeVersion, priceRangeStatus,
             currency.Trim().ToUpperInvariant(), unitArea, totalArea,
-            minimumPrice, maximumPrice,
+            minimumPrice, expectedPrice, maximumPrice,
             Math.Round(totalArea * minimumPrice, 2,
+                MidpointRounding.AwayFromZero),
+            Math.Round(totalArea * expectedPrice, 2,
                 MidpointRounding.AwayFromZero),
             Math.Round(totalArea * maximumPrice, 2,
                 MidpointRounding.AwayFromZero));
@@ -340,15 +489,22 @@ public sealed class StructuredExtractionItemGlassValuation
                 || input.UnitAreaSquareMeters is <= 0
                 || input.TotalAreaSquareMeters is <= 0
                 || input.MinimumPricePerSquareMeter is <= 0
+                || input.ExpectedPricePerSquareMeter is <= 0
                 || input.MaximumPricePerSquareMeter < input.MinimumPricePerSquareMeter
+                || input.ExpectedPricePerSquareMeter < input.MinimumPricePerSquareMeter
+                || input.ExpectedPricePerSquareMeter > input.MaximumPricePerSquareMeter
                 || input.MinimumAmount is < 0
-                || input.MaximumAmount < input.MinimumAmount)
+                || input.ExpectedAmount is < 0
+                || input.MaximumAmount < input.MinimumAmount
+                || input.ExpectedAmount < input.MinimumAmount
+                || input.ExpectedAmount > input.MaximumAmount)
             || !valued && new object?[] { input.GlassPriceRangeVersionId,
                 input.PriceRangeVersion, input.PriceRangeStatus, input.Currency,
                 input.UnitAreaSquareMeters, input.TotalAreaSquareMeters,
                 input.MinimumPricePerSquareMeter,
+                input.ExpectedPricePerSquareMeter,
                 input.MaximumPricePerSquareMeter, input.MinimumAmount,
-                input.MaximumAmount }.Any(value => value is not null))
+                input.ExpectedAmount, input.MaximumAmount }.Any(value => value is not null))
             throw new ArgumentException("Snapshot de valoracion incoherente.");
         return new()
         {
@@ -362,8 +518,10 @@ public sealed class StructuredExtractionItemGlassValuation
             UnitAreaSquareMeters = input.UnitAreaSquareMeters,
             TotalAreaSquareMeters = input.TotalAreaSquareMeters,
             MinimumPricePerSquareMeter = input.MinimumPricePerSquareMeter,
+            ExpectedPricePerSquareMeter = input.ExpectedPricePerSquareMeter,
             MaximumPricePerSquareMeter = input.MaximumPricePerSquareMeter,
             MinimumAmount = input.MinimumAmount,
+            ExpectedAmount = input.ExpectedAmount,
             MaximumAmount = input.MaximumAmount,
             CalculatedAtUtc = calculatedAtUtc
         };

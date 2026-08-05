@@ -37,6 +37,11 @@ public sealed class GlassCatalogModelTests
             range.FindProperty(
                 nameof(GlassPriceRangeVersion.MaximumPricePerSquareMeter))!
                 .GetColumnType());
+        Assert.Equal(
+            "numeric(18,2)",
+            range.FindProperty(
+                nameof(GlassPriceRangeVersion.ExpectedAmountPerM2))!
+                .GetColumnType());
         Assert.Contains(
             glass.GetIndexes(),
             value => value.IsUnique
@@ -55,10 +60,14 @@ public sealed class GlassCatalogModelTests
         Assert.Equal(
             DeleteBehavior.Restrict,
             Assert.Single(range.GetForeignKeys()).DeleteBehavior);
-        Assert.Equal(4, glass.GetSeedData().Count());
-        Assert.Equal(4, range.GetSeedData().Count());
+        Assert.Equal(9, glass.GetSeedData().Count());
+        Assert.Equal(8, range.GetSeedData().Count());
+        Assert.Equal(6, range.GetSeedData().Count(value =>
+            value["ValidToUtc"] is null));
+        Assert.Equal(2, range.GetSeedData().Count(value =>
+            value["Status"] is GlassPriceRangeStatus.Retired));
         Assert.All(
-            range.GetSeedData(),
+            range.GetSeedData().Where(value => value["ValidToUtc"] is null),
             value => Assert.Equal(
                 GlassPriceRangeStatus.Preliminary,
                 value[nameof(GlassPriceRangeVersion.Status)]));

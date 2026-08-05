@@ -110,6 +110,7 @@ public sealed class GlassPriceRangeVersion
     public Guid GlassTypeId { get; private set; }
     public int Version { get; private set; }
     public decimal MinimumPricePerSquareMeter { get; private set; }
+    public decimal ExpectedAmountPerM2 { get; private set; }
     public decimal MaximumPricePerSquareMeter { get; private set; }
     public string Currency { get; private set; } = string.Empty;
     public GlassPriceRangeStatus Status { get; private set; }
@@ -122,6 +123,7 @@ public sealed class GlassPriceRangeVersion
         Guid glassTypeId,
         int version,
         decimal minimumPricePerSquareMeter,
+        decimal expectedAmountPerM2,
         decimal maximumPricePerSquareMeter,
         string currency,
         GlassPriceRangeStatus status,
@@ -140,6 +142,12 @@ public sealed class GlassPriceRangeVersion
         if (minimumPricePerSquareMeter <= 0)
         {
             throw new ArgumentException("Precio minimo invalido.", nameof(minimumPricePerSquareMeter));
+        }
+        if (expectedAmountPerM2 <= 0
+            || expectedAmountPerM2 < minimumPricePerSquareMeter
+            || expectedAmountPerM2 > maximumPricePerSquareMeter)
+        {
+            throw new ArgumentException("Precio esperado invalido.", nameof(expectedAmountPerM2));
         }
         if (maximumPricePerSquareMeter <= 0
             || maximumPricePerSquareMeter < minimumPricePerSquareMeter)
@@ -169,6 +177,7 @@ public sealed class GlassPriceRangeVersion
             GlassTypeId = glassTypeId,
             Version = version,
             MinimumPricePerSquareMeter = minimumPricePerSquareMeter,
+            ExpectedAmountPerM2 = expectedAmountPerM2,
             MaximumPricePerSquareMeter = maximumPricePerSquareMeter,
             Currency = normalizedCurrency,
             Status = status,

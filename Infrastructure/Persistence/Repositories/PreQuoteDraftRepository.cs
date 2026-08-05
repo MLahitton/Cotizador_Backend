@@ -97,7 +97,7 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.GlassValuation.Id,
                             x.GlassValuation.Status == GlassValuationStatus.Valued
                                 ? PreQuoteDraftValuationStatus.Valued
-                                : PreQuoteDraftValuationStatus.Pending,
+                                : PreQuoteDraftValuationStatus.RequiresReview,
                             x.GlassValuation.Reason,
                             x.GlassValuation.GlassTypeId,
                             x.GlassValuation.GlassPriceRangeVersionId,
@@ -112,7 +112,29 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.GlassValuation.Currency,
                             x.GlassValuation.CalculatedAtUtc,
                             null,
-                            null)))
+                            null,
+                            x.GlassValuation.PriceRangeVersion,
+                            x.GlassValuation.ExpectedPricePerSquareMeter,
+                            x.GlassValuation.ExpectedAmount,
+                            x.GlassValuation.MaximumPricePerSquareMeter),
+                    x.TechnicalClassification == null
+                        ? null
+                        : new PreQuoteDraftItemTechnicalSnapshotSource(
+                            x.TechnicalClassification.Id,
+                            x.TechnicalClassification.SystemCode,
+                            x.TechnicalClassification.SystemOriginalText,
+                            x.TechnicalClassification.SystemSource,
+                            x.TechnicalClassification.SystemConfidence,
+                            x.TechnicalClassification.FrameCode,
+                            x.TechnicalClassification.FrameOriginalText,
+                            x.TechnicalClassification.FrameSource,
+                            x.TechnicalClassification.FrameConfidence,
+                            x.TechnicalClassification.FinishCode,
+                            x.TechnicalClassification.FinishOriginalText,
+                            x.TechnicalClassification.FinishSource,
+                            x.TechnicalClassification.FinishConfidence,
+                            x.TechnicalClassification.RequiresReview,
+                            x.TechnicalClassification.ReviewReasons)))
                 .ToArrayAsync(cancellationToken);
             var requirements = await dbContext.Set<StructuredExtractionRequirement>()
                 .AsNoTracking().Where(x => x.StructuredDocumentExtractionId == extractionId)
@@ -271,6 +293,8 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
             .ThenInclude(x => x!.Evidence)
             .Include(x => x.Items)
             .ThenInclude(x => x.ValuationSnapshot)
+            .Include(x => x.Items)
+            .ThenInclude(x => x.TechnicalSnapshot)
             .Include(x => x.Requirements)
             .Include(x => x.DocumentReferences)
             .Include(x => x.Issues)

@@ -48,7 +48,9 @@ public sealed class GlassTypesCatalogController(
                 item.Name,
                 item.Description,
                 item.IsActive,
-                Map(item.CurrentPriceRange!)))
+                item.CurrentPriceRange is null
+                    ? null
+                    : Map(item.CurrentPriceRange)))
                 .ToArray()));
     }
 
@@ -59,6 +61,7 @@ public sealed class GlassTypesCatalogController(
             value.GlassPriceRangeVersionId,
             value.Version,
             value.MinimumPricePerSquareMeter,
+            value.ExpectedAmountPerM2,
             value.MaximumPricePerSquareMeter,
             value.Currency,
             value.Status switch

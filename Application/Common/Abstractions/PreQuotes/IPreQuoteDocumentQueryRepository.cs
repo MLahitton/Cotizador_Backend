@@ -77,6 +77,22 @@ public sealed record StructuredEvidenceReadModel(
     EvidenceSourceType SourceType,
     string Text);
 
+public sealed record StructuredItemTechnicalClassificationReadModel(
+    string? SystemCode,
+    string? SystemOriginalText,
+    TechnicalClassificationSource? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    TechnicalClassificationSource? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    TechnicalClassificationSource? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
+
 public sealed record StructuredProjectReadModel(
     string? Name,
     string? ClientName,
@@ -104,7 +120,8 @@ public sealed record StructuredItemReadModel(
     IReadOnlyList<int> SourcePages,
     IReadOnlyList<StructuredEvidenceReadModel> Evidence,
     StructuredItemGlassReadModel? Glass,
-    StructuredItemGlassValuationReadModel? Valuation = null);
+    StructuredItemGlassValuationReadModel? Valuation = null,
+    StructuredItemTechnicalClassificationReadModel? TechnicalClassification = null);
 
 public sealed record StructuredItemGlassValuationReadModel(
     GlassValuationStatus Status,
@@ -117,8 +134,10 @@ public sealed record StructuredItemGlassValuationReadModel(
     decimal? UnitAreaSquareMeters,
     decimal? TotalAreaSquareMeters,
     decimal? MinimumPricePerSquareMeter,
+    decimal? ExpectedPricePerSquareMeter,
     decimal? MaximumPricePerSquareMeter,
     decimal? MinimumAmount,
+    decimal? ExpectedAmount,
     decimal? MaximumAmount,
     DateTimeOffset CalculatedAtUtc);
 

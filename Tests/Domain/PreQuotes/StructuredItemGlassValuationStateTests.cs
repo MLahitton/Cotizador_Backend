@@ -23,7 +23,8 @@ public sealed class StructuredItemGlassValuationStateTests
             GlassValuationStatus.NotValued, reason,
             reason == GlassValuationReason.PriceRangeNotAvailable
                 ? Guid.NewGuid() : null,
-            null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null,
+            null, null);
 
         var valuation = CreateExtraction(input).Items.Single().GlassValuation;
 
@@ -41,7 +42,7 @@ public sealed class StructuredItemGlassValuationStateTests
         var input = StructuredExtractionItemGlassValuation.Calculate(
             1500, 1000, 3, Guid.NewGuid(), Guid.NewGuid(), 1,
             global::Domain.Catalogs.GlassPriceRangeStatus.Preliminary,
-            "COP", 90000m, 110000m);
+            "COP", 90000m, 100000m, 110000m);
 
         var valuation = CreateExtraction(input).Items.Single().GlassValuation;
 
@@ -49,6 +50,7 @@ public sealed class StructuredItemGlassValuationStateTests
         Assert.Equal(GlassValuationStatus.Valued, valuation.Status);
         Assert.Null(valuation.Reason);
         Assert.Equal(405000m, valuation.MinimumAmount);
+        Assert.Equal(450000m, valuation.ExpectedAmount);
         Assert.Equal(495000m, valuation.MaximumAmount);
         Assert.Equal(TimeSpan.Zero, valuation.CalculatedAtUtc.Offset);
     }

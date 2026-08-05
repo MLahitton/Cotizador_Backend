@@ -17,14 +17,24 @@ public interface IDocumentProcessingDiagnostics
         Guid correlationId,
         int? httpStatusCode,
         string stage,
-        string category);
+        string category,
+        int? itemSequence = null,
+        string? rejectedNormalizedCode = null,
+        IReadOnlyList<string>? acceptedNormalizedCodes = null,
+        string? exceptionType = null,
+        string? exceptionMessage = null,
+        string? jsonPath = null,
+        string? fieldName = null,
+        string? rejectedValue = null);
 
     void CatalogResolutionFailed(
         Guid documentId,
         Guid processingAttemptId,
         Guid correlationId,
         string category,
-        string? normalizedCode);
+        string? normalizedCode,
+        int? itemSequence = null,
+        IReadOnlyList<string>? acceptedNormalizedCodes = null);
 }
 
 public sealed record DocumentProcessingClientRequest(
@@ -79,6 +89,22 @@ public sealed record SourceEvidenceData(
     EvidenceSourceType SourceType,
     string Text);
 
+public sealed record StructuredItemTechnicalClassificationData(
+    string? SystemCode,
+    string? SystemOriginalText,
+    TechnicalClassificationSource? SystemSource,
+    decimal? SystemConfidence,
+    string? FrameCode,
+    string? FrameOriginalText,
+    TechnicalClassificationSource? FrameSource,
+    decimal? FrameConfidence,
+    string? FinishCode,
+    string? FinishOriginalText,
+    TechnicalClassificationSource? FinishSource,
+    decimal? FinishConfidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
+
 public sealed record StructuredRequirementData(
     RequirementCategory Category,
     string Value,
@@ -97,7 +123,8 @@ public sealed record StructuredItemData(
     IReadOnlyList<StructuredIssueCode> ReviewReasons,
     IReadOnlyList<int> SourcePages,
     IReadOnlyList<SourceEvidenceData> Evidence,
-    StructuredItemGlassData? Glass = null);
+    StructuredItemGlassData? Glass = null,
+    StructuredItemTechnicalClassificationData? TechnicalClassification = null);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,
