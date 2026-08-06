@@ -25,7 +25,10 @@ public interface IDocumentProcessingDiagnostics
         string? exceptionMessage = null,
         string? jsonPath = null,
         string? fieldName = null,
-        string? rejectedValue = null);
+        string? rejectedValue = null,
+        long? lineNumber = null,
+        long? bytePositionInLine = null,
+        IReadOnlyList<string>? acceptedValues = null);
 
     void CatalogResolutionFailed(
         Guid documentId,

@@ -810,12 +810,76 @@ public sealed class PreQuoteDraft
         if (included.Any(x => !x.IsCompleteForApproval)) throw new InvalidOperationException("INCOMPLETE_ITEMS");
         if (_issues.Any(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending)) throw new InvalidOperationException("PENDING_ISSUES");
         if (_conflicts.Any(x => x.ResolutionStatus == PreQuoteDraftResolutionStatus.Pending)) throw new InvalidOperationException("PENDING_CONFLICTS");
+        EnsureEconomicallyApprovable(included);
         Status = PreQuoteDraftStatus.Approved;
         ApprovedByUserId = userId;
         ApprovedAtUtc = approvedAtUtc;
         UpdatedByUserId = userId;
         UpdatedAtUtc = approvedAtUtc;
         Version++;
+    }
+
+    private static readonly string[] EconomicApprovalBlockingCodes =
+    [
+        "ALUMINUM_BASE_RATE_NOT_CONFIGURED",
+        "PROJECT_LOCATION_NOT_CONFIRMED",
+        "TRANSPORT_NOT_CONFIRMED"
+    ];
+
+    private void EnsureEconomicallyApprovable(IReadOnlyCollection<PreQuoteDraftItem> includedItems)
+    {
+        if (includedItems.Any(IsItemEconomicallyBlockedForApproval))
+        {
+            throw new InvalidOperationException("ECONOMIC_APPROVAL_BLOCKED");
+        }
+
+        var summary = EconomicSummary;
+        if (!summary.IsEconomicallyComplete
+            || summary.HasLimitedPricingScope
+            || summary.HasNotPriceableItems
+            || summary.PendingValuationItemCount > 0
+            || summary.StaleValuationItemCount > 0
+            || summary.NotPriceableItemCount > 0
+            || summary.ItemsRequiringReviewCount > 0
+            || string.IsNullOrWhiteSpace(summary.Currency)
+            || summary.FinalMinimum is null
+            || summary.FinalExpected is null
+            || summary.FinalMaximum is null
+            || HasMissingEconomicData(summary.MissingData)
+            || HasBlockingEconomicCode(summary.Assumptions))
+        {
+            throw new InvalidOperationException("ECONOMIC_APPROVAL_BLOCKED");
+        }
+    }
+
+    private static bool IsItemEconomicallyBlockedForApproval(PreQuoteDraftItem item)
+    {
+        var valuation = item.ValuationSnapshot;
+        return valuation is null
+            || item.ValuationStatus != PreQuoteDraftValuationStatus.Valued
+            || valuation.Status != PreQuoteDraftValuationStatus.Valued
+            || valuation.InvalidatedAtUtc is not null
+            || valuation.RequiresReview == true
+            || !item.IsCompleteForApproval
+            || item.GlassSnapshot?.RequiresReview == true
+            || item.TechnicalSnapshot?.RequiresReview == true
+            || string.IsNullOrWhiteSpace(valuation.Currency)
+            || valuation.ItemMinimumAmount is null
+            || valuation.ItemExpectedAmount is null
+            || valuation.ItemMaximumAmount is null
+            || HasMissingEconomicData(valuation.MissingData)
+            || HasBlockingEconomicCode(valuation.Assumptions);
+    }
+
+    private static bool HasMissingEconomicData(IReadOnlyList<string>? values)
+    {
+        return values is not null && values.Count > 0;
+    }
+
+    private static bool HasBlockingEconomicCode(IReadOnlyList<string>? values)
+    {
+        return values is not null
+            && values.Any(value => EconomicApprovalBlockingCodes.Contains(value, StringComparer.Ordinal));
     }
 
     private void ApplyItems(IReadOnlyList<PreQuoteDraftItemEdit> edits, Guid userId, DateTimeOffset at)

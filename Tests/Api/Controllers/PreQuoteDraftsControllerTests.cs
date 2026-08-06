@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Reflection;
+using System.Text.Json;
 using Api.Controllers;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
@@ -357,7 +358,7 @@ public sealed class PreQuoteDraftsControllerTests
         int expectedVersion) =>
         new(
             expectedVersion,
-            new("Project", "Client", "Location"),
+            new("Project", "Client", "BOGOTA"),
             draft.Items.OrderBy(x => x.Sequence).Select(x =>
                 new PreQuoteDraftItemRequest(
                     x.Id, x.Sequence, x.Reference, x.Description,
@@ -413,25 +414,85 @@ public sealed class PreQuoteDraftsControllerTests
         return draft;
     }
 
-    private static PreQuoteDraft CreateDraft() => PreQuoteDraft.Create(
-        PreQuoteId, DocumentId, ExtractionId, "Project", "Client",
-        "Location", UserId, At,
-        [new(Guid.NewGuid(), 1, "I-1", "Item",
-            StructuredElementType.Window, null, 100, 100, 1)],
-        [new(Guid.NewGuid(), 1, RequirementCategory.GeneralNote, "Note")],
-        [new(Guid.NewGuid(), 1, "R-1", "Reference", null, 1)],
-        [new(Guid.NewGuid(), 1, StructuredIssueCode.OcrReviewRequired,
-            "Issue", 1, [1])],
-        [new(Guid.NewGuid(), 1,
-            StructuredConflictCode.DuplicateItemReference,
-            "Conflict", [1], [1])]);
+    private static PreQuoteDraft CreateDraft()
+    {
+        var draft = PreQuoteDraft.Create(
+            PreQuoteId, DocumentId, ExtractionId, "Project", "Client",
+            "BOGOTA", UserId, At,
+            [new(Guid.NewGuid(), 1, "I-1", "Item",
+                StructuredElementType.Window, null, 100, 100, 1,
+                null,
+                new(
+                    Guid.NewGuid(),
+                    PreQuoteDraftValuationStatus.Valued,
+                    null,
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    100,
+                    100,
+                    1,
+                    1.000000m,
+                    1.000000m,
+                    90000m,
+                    90000m,
+                    90000m,
+                    "COP",
+                    At,
+                    null,
+                    null,
+                    1,
+                    90000m,
+                    90000m,
+                    90000m))],
+            [new(Guid.NewGuid(), 1, RequirementCategory.GeneralNote, "Note")],
+            [new(Guid.NewGuid(), 1, "R-1", "Reference", null, 1)],
+            [new(Guid.NewGuid(), 1, StructuredIssueCode.OcrReviewRequired,
+                "Issue", 1, [1])],
+            [new(Guid.NewGuid(), 1,
+                StructuredConflictCode.DuplicateItemReference,
+                "Conflict", [1], [1])]);
+        MakeEconomicallyComplete(draft.Items.Single().ValuationSnapshot!);
+        return draft;
+    }
+
+    private static void MakeEconomicallyComplete(
+        PreQuoteDraftItemValuationSnapshot valuation)
+    {
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemMinimumAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemExpectedAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemMaximumAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.RequiresReview),
+            false);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.Assumptions),
+            Array.Empty<string>());
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.MissingData),
+            Array.Empty<string>());
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ConfidenceScore),
+            95);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ConfidenceLevel),
+            PreQuoteDraftPricingConfidenceLevel.High);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.CalculatedAtUtc),
+            At);
+    }
+
+    private static void Set<T>(object target, string propertyName, T value)
+    {
+        var property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        property.SetValue(target, value);
+    }
 
     private static PreQuoteDraftSourceContext CreateSource()
     {
         var draft = CreateDraft();
         return new(
             PreQuoteId, DocumentId, ExtractionId, true, true,
-            "Project", "Client", "Location",
+            "Project", "Client", "BOGOTA",
             draft.Items.Select(x => new PreQuoteDraftItemSource(
                 x.SourceStructuredItemId!.Value, x.Sequence, x.Reference,
                 x.Description, x.ElementType, x.RawMeasurements,

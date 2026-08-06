@@ -29,7 +29,7 @@ public sealed class DocumentProcessingDiagnosticsTests
         var entry = Assert.Single(logger.Entries);
         Assert.Equal(LogLevel.Warning, entry.Level);
         Assert.Equal(
-            "Document processing response rejected. DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} HttpStatusCode={HttpStatusCode} Stage={Stage} Category={Category} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage} JsonPath={JsonPath} FieldName={FieldName} ItemSequence={ItemSequence} RejectedValue={RejectedValue} RejectedNormalizedCode={RejectedNormalizedCode} AcceptedNormalizedCodes={AcceptedNormalizedCodes}",
+            "Document processing response rejected. DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} HttpStatusCode={HttpStatusCode} Stage={Stage} Category={Category} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage} JsonPath={JsonPath} FieldName={FieldName} ItemSequence={ItemSequence} RejectedValue={RejectedValue} AcceptedValues={AcceptedValues} LineNumber={LineNumber} BytePositionInLine={BytePositionInLine} RejectedNormalizedCode={RejectedNormalizedCode} AcceptedNormalizedCodes={AcceptedNormalizedCodes}",
             entry.Properties["{OriginalFormat}"]);
         Assert.Equal(documentId, entry.Properties["DocumentId"]);
         Assert.Equal(attemptId, entry.Properties["ProcessingAttemptId"]);

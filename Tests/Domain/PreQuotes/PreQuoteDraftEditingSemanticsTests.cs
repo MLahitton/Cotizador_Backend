@@ -1,3 +1,4 @@
+using System.Reflection;
 using Domain.PreQuotes;
 using Xunit;
 
@@ -86,7 +87,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, widthMillimeters: 120)],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -114,7 +115,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, heightMillimeters: 120)],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -142,7 +143,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, quantity: 5)],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -169,7 +170,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, widthMillimeters: 120, heightMillimeters: 120)],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -194,7 +195,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, description: "Description updated")],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -219,7 +220,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, reference: "R-2")],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -244,7 +245,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(
                 item,
                 rawMeasurements: "90x120 mm")],
@@ -272,7 +273,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             [CreateItemEdit(item, isIncluded: false)],
             ExistingRequirements(draft),
             ExistingReferences(draft),
@@ -336,7 +337,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             1,
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             items,
             requirements,
             references,
@@ -346,14 +347,15 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             At.AddMinutes(1));
     }
 
-    private static PreQuoteDraft Create(string? itemReference = "I-1") =>
-        PreQuoteDraft.Create(
+    private static PreQuoteDraft Create(string? itemReference = "I-1")
+    {
+        var draft = PreQuoteDraft.Create(
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             UserId,
             At,
             [new(
@@ -365,7 +367,30 @@ public sealed class PreQuoteDraftEditingSemanticsTests
                 null,
                 100,
                 100,
-                1)],
+                1,
+                null,
+                new(
+                    Guid.NewGuid(),
+                    PreQuoteDraftValuationStatus.Valued,
+                    null,
+                    Guid.NewGuid(),
+                    Guid.NewGuid(),
+                    100,
+                    100,
+                    1,
+                    1.000000m,
+                    1.000000m,
+                    90000m,
+                    90000m,
+                    90000m,
+                    "COP",
+                    At,
+                    null,
+                    null,
+                    1,
+                    90000m,
+                    90000m,
+                    90000m))],
             [new(
                 Guid.NewGuid(),
                 1,
@@ -381,6 +406,10 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             [],
             []);
 
+        MakeEconomicallyComplete(draft.Items.Single().ValuationSnapshot!);
+        return draft;
+    }
+
     private static PreQuoteDraft CreateWithValuation() =>
         PreQuoteDraft.Create(
             Guid.NewGuid(),
@@ -388,7 +417,7 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             Guid.NewGuid(),
             "Project",
             "Client",
-            "Location",
+            "BOGOTA",
             UserId,
             At,
             [
@@ -426,6 +455,38 @@ public sealed class PreQuoteDraftEditingSemanticsTests
             [],
             [],
             []);
+
+    private static void MakeEconomicallyComplete(
+        PreQuoteDraftItemValuationSnapshot valuation)
+    {
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemMinimumAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemExpectedAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ItemMaximumAmount),
+            90000m);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.RequiresReview),
+            false);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.Assumptions),
+            Array.Empty<string>());
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.MissingData),
+            Array.Empty<string>());
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ConfidenceScore),
+            95);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.ConfidenceLevel),
+            PreQuoteDraftPricingConfidenceLevel.High);
+        Set(valuation, nameof(PreQuoteDraftItemValuationSnapshot.CalculatedAtUtc),
+            At);
+    }
+
+    private static void Set<T>(object target, string propertyName, T value)
+    {
+        var property = target.GetType().GetProperty(
+            propertyName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        property.SetValue(target, value);
+    }
 
     private static PreQuoteDraftItemEdit CreateItemEdit(
         PreQuoteDraftItem item,

@@ -79,6 +79,59 @@ public sealed class StructuredExtractionPayloadReaderTests
         Assert.Empty(result.Conflicts);
     }
 
+    [Fact]
+    public void Read_WithSchema3EighteenItemsAndEnrichedTechnicalReview_ReturnsCompleteDetails()
+    {
+        var fixture = CreateSchema3EighteenItemsFixture();
+
+        var result = Read(fixture);
+
+        Assert.Equal(18, result.Items.Count);
+        Assert.All(result.Items, item => Assert.NotNull(item.Glass));
+        Assert.All(result.Items, item => Assert.NotNull(item.TechnicalClassification));
+        Assert.Equal(Enumerable.Range(1, 18), result.Items.Select(item => item.Sequence));
+        Assert.Equal("P-04", result.Items[10].Reference);
+        Assert.Equal("P-06", result.Items[17].Reference);
+        Assert.True(result.Items[10].RequiresReview);
+        Assert.True(result.Items[17].RequiresReview);
+        Assert.Contains(
+            "FINISH_REQUIRES_REVIEW",
+            result.Items[10].TechnicalClassification!.ReviewReasons);
+        Assert.Contains(
+            "FINISH_REQUIRES_REVIEW",
+            result.Items[17].TechnicalClassification!.ReviewReasons);
+        Assert.Empty(result.Requirements);
+        Assert.Empty(result.DocumentReferences);
+        Assert.Empty(result.Issues);
+        Assert.Empty(result.Conflicts);
+    }
+
+    [Fact]
+    public void Read_WithSchema3RealTechnicalDifference_ThrowsDiagnosticException()
+    {
+        var fixture = CreateSchema3EighteenItemsFixture();
+        fixture = fixture with
+        {
+            TechnicalClassifications = fixture.TechnicalClassifications
+                .Select((value, index) => index == 0
+                    ? value with { SystemCode = "K999" }
+                    : value)
+                .ToArray()
+        };
+
+        var exception = Assert.Throws<PreQuoteDocumentQueryException>(() =>
+            Read(fixture));
+
+        Assert.IsType<InvalidDataException>(exception.InnerException);
+        Assert.Contains(
+            "Stage=technicalClassification",
+            exception.InnerException.Message);
+        Assert.Contains("ItemSequence=1", exception.InnerException.Message);
+        Assert.Contains(
+            "FieldName=technicalClassification",
+            exception.InnerException.Message);
+    }
+
     [Theory]
     [InlineData("invalid_json")]
     [InlineData("schema")]
@@ -559,6 +612,190 @@ public sealed class StructuredExtractionPayloadReaderTests
                     true,
                     ["FINISH_REQUIRES_REVIEW"])
             ]);
+    }
+
+    private static Fixture CreateSchema3EighteenItemsFixture()
+    {
+        var documentId = Guid.NewGuid();
+        var attemptId = Guid.NewGuid();
+        var extractionId = Guid.NewGuid();
+        var glassTypeId = Guid.NewGuid();
+        var references = new[]
+        {
+            "V-01", "V-02", "P-01", "P-02", "V-03", "V-04",
+            "V-05", "F-01", "P-03", "V-06", "P-04", "V-07",
+            "V-08", "P-05", "V-09", "V-10", "V-11", "P-06"
+        };
+        var systems = new[]
+        {
+            "K40", "K50", "K55", "K70", "K90", "K100",
+            "S35", "S50", "S80", "3890", "K55", "SG45",
+            "K40", "K50", "K70", "S35", "S80", "3890"
+        };
+        var frames = new[]
+        {
+            "MARCO_47", "MARCO_58", "MARCO_47", "MARCO_58",
+            "MARCO_47", "MARCO_58", "MARCO_47", "MARCO_58",
+            "MARCO_47", "MARCO_58", "MARCO_58", "MARCO_47",
+            "MARCO_58", "MARCO_47", "MARCO_58", "MARCO_47",
+            "MARCO_58", "MARCO_47"
+        };
+        var finishes = Enumerable.Range(1, 18)
+            .Select(sequence => sequence is 11 or 18 ? "SPECIAL" : "NATURAL")
+            .ToArray();
+        var payloadItems = Enumerable.Range(1, 18)
+            .Select(sequence => new
+            {
+                sequence,
+                reference = references[sequence - 1],
+                description = $"Item {sequence}",
+                elementType = "WINDOW",
+                rawMeasurements = "1000x1000",
+                widthMillimeters = (int?)1000,
+                heightMillimeters = (int?)1000,
+                quantity = (int?)1,
+                requiresReview = false,
+                reviewReasons = Array.Empty<string>(),
+                sourcePages = new[] { 1 },
+                evidence = new[] { Evidence(1, "NATIVE", $"Item {sequence}") },
+                glass = new
+                {
+                    rawSpecification = "TEMP 8",
+                    normalizedCode = "TEMP_8",
+                    assignmentScope = "ITEM",
+                    requiresReview = false,
+                    reviewReasons = Array.Empty<string>(),
+                    sourcePages = new[] { 1 },
+                    evidence = new[] { Evidence(1, "NATIVE", "TEMP 8") }
+                },
+                technicalClassification = new
+                {
+                    systemCode = systems[sequence - 1],
+                    systemOriginalText = systems[sequence - 1],
+                    systemSource = "EXPLICIT",
+                    systemConfidence = (decimal?)0.95m,
+                    frameCode = frames[sequence - 1],
+                    frameOriginalText = frames[sequence - 1],
+                    frameSource = "EXPLICIT",
+                    frameConfidence = (decimal?)0.95m,
+                    finishCode = finishes[sequence - 1],
+                    finishOriginalText = finishes[sequence - 1],
+                    finishSource = "EXPLICIT",
+                    finishConfidence = (decimal?)0.95m,
+                    requiresReview = false,
+                    reviewReasons = Array.Empty<string>()
+                }
+            })
+            .ToArray();
+        var payload = new
+        {
+            schemaVersion = "3.0",
+            documentId,
+            processingAttemptId = attemptId,
+            status = "COMPLETED",
+            document = new { pageCount = 1 },
+            pages = Array.Empty<object>(),
+            warnings = Array.Empty<object>(),
+            processingMetadata = new { method = "pymupdf", durationMs = 26 },
+            structuredExtraction = new
+            {
+                status = "COMPLETED",
+                project = new
+                {
+                    name = "Torre Cristal",
+                    clientName = "Constructora Horizonte SAS",
+                    location = "Bogota, Cundinamarca",
+                    sourcePages = new[] { 1 },
+                    evidence = new[] { Evidence(1, "NATIVE", "Torre Cristal") }
+                },
+                requirements = new
+                {
+                    glassSpecifications = Array.Empty<object>(),
+                    profileSpecifications = Array.Empty<object>(),
+                    finishes = Array.Empty<object>(),
+                    accessoriesAndSealants = Array.Empty<object>(),
+                    generalNotes = Array.Empty<object>()
+                },
+                items = payloadItems,
+                documentReferences = Array.Empty<object>(),
+                issues = Array.Empty<object>(),
+                conflicts = Array.Empty<object>(),
+                summary = new
+                {
+                    itemCount = 18,
+                    documentReferenceCount = 0,
+                    itemsRequiringReview = 0,
+                    knownQuoteableUnitCount = 18,
+                    identifiedGlassItemCount = 18,
+                    glassItemsRequiringReview = 0
+                },
+                processingMetadata = new
+                {
+                    method = "rule_based_v2",
+                    durationMs = 26
+                }
+            }
+        };
+
+        return new Fixture(
+            documentId,
+            documentId,
+            JsonSerializer.Serialize(payload),
+            new AvailableExtractionProjection(
+                attemptId, Guid.NewGuid(), "3.0", 1, string.Empty,
+                extractionId, StructuredExtractionStatus.Completed,
+                "Torre Cristal", "Constructora Horizonte SAS",
+                "Bogota, Cundinamarca", 18, 0, 2, 18,
+                18, 0, "rule_based_v2", 26, CreatedAt),
+            Enumerable.Range(1, 18)
+                .Select(sequence => new PersistedItem(
+                    sequence,
+                    references[sequence - 1],
+                    $"Item {sequence}",
+                    StructuredElementType.Window,
+                    "1000x1000",
+                    1000,
+                    1000,
+                    1,
+                    sequence is 11 or 18))
+                .ToArray(),
+            [],
+            [],
+            [],
+            [],
+            Enumerable.Range(1, 18)
+                .Select(sequence => new PersistedGlass(
+                    sequence,
+                    glassTypeId,
+                    "TEMP 8",
+                    "TEMP_8",
+                    GlassAssignmentScope.Item,
+                    false,
+                    [],
+                    [1],
+                    [new PersistedGlassEvidence(
+                        1, EvidenceSourceType.Native, "TEMP 8")]))
+                .ToArray(),
+            Enumerable.Range(1, 18)
+                .Select(sequence => new PersistedTechnicalClassification(
+                    sequence,
+                    systems[sequence - 1],
+                    systems[sequence - 1],
+                    TechnicalClassificationSource.Explicit,
+                    0.95m,
+                    frames[sequence - 1],
+                    frames[sequence - 1],
+                    TechnicalClassificationSource.Explicit,
+                    0.95m,
+                    finishes[sequence - 1],
+                    finishes[sequence - 1],
+                    TechnicalClassificationSource.Explicit,
+                    0.95m,
+                    sequence is 11 or 18,
+                    sequence is 11 or 18
+                        ? ["FINISH_REQUIRES_REVIEW"]
+                        : []))
+                .ToArray());
     }
 
     private static object Requirement(string value) => new

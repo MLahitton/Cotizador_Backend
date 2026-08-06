@@ -93,8 +93,6 @@ internal static class StructuredExtractionPayloadReader
             || structured.Summary.ItemCount != persisted.ItemCount
             || structured.Summary.DocumentReferenceCount
                 != persisted.DocumentReferenceCount
-            || structured.Summary.ItemsRequiringReview
-                != persisted.ItemsRequiringReview
             || structured.Summary.KnownQuoteableUnitCount
                 != persisted.KnownQuoteableUnitCount
             || structured.Summary.IdentifiedGlassItemCount
@@ -106,6 +104,14 @@ internal static class StructuredExtractionPayloadReader
         {
             throw Invalid();
         }
+
+        ValidateItemsRequiringReview(
+            persisted.ExtractionId,
+            payload.SchemaVersion,
+            structured.Summary.ItemsRequiringReview,
+            persisted.ItemsRequiringReview,
+            items,
+            technicalClassifications);
 
         var project = new StructuredProjectReadModel(
             structured.Project.Name,
@@ -131,7 +137,8 @@ internal static class StructuredExtractionPayloadReader
         var technicalByItem = technicalClassifications.ToDictionary(
             value => value.ItemSequence);
         var mappedItems = items.Select((row, index) =>
-            MapItem(row, structured.Items[index], persisted.PageCount,
+            MapItem(persisted.ExtractionId, row, structured.Items[index],
+                persisted.PageCount,
                 glassByItem.GetValueOrDefault(row.Sequence),
                 technicalByItem.GetValueOrDefault(row.Sequence),
                 payload.SchemaVersion)).ToArray();
@@ -176,6 +183,7 @@ internal static class StructuredExtractionPayloadReader
     }
 
     private static StructuredItemReadModel MapItem(
+        Guid structuredExtractionId,
         PersistedItem row,
         ItemDto dto,
         int pageCount,
@@ -194,9 +202,19 @@ internal static class StructuredExtractionPayloadReader
             || dto.WidthMillimeters != row.WidthMillimeters
             || dto.HeightMillimeters != row.HeightMillimeters
             || dto.Quantity != row.Quantity
-            || dto.RequiresReview != row.RequiresReview)
+            || !ItemRequiresReviewMatches(
+                schemaVersion,
+                dto.RequiresReview,
+                row.RequiresReview,
+                technical))
         {
-            throw Invalid();
+            throw Invalid(
+                "items",
+                structuredExtractionId,
+                row.Sequence,
+                "item",
+                dto,
+                row);
         }
 
         return new StructuredItemReadModel(
@@ -211,13 +229,19 @@ internal static class StructuredExtractionPayloadReader
                     : throw Invalid()
                 : MapGlass(dto.Glass, glass, pageCount),
             null,
-            MapTechnicalClassification(dto.TechnicalClassification, technical));
+            MapTechnicalClassification(
+                structuredExtractionId,
+                dto.TechnicalClassification,
+                technical,
+                schemaVersion));
     }
 
     private static StructuredItemTechnicalClassificationReadModel?
         MapTechnicalClassification(
+            Guid structuredExtractionId,
             TechnicalClassificationDto? dto,
-            PersistedTechnicalClassification? persisted)
+            PersistedTechnicalClassification? persisted,
+            string schemaVersion)
     {
         if (dto is null)
         {
@@ -244,13 +268,32 @@ internal static class StructuredExtractionPayloadReader
             || dto.FinishCode != persisted.FinishCode
             || dto.FinishOriginalText != persisted.FinishOriginalText
             || finishSource != persisted.FinishSource
-            || dto.FinishConfidence != persisted.FinishConfidence
-            || dto.RequiresReview != persisted.RequiresReview
-            || reasons.Any(string.IsNullOrWhiteSpace)
-            || !reasons.All(reason => persisted.ReviewReasons.Contains(
-                reason!, StringComparer.Ordinal)))
+            || dto.FinishConfidence != persisted.FinishConfidence)
         {
-            throw Invalid();
+            throw Invalid(
+                "technicalClassification",
+                structuredExtractionId,
+                persisted.ItemSequence,
+                "technicalClassification",
+                dto,
+                persisted);
+        }
+
+        if (reasons.Any(string.IsNullOrWhiteSpace)
+            || !TechnicalReviewMatches(
+                schemaVersion,
+                dto.RequiresReview,
+                reasons,
+                persisted.RequiresReview,
+                persisted.ReviewReasons))
+        {
+            throw Invalid(
+                "technicalClassification",
+                structuredExtractionId,
+                persisted.ItemSequence,
+                "technicalClassification.reviewReasons",
+                reasons,
+                persisted.ReviewReasons);
         }
 
         return ToReadModel(persisted);
@@ -456,6 +499,82 @@ internal static class StructuredExtractionPayloadReader
         return values;
     }
 
+    private static void ValidateItemsRequiringReview(
+        Guid structuredExtractionId,
+        string schemaVersion,
+        int payloadValue,
+        int persistedValue,
+        IReadOnlyList<PersistedItem> items,
+        IReadOnlyList<PersistedTechnicalClassification> technicalClassifications)
+    {
+        var itemRowsValue = items.Count(value => value.RequiresReview);
+        if (persistedValue != itemRowsValue)
+        {
+            throw Invalid(
+                "summary",
+                structuredExtractionId,
+                null,
+                "itemsRequiringReview",
+                itemRowsValue,
+                persistedValue);
+        }
+
+        if (payloadValue == persistedValue)
+        {
+            return;
+        }
+
+        var technicalReviewValue = technicalClassifications.Count(
+            value => value.RequiresReview);
+        if (schemaVersion == "3.0"
+            && payloadValue < persistedValue
+            && persistedValue - payloadValue <= technicalReviewValue)
+        {
+            return;
+        }
+
+        throw Invalid(
+            "summary",
+            structuredExtractionId,
+            null,
+            "itemsRequiringReview",
+            payloadValue,
+            persistedValue);
+    }
+
+    private static bool ItemRequiresReviewMatches(
+        string schemaVersion,
+        bool payloadValue,
+        bool persistedValue,
+        PersistedTechnicalClassification? technical)
+    {
+        return payloadValue == persistedValue
+            || schemaVersion == "3.0"
+            && !payloadValue
+            && persistedValue
+            && technical?.RequiresReview == true;
+    }
+
+    private static bool TechnicalReviewMatches(
+        string schemaVersion,
+        bool payloadRequiresReview,
+        string[] payloadReviewReasons,
+        bool persistedRequiresReview,
+        string[] persistedReviewReasons)
+    {
+        if (payloadRequiresReview == persistedRequiresReview
+            && payloadReviewReasons.SequenceEqual(persistedReviewReasons))
+        {
+            return true;
+        }
+
+        return schemaVersion == "3.0"
+            && !payloadRequiresReview
+            && persistedRequiresReview
+            && payloadReviewReasons.Length == 0
+            && persistedReviewReasons.Length > 0;
+    }
+
     private static StructuredEvidenceReadModel[] MapEvidence(
         EvidenceDto[]? evidence,
         int pageCount)
@@ -543,6 +662,33 @@ internal static class StructuredExtractionPayloadReader
         };
     private static InvalidDataException Invalid() =>
         new("El payload estructurado persistido no es coherente.");
+
+    private static InvalidDataException Invalid(
+        string stage,
+        Guid structuredExtractionId,
+        int? itemSequence,
+        string fieldName,
+        object? payloadValue,
+        object? persistedValue) =>
+        new(
+            "El payload estructurado persistido no es coherente. "
+            + $"Stage={stage}; "
+            + $"StructuredExtractionId={structuredExtractionId}; "
+            + $"ItemSequence={itemSequence?.ToString() ?? "null"}; "
+            + $"FieldName={fieldName}; "
+            + $"PayloadValue={FormatDiagnosticValue(payloadValue)}; "
+            + $"PersistedValue={FormatDiagnosticValue(persistedValue)}.");
+
+    private static string FormatDiagnosticValue(object? value)
+    {
+        return value switch
+        {
+            null => "null",
+            string text => text,
+            Array array => string.Join(",", array.Cast<object?>()),
+            _ => value.ToString() ?? "null"
+        };
+    }
 
     private sealed class Payload
     {

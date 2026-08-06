@@ -44,12 +44,15 @@ public sealed class CotizadorAiV3VersionContractTests
             Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
                 result.Failure);
             diagnostics.Received(1).ContractRejected(
-                DocumentId,
-                AttemptId,
-                CorrelationId,
-                200,
-                "structured_metadata",
-                "method_mismatch");
+                documentId: DocumentId,
+                processingAttemptId: AttemptId,
+                correlationId: CorrelationId,
+                httpStatusCode: 200,
+                stage: "structured_metadata",
+                category: "method_mismatch",
+                exceptionType: "ContractValidationException",
+                exceptionMessage:
+                    "Contract validation failed at structured_metadata: method_mismatch.");
         }
     }
 
@@ -168,15 +171,15 @@ public sealed class CotizadorAiV3VersionContractTests
         Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
             result.Failure);
         diagnostics.Received(1).ContractRejected(
-            DocumentId,
-            AttemptId,
-            CorrelationId,
-            200,
-            "glass_contract",
-            "unknown_code",
-            1,
-            "UNKNOWN_CODE",
-            Arg.Is<IReadOnlyList<string>>(codes =>
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: 200,
+            stage: "glass_contract",
+            category: "unknown_code",
+            itemSequence: 1,
+            rejectedNormalizedCode: "UNKNOWN_CODE",
+            acceptedNormalizedCodes: Arg.Is<IReadOnlyList<string>>(codes =>
                 codes != null
                 && codes.Count == 9
                 && codes[0] == "LAM_4_4"
@@ -187,7 +190,10 @@ public sealed class CotizadorAiV3VersionContractTests
                 && codes[5] == "TEMP_5"
                 && codes[6] == "TEMP_6"
                 && codes[7] == "TEMP_8"
-                && codes[8] == "UNKNOWN_GLASS"));
+                && codes[8] == "UNKNOWN_GLASS"),
+            exceptionType: "ContractValidationException",
+            exceptionMessage:
+                "Contract validation failed at glass_contract: unknown_code.");
     }
 
     [Fact]
@@ -209,20 +215,135 @@ public sealed class CotizadorAiV3VersionContractTests
         Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
             result.Failure);
         diagnostics.Received(1).ContractRejected(
-            DocumentId,
-            AttemptId,
-            CorrelationId,
-            null,
-            "response_contract",
-            "invalid_data",
-            null,
-            null,
-            null,
-            "ResponseContractValidationException",
-            "structuredExtraction item width and height must both be present or both be null.",
-            "structuredExtraction.items[0].heightMillimeters",
-            "structuredExtraction.items[0].heightMillimeters",
-            "width=1200;height=null");
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: null,
+            stage: "response_contract",
+            category: "invalid_data",
+            itemSequence: 1,
+            exceptionType: "ResponseContractValidationException",
+            exceptionMessage:
+                "structuredExtraction item width and height must both be present or both be null.",
+            jsonPath: "structuredExtraction.items[0].heightMillimeters",
+            fieldName: "structuredExtraction.items[0].heightMillimeters",
+            rejectedValue: "width=1200;height=null");
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithInvalidTechnicalConfidence_ReportsJsonPath()
+    {
+        var root = JsonNode.Parse(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                schemaVersion: "3.0"))!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var item = structured["items"]![0]!.AsObject();
+        item["technicalClassification"] = new JsonObject
+        {
+            ["systemCode"] = "K40",
+            ["systemOriginalText"] = "K40",
+            ["systemSource"] = "DETECTED",
+            ["systemConfidence"] = "0.95",
+            ["frameCode"] = "MARCO_47",
+            ["frameOriginalText"] = "SG0047",
+            ["frameSource"] = "DETECTED",
+            ["frameConfidence"] = "0.95",
+            ["finishCode"] = "BLACK_MATTE",
+            ["finishOriginalText"] = "ACABADO NEGRO MATE",
+            ["finishSource"] = "DETECTED",
+            ["finishConfidence"] = "0.95",
+            ["requiresReview"] = false,
+            ["reviewReasons"] = new JsonArray()
+        };
+
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var result = await ExecuteAsync(root.ToJsonString(), diagnostics);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
+            result.Failure);
+        var call = Assert.Single(diagnostics.ReceivedCalls());
+        var arguments = call.GetArguments();
+        Assert.Equal(DocumentId, arguments[0]);
+        Assert.Equal(AttemptId, arguments[1]);
+        Assert.Equal(CorrelationId, arguments[2]);
+        Assert.Null(arguments[3]);
+        Assert.Equal("root_shape", arguments[4]);
+        Assert.Equal("invalid_json", arguments[5]);
+        Assert.Null(arguments[6]);
+        Assert.Null(arguments[7]);
+        Assert.Null(arguments[8]);
+        Assert.Equal("JsonException", arguments[9]);
+        Assert.Contains("System.Nullable", Assert.IsType<string>(arguments[10]));
+        Assert.Equal(
+            "$.structuredExtraction.items[0].technicalClassification.systemConfidence",
+            arguments[11]);
+        Assert.Null(arguments[12]);
+        Assert.Null(arguments[13]);
+        Assert.IsType<long>(arguments[14]);
+        Assert.IsType<long>(arguments[15]);
+        Assert.Null(arguments[16]);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithUnknownTechnicalSource_ReportsFieldAndAcceptedValues()
+    {
+        var root = JsonNode.Parse(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                schemaVersion: "3.0"))!.AsObject();
+        var structured = root["structuredExtraction"]!.AsObject();
+        var item = structured["items"]![0]!.AsObject();
+        item["technicalClassification"] = new JsonObject
+        {
+            ["systemCode"] = "K40",
+            ["systemOriginalText"] = "K40",
+            ["systemSource"] = "DETECTED",
+            ["systemConfidence"] = 0.95m,
+            ["frameCode"] = "MARCO_47",
+            ["frameOriginalText"] = "SG0047",
+            ["frameSource"] = "EXPLICIT",
+            ["frameConfidence"] = 0.95m,
+            ["finishCode"] = "BLACK_MATTE",
+            ["finishOriginalText"] = "ACABADO NEGRO MATE",
+            ["finishSource"] = "EXPLICIT",
+            ["finishConfidence"] = 0.95m,
+            ["requiresReview"] = false,
+            ["reviewReasons"] = new JsonArray()
+        };
+
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var result = await ExecuteAsync(root.ToJsonString(), diagnostics);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(DocumentProcessingClientFailure.InvalidResponse,
+            result.Failure);
+        var call = Assert.Single(diagnostics.ReceivedCalls());
+        var arguments = call.GetArguments();
+        Assert.Equal(DocumentId, arguments[0]);
+        Assert.Equal(AttemptId, arguments[1]);
+        Assert.Equal(CorrelationId, arguments[2]);
+        Assert.Equal(200, arguments[3]);
+        Assert.Equal("technical_classification_contract", arguments[4]);
+        Assert.Equal("unknown_source", arguments[5]);
+        Assert.Equal(1, arguments[6]);
+        Assert.Null(arguments[7]);
+        Assert.Null(arguments[8]);
+        Assert.Equal("ContractValidationException", arguments[9]);
+        Assert.Equal(
+            "Contract validation failed at technical_classification_contract: unknown_source.",
+            arguments[10]);
+        Assert.Null(arguments[11]);
+        Assert.Equal("systemSource", arguments[12]);
+        Assert.Equal("DETECTED", arguments[13]);
+        Assert.Null(arguments[14]);
+        Assert.Null(arguments[15]);
+        Assert.Equal(
+            ["ALIAS", "EXPLICIT", "INFERRED", "UNRESOLVED"],
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(arguments[16]));
     }
 
     private static async Task<DocumentProcessingClientResult> ExecuteAsync(

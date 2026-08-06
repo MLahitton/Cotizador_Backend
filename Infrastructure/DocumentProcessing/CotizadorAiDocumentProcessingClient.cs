@@ -46,6 +46,14 @@ public sealed class CotizadorAiDocumentProcessingClient(
         "UNKNOWN_GLASS"
     ];
 
+    private static readonly string[] TechnicalClassificationSourceValues =
+    [
+        "ALIAS",
+        "EXPLICIT",
+        "INFERRED",
+        "UNRESOLVED"
+    ];
+
     private static readonly UTF8Encoding StrictUtf8Encoding = new(
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
@@ -109,7 +117,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 exception.Message,
                 exception.JsonPath,
                 exception.FieldName,
-                exception.RejectedValue);
+                exception.RejectedValue,
+                null,
+                null,
+                exception.AcceptedValues);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
@@ -144,12 +155,22 @@ public sealed class CotizadorAiDocumentProcessingClient(
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
             diagnostics?.ContractRejected(
                 request.DocumentId, request.ProcessingAttemptId,
                 request.CorrelationId, null,
-                "root_shape", "invalid_json");
+                "root_shape", "invalid_json",
+                null,
+                null,
+                null,
+                exception.GetType().Name,
+                exception.Message,
+                exception.Path,
+                null,
+                null,
+                exception.LineNumber,
+                exception.BytePositionInLine);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
@@ -1014,7 +1035,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 : MapGlass(x.Glass, pageCount, x.Sequence);
             var technical = x.TechnicalClassification is null
                 ? null
-                : MapTechnicalClassification(x.TechnicalClassification);
+                : MapTechnicalClassification(
+                    x.TechnicalClassification,
+                    x.Sequence);
             items.Add(new StructuredItemData(x.Sequence, x.Reference,
                 x.Description, MapElementType(x.ElementType), x.RawMeasurements,
                 x.WidthMillimeters, x.HeightMillimeters, x.Quantity,
@@ -1170,7 +1193,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
     }
 
     private static StructuredItemTechnicalClassificationData
-        MapTechnicalClassification(TechnicalClassificationDto dto)
+        MapTechnicalClassification(
+            TechnicalClassificationDto dto,
+            int itemSequence)
     {
         if (dto.ReviewReasons is null
             || dto.ReviewReasons.Any(string.IsNullOrWhiteSpace)
@@ -1193,15 +1218,15 @@ public sealed class CotizadorAiDocumentProcessingClient(
         return new(
             dto.SystemCode?.Trim().ToUpperInvariant(),
             NormalizeTechnicalText(dto.SystemOriginalText),
-            MapTechnicalSource(dto.SystemSource),
+            MapTechnicalSource(dto.SystemSource, itemSequence, "systemSource"),
             dto.SystemConfidence,
             dto.FrameCode?.Trim().ToUpperInvariant(),
             NormalizeTechnicalText(dto.FrameOriginalText),
-            MapTechnicalSource(dto.FrameSource),
+            MapTechnicalSource(dto.FrameSource, itemSequence, "frameSource"),
             dto.FrameConfidence,
             dto.FinishCode?.Trim().ToUpperInvariant(),
             NormalizeTechnicalText(dto.FinishOriginalText),
-            MapTechnicalSource(dto.FinishSource),
+            MapTechnicalSource(dto.FinishSource, itemSequence, "finishSource"),
             dto.FinishConfidence,
             dto.RequiresReview,
             dto.ReviewReasons
@@ -1266,7 +1291,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
         "OTHER" => StructuredElementType.Other, _ => throw new InvalidDataException()
     };
     private static TechnicalClassificationSource? MapTechnicalSource(
-        string? value) => value switch
+        string? value,
+        int itemSequence,
+        string fieldName) => value switch
     {
         null => null,
         "EXPLICIT" => TechnicalClassificationSource.Explicit,
@@ -1274,7 +1301,11 @@ public sealed class CotizadorAiDocumentProcessingClient(
         "INFERRED" => TechnicalClassificationSource.Inferred,
         "UNRESOLVED" => TechnicalClassificationSource.Unresolved,
         _ => throw Contract("technical_classification_contract",
-            "unknown_source", 200)
+            "unknown_source", 200,
+            itemSequence: itemSequence,
+            fieldName: fieldName,
+            rejectedValue: value,
+            acceptedValues: TechnicalClassificationSourceValues)
     };
 
     private static void ValidateTechnicalCode(string? value)
@@ -1624,9 +1655,13 @@ public sealed class CotizadorAiDocumentProcessingClient(
         Exception? innerException = null,
         int? itemSequence = null,
         string? rejectedNormalizedCode = null,
-        IReadOnlyList<string>? acceptedNormalizedCodes = null) =>
+        IReadOnlyList<string>? acceptedNormalizedCodes = null,
+        string? fieldName = null,
+        string? rejectedValue = null,
+        IReadOnlyList<string>? acceptedValues = null) =>
         new(stage, category, httpStatusCode, innerException, itemSequence,
-            rejectedNormalizedCode, acceptedNormalizedCodes);
+            rejectedNormalizedCode, acceptedNormalizedCodes, fieldName,
+            rejectedValue, acceptedValues);
 
     private sealed class ContractValidationException(
         string stage,
@@ -1635,7 +1670,10 @@ public sealed class CotizadorAiDocumentProcessingClient(
         Exception? innerException = null,
         int? itemSequence = null,
         string? rejectedNormalizedCode = null,
-        IReadOnlyList<string>? acceptedNormalizedCodes = null)
+        IReadOnlyList<string>? acceptedNormalizedCodes = null,
+        string? fieldName = null,
+        string? rejectedValue = null,
+        IReadOnlyList<string>? acceptedValues = null)
         : Exception(
             $"Contract validation failed at {stage}: {category}.",
             innerException)
@@ -1648,8 +1686,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
         public IReadOnlyList<string>? AcceptedNormalizedCodes { get; } =
             acceptedNormalizedCodes;
         public string? JsonPath { get; } = null;
-        public string? FieldName { get; } = null;
-        public string? RejectedValue { get; } = null;
+        public string? FieldName { get; } = fieldName;
+        public string? RejectedValue { get; } = rejectedValue;
+        public IReadOnlyList<string>? AcceptedValues { get; } = acceptedValues;
     }
 
     private static ResponseContractValidationException Invalid(

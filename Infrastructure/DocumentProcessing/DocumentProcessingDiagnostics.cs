@@ -21,7 +21,10 @@ public sealed class DocumentProcessingDiagnostics(
         string? exceptionMessage = null,
         string? jsonPath = null,
         string? fieldName = null,
-        string? rejectedValue = null)
+        string? rejectedValue = null,
+        long? lineNumber = null,
+        long? bytePositionInLine = null,
+        IReadOnlyList<string>? acceptedValues = null)
     {
         var acceptedCodes = acceptedNormalizedCodes is null
             ? null
@@ -30,9 +33,16 @@ public sealed class DocumentProcessingDiagnostics(
                 acceptedNormalizedCodes.OrderBy(
                     value => value,
                     StringComparer.Ordinal));
+        var acceptedContractValues = acceptedValues is null
+            ? null
+            : string.Join(
+                ",",
+                acceptedValues.OrderBy(
+                    value => value,
+                    StringComparer.Ordinal));
 
         logger.LogWarning(
-            "Document processing response rejected. DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} HttpStatusCode={HttpStatusCode} Stage={Stage} Category={Category} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage} JsonPath={JsonPath} FieldName={FieldName} ItemSequence={ItemSequence} RejectedValue={RejectedValue} RejectedNormalizedCode={RejectedNormalizedCode} AcceptedNormalizedCodes={AcceptedNormalizedCodes}",
+            "Document processing response rejected. DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} HttpStatusCode={HttpStatusCode} Stage={Stage} Category={Category} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage} JsonPath={JsonPath} FieldName={FieldName} ItemSequence={ItemSequence} RejectedValue={RejectedValue} AcceptedValues={AcceptedValues} LineNumber={LineNumber} BytePositionInLine={BytePositionInLine} RejectedNormalizedCode={RejectedNormalizedCode} AcceptedNormalizedCodes={AcceptedNormalizedCodes}",
             documentId,
             processingAttemptId,
             correlationId,
@@ -45,6 +55,9 @@ public sealed class DocumentProcessingDiagnostics(
             fieldName,
             itemSequence,
             rejectedValue,
+            acceptedContractValues,
+            lineNumber,
+            bytePositionInLine,
             rejectedNormalizedCode,
             acceptedCodes);
     }

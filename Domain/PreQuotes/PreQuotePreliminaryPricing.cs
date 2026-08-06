@@ -267,6 +267,12 @@ public static class PreQuotePreliminaryPricing
             + administrationMaximum + contingencyMaximum + profitMaximum
             + vatMaximum;
         var confidence = OverallConfidence(snapshots);
+        var hasLimitedPricingScope = transport.Assumptions.Any()
+            || transport.MissingData.Any()
+            || snapshots.Any(snapshot =>
+                snapshot.RequiresReview == true
+                || snapshot.Assumptions.Any()
+                || snapshot.MissingData.Any());
         return new(
             totalArea,
             minimumSubtotal,
@@ -294,7 +300,7 @@ public static class PreQuotePreliminaryPricing
             confidence.Level,
             transport.Assumptions,
             transport.MissingData,
-            true);
+            hasLimitedPricingScope);
     }
 
     private static (string Code, decimal Minimum, decimal Expected,
