@@ -129,9 +129,11 @@ public sealed record PreQuoteDraftItemGlassResponse(
 
 public sealed record PreQuoteDraftItemGlassEvidenceResponse(
     int Sequence,
-    int PageNumber,
+    int? PageNumber,
     string SourceType,
-    string Text);
+    string Text,
+    string? SheetName,
+    string? CellRange);
 
 public sealed record PreQuoteDraftItemValuationResponse(
     Guid SourceStructuredItemValuationId,

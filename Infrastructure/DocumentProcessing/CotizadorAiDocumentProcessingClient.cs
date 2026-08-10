@@ -19,6 +19,14 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
     private const string CorrelationHeaderName = "X-Correlation-ID";
     private const long MaximumPdfSizeBytes = 20_971_520;
+    private const string PdfContentType =
+        "application/pdf";
+    private const string XlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string OpenxmlMetadataMethod = "openpyxl";
+    private const string PdfMetadataMethod = "pymupdf";
+    private const string AiResponseDebugFilePath =
+        "C:\\Users\\mlahi\\Desktop\\Cotizador_SnG\\Cotizador_Backend\\ai-response-debug.json";
 
     private static readonly string[] AiV3ContractGlassNormalizedCodes =
     [
@@ -73,8 +81,6 @@ public sealed class CotizadorAiDocumentProcessingClient(
         DocumentProcessingClientRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateRequest(request);
-
         using var timeoutSource =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -83,6 +89,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         try
         {
+            ValidateRequest(request);
             using var requestMessage = CreateRequestMessage(request);
             using var responseMessage = await httpClient.SendAsync(
                 requestMessage,
@@ -267,6 +274,24 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 "El contenido del archivo debe ser legible.",
                 nameof(request));
         }
+
+        if (!string.Equals(
+                request.ContentType,
+                PdfContentType,
+                StringComparison.Ordinal)
+            && !string.Equals(
+                request.ContentType,
+                XlsxContentType,
+                StringComparison.Ordinal))
+        {
+            throw Contract(
+                "content_type",
+                "unsupported_content_type",
+                null,
+                null,
+                rejectedValue: request.ContentType,
+                acceptedValues: [PdfContentType, XlsxContentType]);
+        }
     }
 
     private static HttpRequestMessage CreateRequestMessage(
@@ -297,11 +322,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 Encoding.UTF8),
             "processingAttemptId");
 
-        var fileContent = new StreamContent(
-            new NonDisposingStream(request.Content));
-
-        fileContent.Headers.ContentType =
-            new MediaTypeHeaderValue("application/pdf");
+        var fileContent = new StreamContent(new NonDisposingStream(request.Content));
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue(
+            request.ContentType);
 
         multipartContent.Add(
             fileContent,
@@ -381,6 +404,18 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         if (statusCode == 200)
         {
+            if (IsDevelopmentEnvironment())
+            {
+                try
+                {
+                    File.WriteAllText(AiResponseDebugFilePath, payloadJson, StrictUtf8Encoding);
+                }
+                catch
+                {
+                    // Development-only diagnostics: keep production behavior unchanged
+                }
+            }
+
             var responseData = ParseSuccessResponse(
                 payloadJson,
                 request);
@@ -389,6 +424,22 @@ public sealed class CotizadorAiDocumentProcessingClient(
         }
 
         return ParseErrorResponse(payloadJson, statusCode);
+    }
+
+    private static bool IsDevelopmentEnvironment()
+    {
+        var aspNetCoreEnv = Environment.GetEnvironmentVariable(
+            "ASPNETCORE_ENVIRONMENT");
+        var dotNetEnv = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+
+        return string.Equals(
+            aspNetCoreEnv,
+            "Development",
+            StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                dotNetEnv,
+                "Development",
+                StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidateCorrelationHeader(
@@ -546,21 +597,68 @@ public sealed class CotizadorAiDocumentProcessingClient(
         var outcome = MapOutcome(response.Status);
         var classification = MapClassification(
             response.Document.Classification);
+        var isXlsx = classification == DocumentClassification.Xlsx;
 
         if (!string.Equals(
                 response.Document.FileName,
                 request.FileName,
                 StringComparison.Ordinal)
-            || !string.Equals(
-                response.Document.ContentType,
-                "application/pdf",
-                StringComparison.Ordinal)
-            || response.Document.SizeBytes != request.SizeBytes
-            || response.Document.PageCount < 1
-            || response.Document.PageCount > options.MaximumPageCount
-            || response.Pages.Count != response.Document.PageCount)
+            || response.Document.SizeBytes != request.SizeBytes)
         {
             throw new InvalidDataException();
+        }
+
+        if (!isXlsx
+            && !string.Equals(
+                response.Document.ContentType,
+                PdfContentType,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException();
+        }
+
+        if (isXlsx
+            && !string.Equals(
+                response.Document.ContentType,
+                XlsxContentType,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidDataException();
+        }
+
+        if (isXlsx)
+        {
+            if (response.Document.PageCount != 0
+                || response.Pages.Count != 0
+                || response.Document.RequiresOcr
+                || !string.Equals(
+                    response.ProcessingMetadata.Method,
+                    OpenxmlMetadataMethod,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidDataException();
+            }
+        }
+        else
+        {
+            if (response.ProcessingMetadata.DurationMs < 0)
+            {
+                throw new InvalidDataException();
+            }
+
+            if (response.Document.PageCount < 1
+                || response.Document.PageCount > options.MaximumPageCount
+                || response.Document.PageCount != response.Pages.Count
+                || response.Document.RequiresOcr
+                != (classification is DocumentClassification.PdfScanned
+                    or DocumentClassification.PdfMixed)
+                || !string.Equals(
+                    response.ProcessingMetadata.Method,
+                    PdfMetadataMethod,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidDataException();
+            }
         }
 
         var pages = new ProcessedPageData[response.Pages.Count];
@@ -618,18 +716,21 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
             var pageNumbers = warning.PageNumbers.ToArray();
 
-            for (var pageIndex = 0;
-                 pageIndex < pageNumbers.Length;
-                 pageIndex++)
+            if (!isXlsx)
             {
-                var pageNumber = pageNumbers[pageIndex];
-
-                if (pageNumber < 1
-                    || pageNumber > response.Document.PageCount
-                    || (pageIndex > 0
-                        && pageNumber <= pageNumbers[pageIndex - 1]))
+                for (var pageIndex = 0;
+                     pageIndex < pageNumbers.Length;
+                     pageIndex++)
                 {
-                    throw new InvalidDataException();
+                    var pageNumber = pageNumbers[pageIndex];
+
+                    if (pageNumber < 1
+                        || pageNumber > response.Document.PageCount
+                        || (pageIndex > 0
+                            && pageNumber <= pageNumbers[pageIndex - 1]))
+                    {
+                        throw new InvalidDataException();
+                    }
                 }
             }
 
@@ -643,15 +744,6 @@ public sealed class CotizadorAiDocumentProcessingClient(
             classification,
             pages,
             warnings);
-
-        if (!string.Equals(
-                response.ProcessingMetadata.Method,
-                "pymupdf",
-                StringComparison.Ordinal)
-            || response.ProcessingMetadata.DurationMs < 0)
-        {
-            throw new InvalidDataException();
-        }
 
         var canonicalPayloadJson = JsonSerializer.Serialize(
             response,
@@ -697,6 +789,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         ValidateExactObjectProperties(
             jsonDocument.RootElement,
+            "$",
             "schemaVersion",
             "errorCode",
             "message");
@@ -750,6 +843,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
     {
         ValidateExactObjectProperties(
             root,
+            "$",
             "schemaVersion",
             "documentId",
             "processingAttemptId",
@@ -762,6 +856,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         ValidateExactObjectProperties(
             root.GetProperty("document"),
+            "$.document",
             "fileName",
             "contentType",
             "sizeBytes",
@@ -770,16 +865,22 @@ public sealed class CotizadorAiDocumentProcessingClient(
             "requiresOcr");
 
         var pages = root.GetProperty("pages");
-
         if (pages.ValueKind != JsonValueKind.Array)
         {
-            throw new InvalidDataException();
+            throw new InvalidDataException(
+                BuildInvalidObjectValueKindMessage(
+                    "$",
+                    "$.pages",
+                    JsonValueKind.Array,
+                    pages.ValueKind));
         }
 
-        foreach (var page in pages.EnumerateArray())
+        foreach (var page in pages.EnumerateArray().Select((page, index) =>
+                     (index, page)))
         {
             ValidateExactObjectProperties(
-                page,
+                page.page,
+                $"$.pages[{page.index}]",
                 "pageNumber",
                 "text",
                 "characterCount",
@@ -787,16 +888,22 @@ public sealed class CotizadorAiDocumentProcessingClient(
         }
 
         var warnings = root.GetProperty("warnings");
-
         if (warnings.ValueKind != JsonValueKind.Array)
         {
-            throw new InvalidDataException();
+            throw new InvalidDataException(
+                BuildInvalidObjectValueKindMessage(
+                    "$",
+                    "$.warnings",
+                    JsonValueKind.Array,
+                    warnings.ValueKind));
         }
 
-        foreach (var warning in warnings.EnumerateArray())
+        foreach (var warning in warnings.EnumerateArray().Select((warning, index) =>
+                     (index, warning)))
         {
             ValidateExactObjectProperties(
-                warning,
+                warning.warning,
+                $"$.warnings[{warning.index}]",
                 "code",
                 "message",
                 "pageNumbers");
@@ -804,6 +911,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
         ValidateExactObjectProperties(
             root.GetProperty("processingMetadata"),
+            "$.processingMetadata",
             "method",
             "durationMs");
 
@@ -815,10 +923,24 @@ public sealed class CotizadorAiDocumentProcessingClient(
     private static void ValidateExactObjectProperties(
         JsonElement element,
         params string[] expectedPropertyNames)
+        => ValidateExactObjectProperties(
+            element,
+            "$",
+            expectedPropertyNames);
+
+    private static void ValidateExactObjectProperties(
+        JsonElement element,
+        string jsonPath,
+        params string[] expectedPropertyNames)
     {
         if (element.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidDataException();
+            throw new InvalidDataException(
+                BuildInvalidObjectValueKindMessage(
+                    jsonPath,
+                    jsonPath,
+                    JsonValueKind.Object,
+                    element.ValueKind));
         }
 
         var expectedProperties = new HashSet<string>(
@@ -832,44 +954,102 @@ public sealed class CotizadorAiDocumentProcessingClient(
             if (!observedProperties.Add(property.Name)
                 || !expectedProperties.Contains(property.Name))
             {
-                throw new InvalidDataException();
+                throw new InvalidDataException(
+                    BuildInvalidObjectPropertiesMessage(
+                        jsonPath,
+                        expectedProperties,
+                        observedProperties));
             }
         }
 
         if (!observedProperties.SetEquals(expectedProperties))
         {
-            throw new InvalidDataException();
+            throw new InvalidDataException(
+                BuildInvalidObjectPropertiesMessage(
+                    jsonPath,
+                    expectedProperties,
+                    observedProperties));
         }
     }
+
+    private static string BuildInvalidObjectPropertiesMessage(
+        string jsonPath,
+        HashSet<string> expectedProperties,
+        HashSet<string> observedProperties)
+    {
+        var missing = expectedProperties
+            .Except(observedProperties)
+            .OrderBy(value => value)
+            .ToArray();
+        var extra = observedProperties
+            .Except(expectedProperties)
+            .OrderBy(value => value)
+            .ToArray();
+
+        return $"Path={jsonPath};"
+            + $" Missing={FormatPropertiesForDiagnostic(missing)};"
+            + $" Extra={FormatPropertiesForDiagnostic(extra)};"
+            + $" Expected={FormatPropertiesForDiagnostic(expectedProperties.OrderBy(value => value))};"
+            + $" Actual={FormatPropertiesForDiagnostic(observedProperties.OrderBy(value => value))}";
+    }
+
+    private static string BuildInvalidObjectValueKindMessage(
+        string jsonPath,
+        string propertyPath,
+        JsonValueKind expectedKind,
+        JsonValueKind actualKind) =>
+        $"Path={jsonPath};"
+        + $" Property={propertyPath};"
+        + $" ExpectedKind={expectedKind};"
+        + $" ActualKind={actualKind}";
+
+    private static string FormatPropertiesForDiagnostic(
+        IEnumerable<string> values) =>
+        $"[{string.Join(", ", values)}]";
 
     private static void ValidateStructuredJsonShape(
         JsonElement root,
         string? schemaVersion)
     {
-        ValidateExactObjectProperties(root, "status", "project",
+        ValidateExactObjectProperties(
+            root,
+            "$.structuredExtraction",
+            "status", "project",
             "requirements", "items", "documentReferences", "issues",
             "conflicts", "summary", "processingMetadata");
-        ValidateExactObjectProperties(root.GetProperty("project"),
+        ValidateExactObjectProperties(
+            root.GetProperty("project"),
+            "$.structuredExtraction.project",
             "name", "clientName", "location", "sourcePages", "evidence");
-        ValidateExactObjectProperties(root.GetProperty("requirements"),
+            ValidateExactObjectProperties(
+                root.GetProperty("requirements"),
+                "$.structuredExtraction.requirements",
             "glassSpecifications", "profileSpecifications", "finishes",
             "accessoriesAndSealants", "generalNotes");
         if (schemaVersion == "2.0")
-            ValidateExactObjectProperties(root.GetProperty("summary"),
+            ValidateExactObjectProperties(
+                root.GetProperty("summary"),
+                "$.structuredExtraction.summary",
                 "itemCount", "documentReferenceCount", "itemsRequiringReview",
                 "knownQuoteableUnitCount");
         else if (schemaVersion == "3.0")
-            ValidateExactObjectProperties(root.GetProperty("summary"),
+            ValidateExactObjectProperties(
+                root.GetProperty("summary"),
+                "$.structuredExtraction.summary",
                 "itemCount", "documentReferenceCount", "itemsRequiringReview",
                 "knownQuoteableUnitCount", "identifiedGlassItemCount",
                 "glassItemsRequiringReview");
         else
             throw Contract(
                 "structured_shape", "unsupported_schema", 200);
-        ValidateExactObjectProperties(root.GetProperty("processingMetadata"),
+        ValidateExactObjectProperties(
+            root.GetProperty("processingMetadata"),
+            "$.structuredExtraction.processingMetadata",
             "method", "durationMs");
-        foreach (var item in root.GetProperty("items").EnumerateArray())
+        foreach (var item in root.GetProperty("items").EnumerateArray()
+                     .Select((item, index) => (item, index)))
         {
+            var itemPath = $"$.structuredExtraction.items[{item.index}]";
             var properties = new List<string>
             {
                 "sequence", "reference", "description", "elementType",
@@ -878,37 +1058,98 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 "sourcePages", "evidence"
             };
             if (schemaVersion == "3.0") properties.Add("glass");
-            if (item.TryGetProperty("technicalClassification", out var technical))
+            if (item.item.TryGetProperty("technicalClassification", out var technical))
             {
                 properties.Add("technicalClassification");
-                ValidateExactObjectProperties(technical,
+                ValidateExactObjectProperties(
+                    technical,
+                    $"{itemPath}.technicalClassification",
                     "systemCode", "systemOriginalText", "systemSource",
                     "systemConfidence", "frameCode", "frameOriginalText",
                     "frameSource", "frameConfidence", "finishCode",
                     "finishOriginalText", "finishSource", "finishConfidence",
                     "requiresReview", "reviewReasons");
             }
-            ValidateExactObjectProperties(item, [.. properties]);
+            ValidateExactObjectProperties(item.item, itemPath, [.. properties]);
             if (schemaVersion == "3.0")
             {
-                var glass = item.GetProperty("glass");
-                ValidateExactObjectProperties(glass, "rawSpecification",
+                var glass = item.item.GetProperty("glass");
+                ValidateExactObjectProperties(
+                    glass,
+                    $"{itemPath}.glass",
+                    "rawSpecification",
                     "normalizedCode", "assignmentScope", "requiresReview",
                     "reviewReasons", "sourcePages", "evidence");
-                foreach (var evidence in glass.GetProperty("evidence").EnumerateArray())
-                    ValidateExactObjectProperties(evidence, "pageNumber",
-                        "sourceType", "text");
+                foreach (var evidence in glass.GetProperty("evidence").EnumerateArray()
+                             .Select((evidence, index) => (evidence, index)))
+                    ValidateEvidenceShape(
+                        evidence.evidence,
+                        $"{itemPath}.glass.evidence[{evidence.index}]");
             }
         }
-        foreach (var item in root.GetProperty("documentReferences").EnumerateArray())
-            ValidateExactObjectProperties(item, "sequence", "reference",
+        foreach (var item in root.GetProperty("documentReferences").EnumerateArray()
+                     .Select((item, index) => (item, index)))
+            ValidateExactObjectProperties(
+                item.item,
+                $"$.structuredExtraction.documentReferences[{item.index}]",
+                "sequence", "reference",
                 "description", "detail", "quantity", "sourcePages", "evidence");
-        foreach (var item in root.GetProperty("issues").EnumerateArray())
-            ValidateExactObjectProperties(item, "code", "message",
+        foreach (var item in root.GetProperty("issues").EnumerateArray()
+                     .Select((item, index) => (item, index)))
+            ValidateExactObjectProperties(
+                item.item,
+                $"$.structuredExtraction.issues[{item.index}]",
+                "code", "message",
                 "itemSequence", "pageNumbers");
-        foreach (var item in root.GetProperty("conflicts").EnumerateArray())
-            ValidateExactObjectProperties(item, "code", "message",
+        foreach (var item in root.GetProperty("conflicts").EnumerateArray()
+                     .Select((item, index) => (item, index)))
+            ValidateExactObjectProperties(
+                item.item,
+                $"$.structuredExtraction.conflicts[{item.index}]",
+                "code", "message",
                 "itemSequences", "pageNumbers");
+    }
+
+    private static void ValidateEvidenceShape(
+        JsonElement evidence,
+        string jsonPath)
+    {
+        if (!evidence.TryGetProperty("sourceType", out var sourceTypeElement)
+            || sourceTypeElement.ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidDataException(
+                BuildInvalidObjectValueKindMessage(
+                    jsonPath,
+                    $"{jsonPath}.sourceType",
+                    JsonValueKind.String,
+                    sourceTypeElement.ValueKind));
+        }
+
+        var sourceType = sourceTypeElement.GetString();
+        if (sourceType is null)
+        {
+            throw new InvalidDataException(
+                $"{jsonPath}.sourceType: expected non-null string; actual null");
+        }
+
+        if (sourceType is "NATIVE" or "OCR")
+        {
+            ValidateExactObjectProperties(evidence, jsonPath,
+                "pageNumber",
+                "sourceType", "text");
+            return;
+        }
+
+        if (sourceType is "XLSX")
+        {
+            ValidateExactObjectProperties(evidence, jsonPath,
+                "sourceType", "text",
+                "sheetName", "cellRange");
+            return;
+        }
+
+        throw new InvalidDataException(
+            $"Path={jsonPath}.sourceType; Property=sourceType; Expected one of {{NATIVE,OCR,XLSX}}; Actual={sourceType}");
     }
 
     private static StructuredExtractionData ValidateStructuredExtraction(
@@ -1168,6 +1409,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
         ValidateNumbers(dto.SourcePages, pageCount);
         var evidence = MapEvidence(dto.Evidence, pageCount);
         var evidencePages = evidence.Select(value => value.PageNumber)
+            .Where(value => value.HasValue)
             .Distinct().Order().ToArray();
         var unassigned = scope == GlassAssignmentScope.Unassigned;
         var validUnassigned = unassigned
@@ -1175,13 +1417,14 @@ public sealed class CotizadorAiDocumentProcessingClient(
             && dto.NormalizedCode is null
             && dto.RequiresReview
             && reasons.SequenceEqual(
-                [GlassReviewReason.GlassTypeNotIdentified])
+                new[] { GlassReviewReason.GlassTypeNotIdentified })
             && dto.SourcePages!.Count == 0
             && evidence.Length == 0;
         var validAssigned = !unassigned
             && dto.RawSpecification is not null
             && evidence.Length > 0
-            && dto.SourcePages!.SequenceEqual(evidencePages)
+            && evidencePages.SequenceEqual(
+                dto.SourcePages.Select(value => (int?)value).ToArray())
             && (dto.NormalizedCode is not null
                 || dto.RequiresReview && reasons.Length > 0);
         if (reasons.Distinct().Count() != reasons.Length
@@ -1253,22 +1496,63 @@ public sealed class CotizadorAiDocumentProcessingClient(
     {
         if (values is null) throw new InvalidDataException();
         var result = new SourceEvidenceData[values.Count];
-        var seen = new HashSet<(int, string, string)>();
+        var seen = new HashSet<(int?, EvidenceSourceType, string, string?, string?)>();
         for (var i = 0; i < values.Count; i++)
         {
             var x = values[i] ?? throw new InvalidDataException();
-            if (x.PageNumber < 1 || x.PageNumber > pageCount
-                || string.IsNullOrWhiteSpace(x.Text) || x.Text.Length > 500
-                || !seen.Add((x.PageNumber, x.SourceType ?? "", x.Text)))
+            if (string.IsNullOrWhiteSpace(x.Text) || x.Text.Length > 500)
                 throw new InvalidDataException();
-            if (i > 0 && x.PageNumber < result[i - 1].PageNumber)
-                throw new InvalidDataException();
-            result[i] = new(x.PageNumber, x.SourceType switch
+
+            var sourceType = x.SourceType switch
             {
                 "NATIVE" => EvidenceSourceType.Native,
                 "OCR" => EvidenceSourceType.Ocr,
+                "XLSX" => EvidenceSourceType.Xlsx,
                 _ => throw new InvalidDataException()
-            }, x.Text);
+            };
+
+            var sheetName = string.IsNullOrWhiteSpace(x.SheetName)
+                ? null
+                : x.SheetName;
+            var cellRange = string.IsNullOrWhiteSpace(x.CellRange)
+                ? null
+                : x.CellRange;
+
+            if (sourceType is EvidenceSourceType.Native or EvidenceSourceType.Ocr)
+            {
+                if (x.PageNumber is not { } pageNumber
+                    || pageNumber < 1
+                    || pageNumber > pageCount
+                    || sheetName is not null
+                    || cellRange is not null)
+                {
+                    throw new InvalidDataException();
+                }
+            }
+            else
+            {
+                if (x.PageNumber is not null
+                    || sheetName is null
+                    || cellRange is null)
+                {
+                    throw new InvalidDataException();
+                }
+            }
+
+            if (i > 0
+                && result[i - 1].PageNumber.HasValue
+                && x.PageNumber.HasValue
+                && x.PageNumber.Value < result[i - 1].PageNumber.Value)
+                throw new InvalidDataException();
+
+            if (!seen.Add((x.PageNumber, sourceType, x.Text,
+                sheetName, cellRange)))
+            {
+                throw new InvalidDataException();
+            }
+
+            result[i] = new(x.PageNumber, sourceType, x.Text, sheetName,
+                cellRange);
         }
         return result;
     }
@@ -1382,37 +1666,40 @@ public sealed class CotizadorAiDocumentProcessingClient(
         };
     }
 
-    private static PdfClassification MapClassification(
+    private static DocumentClassification MapClassification(
         string? classification)
     {
         return classification switch
         {
-            "PDF_TEXT" => PdfClassification.PdfText,
-            "PDF_SCANNED" => PdfClassification.PdfScanned,
-            "PDF_MIXED" => PdfClassification.PdfMixed,
+            "PDF_TEXT" => DocumentClassification.PdfText,
+            "PDF_SCANNED" => DocumentClassification.PdfScanned,
+            "PDF_MIXED" => DocumentClassification.PdfMixed,
+            "XLSX" => DocumentClassification.Xlsx,
             _ => throw new InvalidDataException()
         };
     }
 
     private static void ValidateClassificationInvariants(
         DocumentProcessingOutcome outcome,
-        PdfClassification classification,
+        DocumentClassification classification,
         bool requiresOcr,
         IReadOnlyList<ProcessedPageData> pages)
     {
         var isValid = classification switch
         {
-            PdfClassification.PdfText =>
+            DocumentClassification.PdfText =>
                 outcome == DocumentProcessingOutcome.Completed
                 && !requiresOcr
                 && pages.All(page => page.HasExtractableText),
-            PdfClassification.PdfScanned =>
+            DocumentClassification.PdfScanned =>
                 outcome == DocumentProcessingOutcome.RequiresReview
                 && requiresOcr,
-            PdfClassification.PdfMixed =>
+            DocumentClassification.PdfMixed =>
                 outcome == DocumentProcessingOutcome.RequiresReview
                 && requiresOcr
                 && pages.Count >= 2,
+            DocumentClassification.Xlsx =>
+                !requiresOcr,
             _ => false
         };
 
@@ -1463,13 +1750,13 @@ public sealed class CotizadorAiDocumentProcessingClient(
     }
 
     private static void ValidateWarnings(
-        PdfClassification classification,
+        DocumentClassification classification,
         IReadOnlyList<ProcessedPageData> pages,
         IReadOnlyList<ProcessingWarningData> warnings)
     {
         switch (classification)
         {
-            case PdfClassification.PdfText:
+            case DocumentClassification.PdfText:
                 if (warnings.Count != 0)
                 {
                     throw new InvalidDataException();
@@ -1477,7 +1764,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
                 break;
 
-            case PdfClassification.PdfScanned:
+            case DocumentClassification.PdfScanned:
                 var scannedWarning = ValidateSingleWarning(
                     warnings,
                     "OCR_REQUIRED",
@@ -1491,7 +1778,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
 
                 break;
 
-            case PdfClassification.PdfMixed:
+            case DocumentClassification.PdfMixed:
                 var mixedWarning = ValidateSingleWarning(
                     warnings,
                     "PARTIAL_OCR_REQUIRED",
@@ -1509,6 +1796,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
                     throw new InvalidDataException();
                 }
 
+                break;
+
+            case DocumentClassification.Xlsx:
                 break;
 
             default:
@@ -1629,7 +1919,14 @@ public sealed class CotizadorAiDocumentProcessingClient(
     }
     private sealed class ProjectDto { public string? Name { get; init; } public string? ClientName { get; init; } public string? Location { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
     private sealed class RequirementsDto { public List<RequirementDto?>? GlassSpecifications { get; init; } public List<RequirementDto?>? ProfileSpecifications { get; init; } public List<RequirementDto?>? Finishes { get; init; } public List<RequirementDto?>? AccessoriesAndSealants { get; init; } public List<RequirementDto?>? GeneralNotes { get; init; } }
-    private sealed class EvidenceDto { public int PageNumber { get; init; } public string? SourceType { get; init; } public string? Text { get; init; } }
+    private sealed class EvidenceDto
+    {
+        public int? PageNumber { get; init; }
+        public string? SourceType { get; init; }
+        public string? Text { get; init; }
+        public string? SheetName { get; init; }
+        public string? CellRange { get; init; }
+    }
     private sealed class RequirementDto { public string? Value { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
     private sealed class ItemDto { public int Sequence { get; init; } public string? Reference { get; init; } public string? Description { get; init; } public string? ElementType { get; init; } public string? RawMeasurements { get; init; } public int? WidthMillimeters { get; init; } public int? HeightMillimeters { get; init; } public int? Quantity { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } public GlassDto? Glass { get; init; } public TechnicalClassificationDto? TechnicalClassification { get; init; } }
     private sealed class GlassDto { public string? RawSpecification { get; init; } public string? NormalizedCode { get; init; } public string? AssignmentScope { get; init; } public bool RequiresReview { get; init; } public List<string?>? ReviewReasons { get; init; } public List<int>? SourcePages { get; init; } public List<EvidenceDto?>? Evidence { get; init; } }
@@ -1675,7 +1972,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
         string? rejectedValue = null,
         IReadOnlyList<string>? acceptedValues = null)
         : Exception(
-            $"Contract validation failed at {stage}: {category}.",
+            BuildContractValidationMessage(stage, category, innerException),
             innerException)
     {
         public string Stage { get; } = stage;
@@ -1689,6 +1986,20 @@ public sealed class CotizadorAiDocumentProcessingClient(
         public string? FieldName { get; } = fieldName;
         public string? RejectedValue { get; } = rejectedValue;
         public IReadOnlyList<string>? AcceptedValues { get; } = acceptedValues;
+    }
+
+    private static string BuildContractValidationMessage(
+        string stage,
+        string category,
+        Exception? innerException)
+    {
+        if (innerException is null
+            || string.IsNullOrWhiteSpace(innerException.Message))
+        {
+            return $"Contract validation failed at {stage}: {category}.";
+        }
+
+        return $"Contract validation failed at {stage}: {category}. {innerException.Message}";
     }
 
     private static ResponseContractValidationException Invalid(

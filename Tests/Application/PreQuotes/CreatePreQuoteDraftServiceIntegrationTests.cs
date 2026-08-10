@@ -86,7 +86,7 @@ public sealed class CreatePreQuoteDraftServiceIntegrationTests(
             var extractionResult = DocumentExtractionResult.Create(
                 attempt.Id,
                 "3.0",
-                PdfClassification.PdfText,
+                DocumentClassification.PdfText,
                 false,
                 5,
                 "pymupdf",

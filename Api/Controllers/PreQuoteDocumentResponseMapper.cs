@@ -73,23 +73,24 @@ internal static class PreQuoteDocumentResponseMapper
                 item.WidthMillimeters, item.HeightMillimeters, item.Quantity,
                 item.RequiresReview, item.ReviewReasons.Select(Map).ToArray(),
                 item.SourcePages, item.Evidence.Select(Map).ToArray(),
-                item.Glass is null ? null : new StructuredExtractionItemGlassResponse(
-                    item.Glass.GlassTypeId,
-                    item.Glass.RawSpecification,
-                    item.Glass.NormalizedCode,
-                    Map(item.Glass.AssignmentScope),
+                        item.Glass is null ? null : new StructuredExtractionItemGlassResponse(
+                            item.Glass.GlassTypeId,
+                            item.Glass.RawSpecification,
+                            item.Glass.NormalizedCode,
+                            Map(item.Glass.AssignmentScope),
                     item.Glass.RequiresReview,
                     item.Glass.ReviewReasons.Select(Map).ToArray(),
                     item.Glass.SourcePages,
-                    item.Glass.Evidence.Select(value =>
-                        new StructuredExtractionItemGlassEvidenceResponse(
-                            value.PageNumber,
-                            value.SourceType == EvidenceSourceType.Native
-                                ? "NATIVE" : "OCR",
-                            value.Text)).ToArray()),
-                item.Valuation is null ? null
-                    : new StructuredExtractionItemGlassValuationResponse(
-                        Map(item.Valuation.Status),
+                        item.Glass.Evidence.Select(value =>
+                            new StructuredExtractionItemGlassEvidenceResponse(
+                                value.PageNumber,
+                                Map(value.SourceType),
+                                value.Text,
+                                value.SheetName,
+                                value.CellRange)).ToArray()),
+                    item.Valuation is null ? null
+                        : new StructuredExtractionItemGlassValuationResponse(
+                            Map(item.Valuation.Status),
                         item.Valuation.Reason is { } reason ? Map(reason) : null,
                         item.Valuation.GlassTypeId,
                         item.Valuation.GlassPriceRangeVersionId,
@@ -177,8 +178,20 @@ internal static class PreQuoteDocumentResponseMapper
 
     private static StructuredEvidenceResponse Map(
         StructuredEvidenceReadModel value) =>
-        new(value.PageNumber, value.SourceType == EvidenceSourceType.Native
-            ? "NATIVE" : "OCR", value.Text);
+        new(
+            value.PageNumber,
+            Map(value.SourceType),
+            value.Text,
+            value.SheetName,
+            value.CellRange);
+
+    private static string Map(EvidenceSourceType value) => value switch
+    {
+        EvidenceSourceType.Native => "NATIVE",
+        EvidenceSourceType.Ocr => "OCR",
+        EvidenceSourceType.Xlsx => "XLSX",
+        _ => throw new InvalidOperationException()
+    };
     private static string Map(DocumentProcessingState value) => value switch
     {
         DocumentProcessingState.Pending => "PENDING",
@@ -193,11 +206,12 @@ internal static class PreQuoteDocumentResponseMapper
         DocumentProcessingOutcome.Failed => "FAILED",
         _ => throw new InvalidOperationException()
     };
-    private static string Map(PdfClassification value) => value switch
+    private static string Map(DocumentClassification value) => value switch
     {
-        PdfClassification.PdfText => "PDF_TEXT",
-        PdfClassification.PdfScanned => "PDF_SCANNED",
-        PdfClassification.PdfMixed => "PDF_MIXED",
+        DocumentClassification.PdfText => "PDF_TEXT",
+        DocumentClassification.PdfScanned => "PDF_SCANNED",
+        DocumentClassification.PdfMixed => "PDF_MIXED",
+        DocumentClassification.Xlsx => "XLSX",
         _ => throw new InvalidOperationException()
     };
     private static string Map(StructuredElementType value) => value switch

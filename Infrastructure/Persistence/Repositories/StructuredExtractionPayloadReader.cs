@@ -67,43 +67,7 @@ internal static class StructuredExtractionPayloadReader
             ?? throw Invalid();
         var structured = payload.StructuredExtraction ?? throw Invalid();
 
-        if (payload.SchemaVersion != persisted.SchemaVersion
-            || payload.SchemaVersion is not ("2.0" or "3.0")
-            || expectedDocumentId == Guid.Empty
-            || payload.DocumentId == Guid.Empty
-            || payload.DocumentId != expectedDocumentId
-            || payload.ProcessingAttemptId == Guid.Empty
-            || payload.ProcessingAttemptId != persisted.ProcessingAttemptId
-            || payload.Document is null
-            || payload.Pages is null
-            || payload.Warnings is null
-            || payload.ProcessingMetadata is null
-            || MapStatus(structured.Status) != persisted.Status
-            || structured.Project is null
-            || structured.Requirements is null
-            || structured.Items is null
-            || structured.DocumentReferences is null
-            || structured.Issues is null
-            || structured.Conflicts is null
-            || structured.Summary is null
-            || structured.ProcessingMetadata is null
-            || structured.Project.Name != persisted.ProjectName
-            || structured.Project.ClientName != persisted.ClientName
-            || structured.Project.Location != persisted.Location
-            || structured.Summary.ItemCount != persisted.ItemCount
-            || structured.Summary.DocumentReferenceCount
-                != persisted.DocumentReferenceCount
-            || structured.Summary.KnownQuoteableUnitCount
-                != persisted.KnownQuoteableUnitCount
-            || structured.Summary.IdentifiedGlassItemCount
-                != persisted.IdentifiedGlassItemCount
-            || structured.Summary.GlassItemsRequiringReview
-                != persisted.GlassItemsRequiringReview
-            || structured.ProcessingMetadata.Method != persisted.ProcessingMethod
-            || structured.ProcessingMetadata.DurationMs != persisted.DurationMs)
-        {
-            throw Invalid();
-        }
+        ValidateHeader(expectedDocumentId, persisted, payload, structured);
 
         ValidateItemsRequiringReview(
             persisted.ExtractionId,
@@ -121,18 +85,28 @@ internal static class StructuredExtractionPayloadReader
             MapEvidence(structured.Project.Evidence, persisted.PageCount));
         var payloadRequirements = FlattenRequirements(structured.Requirements);
 
-        if (items.Count != structured.Items.Count
-            || requirements.Count != payloadRequirements.Length
-            || references.Count != structured.DocumentReferences.Count
-            || issues.Count != structured.Issues.Count
-            || conflicts.Count != structured.Conflicts.Count)
-        {
-            throw Invalid();
-        }
+        ValidateCollectionCounts(
+            persisted.ExtractionId,
+            items.Count,
+            structured.Items.Count,
+            requirements.Count,
+            payloadRequirements.Length,
+            references.Count,
+            structured.DocumentReferences.Count,
+            issues.Count,
+            structured.Issues.Count,
+            conflicts.Count,
+            structured.Conflicts.Count);
 
         if (payload.SchemaVersion == "2.0" && glasses.Count != 0
             || payload.SchemaVersion == "3.0" && glasses.Count != items.Count)
-            throw Invalid();
+            throw Invalid(
+                "glass",
+                persisted.ExtractionId,
+                null,
+                "count",
+                payload.SchemaVersion == "3.0" ? items.Count : 0,
+                glasses.Count);
         var glassByItem = glasses.ToDictionary(value => value.ItemSequence);
         var technicalByItem = technicalClassifications.ToDictionary(
             value => value.ItemSequence);
@@ -253,37 +227,96 @@ internal static class StructuredExtractionPayloadReader
             throw Invalid();
         }
 
+        var systemCode = NormalizeTechnicalCode(dto.SystemCode);
+        var systemOriginalText = NormalizeTechnicalText(dto.SystemOriginalText);
         var systemSource = MapTechnicalSource(dto.SystemSource);
+        var frameCode = NormalizeTechnicalCode(dto.FrameCode);
+        var frameOriginalText = NormalizeTechnicalText(dto.FrameOriginalText);
         var frameSource = MapTechnicalSource(dto.FrameSource);
+        var finishCode = NormalizeTechnicalCode(dto.FinishCode);
+        var finishOriginalText = NormalizeTechnicalText(dto.FinishOriginalText);
         var finishSource = MapTechnicalSource(dto.FinishSource);
         var reasons = dto.ReviewReasons ?? throw Invalid();
-        if (dto.SystemCode != persisted.SystemCode
-            || dto.SystemOriginalText != persisted.SystemOriginalText
-            || systemSource != persisted.SystemSource
-            || dto.SystemConfidence != persisted.SystemConfidence
-            || dto.FrameCode != persisted.FrameCode
-            || dto.FrameOriginalText != persisted.FrameOriginalText
-            || frameSource != persisted.FrameSource
-            || dto.FrameConfidence != persisted.FrameConfidence
-            || dto.FinishCode != persisted.FinishCode
-            || dto.FinishOriginalText != persisted.FinishOriginalText
-            || finishSource != persisted.FinishSource
-            || dto.FinishConfidence != persisted.FinishConfidence)
-        {
-            throw Invalid(
-                "technicalClassification",
-                structuredExtractionId,
-                persisted.ItemSequence,
-                "technicalClassification",
-                dto,
-                persisted);
-        }
 
-        if (reasons.Any(string.IsNullOrWhiteSpace)
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "systemCode",
+            systemCode,
+            persisted.SystemCode);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "systemOriginalText",
+            systemOriginalText,
+            persisted.SystemOriginalText);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "systemSource",
+            systemSource,
+            persisted.SystemSource);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "systemConfidence",
+            dto.SystemConfidence,
+            persisted.SystemConfidence);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "frameCode",
+            frameCode,
+            persisted.FrameCode);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "frameOriginalText",
+            frameOriginalText,
+            persisted.FrameOriginalText);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "frameSource",
+            frameSource,
+            persisted.FrameSource);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "frameConfidence",
+            dto.FrameConfidence,
+            persisted.FrameConfidence);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "finishCode",
+            finishCode,
+            persisted.FinishCode);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "finishOriginalText",
+            finishOriginalText,
+            persisted.FinishOriginalText);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "finishSource",
+            finishSource,
+            persisted.FinishSource);
+        ValidateTechnicalField(
+            structuredExtractionId,
+            persisted.ItemSequence,
+            "finishConfidence",
+            dto.FinishConfidence,
+            persisted.FinishConfidence);
+
+        var normalizedReasons = NormalizeTechnicalReviewReasons(reasons);
+        if (normalizedReasons is null
             || !TechnicalReviewMatches(
                 schemaVersion,
                 dto.RequiresReview,
-                reasons,
+                normalizedReasons,
                 persisted.RequiresReview,
                 persisted.ReviewReasons))
         {
@@ -292,7 +325,7 @@ internal static class StructuredExtractionPayloadReader
                 structuredExtractionId,
                 persisted.ItemSequence,
                 "technicalClassification.reviewReasons",
-                reasons,
+                normalizedReasons ?? reasons,
                 persisted.ReviewReasons);
         }
 
@@ -351,7 +384,12 @@ internal static class StructuredExtractionPayloadReader
             || evidence.Where((value, index) =>
                 value.PageNumber != persisted.Evidence[index].PageNumber
                 || value.SourceType != persisted.Evidence[index].SourceType
-                || value.Text != persisted.Evidence[index].Text).Any())
+                || value.Text != persisted.Evidence[index].Text
+                || value.SheetName != persisted.Evidence[index].SheetName
+                || value.CellRange != persisted.Evidence[index].CellRange).Any())
+            // TODO(BE-PAYLOAD-EVIDENCE-LOC): PersistedGlassEvidence aún no
+            // transporta SheetName/CellRange desde EF legacy; se completa en el
+            // próximo paso de configuración de persistencia.
             throw Invalid();
         return new(persisted.GlassTypeId, persisted.RawSpecification,
             persisted.NormalizedCode, persisted.AssignmentScope,
@@ -542,6 +580,141 @@ internal static class StructuredExtractionPayloadReader
             persistedValue);
     }
 
+    private static void ValidateHeader(
+        Guid expectedDocumentId,
+        AvailableExtractionProjection persisted,
+        Payload payload,
+        StructuredDto structured)
+    {
+        if (payload.SchemaVersion != persisted.SchemaVersion)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "schemaVersion", payload.SchemaVersion, persisted.SchemaVersion);
+        if (payload.SchemaVersion is not ("2.0" or "3.0"))
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "schemaVersion", payload.SchemaVersion, "2.0|3.0");
+        if (expectedDocumentId == Guid.Empty
+            || payload.DocumentId == Guid.Empty
+            || payload.DocumentId != expectedDocumentId)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "documentId", payload.DocumentId, expectedDocumentId);
+        if (payload.ProcessingAttemptId == Guid.Empty
+            || payload.ProcessingAttemptId != persisted.ProcessingAttemptId)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "processingAttemptId",
+                payload.ProcessingAttemptId,
+                persisted.ProcessingAttemptId);
+        if (payload.Document is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "document", null, "present");
+        if (payload.Pages is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "pages", null, "present");
+        if (payload.Warnings is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "warnings", null, "present");
+        if (payload.ProcessingMetadata is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "processingMetadata", null, "present");
+        if (MapStatus(structured.Status) != persisted.Status)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "status", structured.Status, persisted.Status);
+        if (structured.Project is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "project", null, "present");
+        if (structured.Requirements is null)
+            throw Invalid("requirements", persisted.ExtractionId, null,
+                "requirements", null, "present");
+        if (structured.Items is null)
+            throw Invalid("items", persisted.ExtractionId, null,
+                "items", null, "present");
+        if (structured.DocumentReferences is null)
+            throw Invalid("references", persisted.ExtractionId, null,
+                "documentReferences", null, "present");
+        if (structured.Issues is null)
+            throw Invalid("issues", persisted.ExtractionId, null,
+                "issues", null, "present");
+        if (structured.Conflicts is null)
+            throw Invalid("conflicts", persisted.ExtractionId, null,
+                "conflicts", null, "present");
+        if (structured.Summary is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "summary", null, "present");
+        if (structured.ProcessingMetadata is null)
+            throw Invalid("summary", persisted.ExtractionId, null,
+                "structuredProcessingMetadata", null, "present");
+        ValidateHeaderField(persisted.ExtractionId, "projectName",
+            structured.Project.Name, persisted.ProjectName);
+        ValidateHeaderField(persisted.ExtractionId, "clientName",
+            structured.Project.ClientName, persisted.ClientName);
+        ValidateHeaderField(persisted.ExtractionId, "location",
+            structured.Project.Location, persisted.Location);
+        ValidateHeaderField(persisted.ExtractionId, "itemCount",
+            structured.Summary.ItemCount, persisted.ItemCount);
+        ValidateHeaderField(persisted.ExtractionId, "documentReferenceCount",
+            structured.Summary.DocumentReferenceCount,
+            persisted.DocumentReferenceCount);
+        ValidateHeaderField(persisted.ExtractionId, "knownQuoteableUnitCount",
+            structured.Summary.KnownQuoteableUnitCount,
+            persisted.KnownQuoteableUnitCount);
+        ValidateHeaderField(persisted.ExtractionId, "identifiedGlassItemCount",
+            structured.Summary.IdentifiedGlassItemCount,
+            persisted.IdentifiedGlassItemCount);
+        ValidateHeaderField(persisted.ExtractionId, "glassItemsRequiringReview",
+            structured.Summary.GlassItemsRequiringReview,
+            persisted.GlassItemsRequiringReview);
+        ValidateHeaderField(persisted.ExtractionId, "processingMethod",
+            structured.ProcessingMetadata.Method, persisted.ProcessingMethod);
+        ValidateHeaderField(persisted.ExtractionId, "durationMs",
+            structured.ProcessingMetadata.DurationMs, persisted.DurationMs);
+    }
+
+    private static void ValidateHeaderField<T>(
+        Guid structuredExtractionId,
+        string fieldName,
+        T payloadValue,
+        T persistedValue)
+    {
+        if (!EqualityComparer<T>.Default.Equals(payloadValue, persistedValue))
+            throw Invalid("summary", structuredExtractionId, null, fieldName,
+                payloadValue, persistedValue);
+    }
+
+    private static void ValidateCollectionCounts(
+        Guid structuredExtractionId,
+        int persistedItems,
+        int payloadItems,
+        int persistedRequirements,
+        int payloadRequirements,
+        int persistedReferences,
+        int payloadReferences,
+        int persistedIssues,
+        int payloadIssues,
+        int persistedConflicts,
+        int payloadConflicts)
+    {
+        ValidateCollectionCount(structuredExtractionId, "items",
+            payloadItems, persistedItems);
+        ValidateCollectionCount(structuredExtractionId, "requirements",
+            payloadRequirements, persistedRequirements);
+        ValidateCollectionCount(structuredExtractionId, "references",
+            payloadReferences, persistedReferences);
+        ValidateCollectionCount(structuredExtractionId, "issues",
+            payloadIssues, persistedIssues);
+        ValidateCollectionCount(structuredExtractionId, "conflicts",
+            payloadConflicts, persistedConflicts);
+    }
+
+    private static void ValidateCollectionCount(
+        Guid structuredExtractionId,
+        string stage,
+        int payloadValue,
+        int persistedValue)
+    {
+        if (payloadValue != persistedValue)
+            throw Invalid(stage, structuredExtractionId, null, "count",
+                payloadValue, persistedValue);
+    }
+
     private static bool ItemRequiresReviewMatches(
         string schemaVersion,
         bool payloadValue,
@@ -575,6 +748,64 @@ internal static class StructuredExtractionPayloadReader
             && persistedReviewReasons.Length > 0;
     }
 
+    private static void ValidateTechnicalField<T>(
+        Guid structuredExtractionId,
+        int itemSequence,
+        string fieldName,
+        T payloadValue,
+        T persistedValue)
+    {
+        if (!EqualityComparer<T>.Default.Equals(payloadValue, persistedValue))
+            throw Invalid(
+                "technicalClassification",
+                structuredExtractionId,
+                itemSequence,
+                fieldName,
+                payloadValue,
+                persistedValue);
+    }
+
+    private static string? NormalizeTechnicalCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var code = value.Trim().ToUpperInvariant();
+        return code.Length <= 30
+            && code.All(character =>
+                character is >= 'A' and <= 'Z'
+                || character is >= '0' and <= '9'
+                || character is '_' or '-')
+            ? code
+            : null;
+    }
+
+    private static string? NormalizeTechnicalText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var text = value.Trim();
+        return text.Length <= 500 ? text : null;
+    }
+
+    private static string[]? NormalizeTechnicalReviewReasons(string[] reasons)
+    {
+        if (reasons.Any(string.IsNullOrWhiteSpace))
+        {
+            return null;
+        }
+
+        return reasons
+            .Select(value => value.Trim().ToUpperInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     private static StructuredEvidenceReadModel[] MapEvidence(
         EvidenceDto[]? evidence,
         int pageCount)
@@ -586,22 +817,46 @@ internal static class StructuredExtractionPayloadReader
 
         return evidence.Select(value =>
         {
-            if (value.PageNumber < 1
-                || value.PageNumber > pageCount
-                || value.Text is null)
+            if (value.Text is null || value.Text.Length > 500)
+            {
+                throw Invalid();
+            }
+
+            var sourceType = value.SourceType switch
+            {
+                "NATIVE" => EvidenceSourceType.Native,
+                "OCR" => EvidenceSourceType.Ocr,
+                "XLSX" => EvidenceSourceType.Xlsx,
+                _ => throw Invalid()
+            };
+
+            var sheetName = string.IsNullOrWhiteSpace(value.SheetName)
+                ? null
+                : value.SheetName;
+            var cellRange = string.IsNullOrWhiteSpace(value.CellRange)
+                ? null
+                : value.CellRange;
+
+            if (sourceType is EvidenceSourceType.Native or EvidenceSourceType.Ocr)
+            {
+                if (value.PageNumber is not { } pageNumber
+                    || pageNumber < 1 || pageNumber > pageCount
+                    || sheetName is not null || cellRange is not null)
+                {
+                    throw Invalid();
+                }
+
+                return new StructuredEvidenceReadModel(
+                    pageNumber, sourceType, value.Text, null, null);
+            }
+
+            if (value.PageNumber is not null || sheetName is null || cellRange is null)
             {
                 throw Invalid();
             }
 
             return new StructuredEvidenceReadModel(
-                value.PageNumber,
-                value.SourceType switch
-                {
-                    "NATIVE" => EvidenceSourceType.Native,
-                    "OCR" => EvidenceSourceType.Ocr,
-                    _ => throw Invalid()
-                },
-                value.Text);
+                null, sourceType, value.Text, sheetName, cellRange);
         }).ToArray();
     }
 
@@ -651,9 +906,10 @@ internal static class StructuredExtractionPayloadReader
             _ => throw Invalid()
         };
     private static TechnicalClassificationSource? MapTechnicalSource(
-        string? value) => value switch
+        string? value) => string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToUpperInvariant() switch
         {
-            null => null,
             "EXPLICIT" => TechnicalClassificationSource.Explicit,
             "ALIAS" => TechnicalClassificationSource.Alias,
             "INFERRED" => TechnicalClassificationSource.Inferred,
@@ -805,9 +1061,11 @@ internal static class StructuredExtractionPayloadReader
     }
     private sealed class EvidenceDto
     {
-        public int PageNumber { get; init; }
+        public int? PageNumber { get; init; }
         public string? SourceType { get; init; }
         public string? Text { get; init; }
+        public string? SheetName { get; init; }
+        public string? CellRange { get; init; }
     }
     private sealed class SummaryDto
     {

@@ -68,7 +68,7 @@ public sealed class StructuredDocumentExtractionTests
         var result = DocumentExtractionResult.Create(
             Guid.NewGuid(),
             "1.0",
-            PdfClassification.PdfText,
+            DocumentClassification.PdfText,
             false,
             1,
             "pymupdf",

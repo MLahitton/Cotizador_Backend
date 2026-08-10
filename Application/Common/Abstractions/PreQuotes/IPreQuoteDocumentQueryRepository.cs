@@ -15,7 +15,7 @@ public enum DocumentProcessingAvailability
 
 public sealed record DocumentExtractionResultMetadataReadModel(
     string SchemaVersion,
-    PdfClassification Classification,
+    DocumentClassification Classification,
     bool RequiresOcr,
     int PageCount,
     string ProcessingMethod,
@@ -73,9 +73,11 @@ public sealed record PreQuoteDocumentReadModel(
     DateTimeOffset CreatedAtUtc);
 
 public sealed record StructuredEvidenceReadModel(
-    int PageNumber,
+    int? PageNumber,
     EvidenceSourceType SourceType,
-    string Text);
+    string Text,
+    string? SheetName = null,
+    string? CellRange = null);
 
 public sealed record StructuredItemTechnicalClassificationReadModel(
     string? SystemCode,

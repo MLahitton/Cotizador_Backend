@@ -15,6 +15,7 @@ using Application.PreQuotes.GetPreQuoteDocuments;
 using Contracts.Common;
 using Contracts.PreQuotes;
 using Domain.Clients;
+using Domain.PreQuotes;
 using Domain.Identity;
 using FluentValidation;
 using Microsoft.AspNetCore.Builder;
@@ -35,11 +36,15 @@ public sealed class DocumentUploadProblemDetailsTests
 {
     private static readonly Guid UserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly DateTimeOffset At = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    private const string PdfContentType = "application/pdf";
+    private const string XlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     [Theory]
     [InlineData("unauthorized", 401, PreQuoteErrorCodes.Unauthorized)]
     [InlineData("inactive_user", 403, PreQuoteErrorCodes.InactiveUser)]
     [InlineData("unsupported", 415, DocumentErrorCodes.UnsupportedFileType)]
+    [InlineData("unsupported_extension", 415, DocumentErrorCodes.UnsupportedFileType)]
     [InlineData("empty", 422, DocumentErrorCodes.EmptyFile)]
     [InlineData("too_large", 413, DocumentErrorCodes.FileTooLarge)]
     [InlineData("not_found", 404, DocumentErrorCodes.PreQuoteNotFound)]
@@ -100,7 +105,58 @@ public sealed class DocumentUploadProblemDetailsTests
             TestContext.Current.CancellationToken);
         Assert.NotNull(body);
         Assert.Equal(CreatePreQuoteDocumentService.MaximumFileSizeBytes, body.SizeBytes);
+        host.Storage.Received(1).SaveAsync(
+            Arg.Is<string>(key => key.EndsWith("/original.pdf", StringComparison.Ordinal)),
+            Arg.Any<Stream>(),
+            Arg.Any<CancellationToken>());
+        host.Repository.Received(1).AddDocument(Arg.Is<PreQuoteDocument>(document =>
+            document.ContentType == PdfContentType
+            && document.StorageKey.EndsWith("/original.pdf", StringComparison.Ordinal)));
         await host.Repository.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(PdfContentType, "document.PDF", "original.pdf")]
+    [InlineData(XlsxContentType, "document.XLSX", "original.xlsx")]
+    public async Task Post_SupportedFileTypeWithAllowedExtension_IsAccepted(
+        string contentType,
+        string fileName,
+        string storageName)
+    {
+        await using var host = await ControlledHost.StartAsync("success");
+        using var content = CreateMultipart(fileName, contentType);
+        using var response = await host.Client.PostAsync(
+            $"/api/v1/prequotes/{host.PreQuoteId}/documents", content,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<CreatePreQuoteDocumentResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(body);
+        Assert.Equal(contentType, body.ContentType);
+        host.Storage.Received(1).SaveAsync(
+            Arg.Is<string>(key => key.EndsWith($"/{storageName}", StringComparison.Ordinal)),
+            Arg.Any<Stream>(),
+            Arg.Any<CancellationToken>());
+        host.Repository.Received(1).AddDocument(Arg.Is<PreQuoteDocument>(document =>
+            document.ContentType == contentType
+            && document.StorageKey.EndsWith($"/{storageName}", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData(PdfContentType, "document.xlsx")]
+    [InlineData(XlsxContentType, "document.pdf")]
+    [InlineData("text/plain", "document.pdf")]
+    [InlineData(PdfContentType, "document.txt")]
+    public async Task Post_UnsupportedContentTypeOrExtension_IsRejected(
+        string contentType,
+        string fileName)
+    {
+        await using var host = await ControlledHost.StartAsync("success");
+        using var content = CreateMultipart(fileName, contentType);
+        using var response = await host.Client.PostAsync(
+            $"/api/v1/prequotes/{host.PreQuoteId}/documents", content,
+            TestContext.Current.CancellationToken);
+        await AssertProblemAsync(response, 415, DocumentErrorCodes.UnsupportedFileType);
     }
 
     [Fact]
@@ -119,10 +175,22 @@ public sealed class DocumentUploadProblemDetailsTests
         Assert.Equal(typeof(IFormFile), fileParameter.ParameterType);
     }
 
-    private static HttpContent CreateMultipart(string scenario)
+    private static HttpContent CreateMultipart(
+        string fileName,
+        string contentType,
+        int length = 4,
+        bool wrongField = false)
     {
         var form = new MultipartFormDataContent();
-        if (scenario == "missing_file") return form;
+        var file = new ByteArrayContent(new byte[length]);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(file, wrongField ? "document" : "file", fileName);
+        return form;
+    }
+
+    private static HttpContent CreateMultipart(string scenario)
+    {
+        if (scenario == "missing_file") return new MultipartFormDataContent();
         var length = scenario switch
         {
             "empty" => 0,
@@ -130,11 +198,10 @@ public sealed class DocumentUploadProblemDetailsTests
             "too_large" => (int)CreatePreQuoteDocumentService.MaximumFileSizeBytes + 1,
             _ => 4
         };
-        var file = new ByteArrayContent(new byte[length]);
-        file.Headers.ContentType = new MediaTypeHeaderValue(
-            scenario == "unsupported" ? "text/plain" : "application/pdf");
-        form.Add(file, scenario == "wrong_field" ? "document" : "file", "document.pdf");
-        return form;
+        var contentType = scenario == "unsupported" ? "text/plain" : PdfContentType;
+        var fileName = scenario == "unsupported_extension" ? "document.txt" : "document.pdf";
+        var wrongField = scenario == "wrong_field";
+        return CreateMultipart(fileName, contentType, length, wrongField);
     }
 
     private static async Task AssertProblemAsync(

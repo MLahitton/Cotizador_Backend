@@ -319,7 +319,7 @@ public sealed class PreQuoteDraftRepositoryTests(
         var result = DocumentExtractionResult.Create(
             attempt.Id,
             schemaVersion,
-            PdfClassification.PdfText,
+            DocumentClassification.PdfText,
             false,
             5,
             "pymupdf",

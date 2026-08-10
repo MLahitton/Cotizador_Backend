@@ -25,8 +25,8 @@ public sealed record PreQuoteDraftItemGlassReviewReasonSource(
 public sealed record PreQuoteDraftItemGlassSourcePageSource(
     int Sequence, int PageNumber);
 public sealed record PreQuoteDraftItemGlassEvidenceSource(
-    int Sequence, int PageNumber, EvidenceSourceType SourceType,
-    string Text);
+    int Sequence, int? PageNumber, EvidenceSourceType SourceType,
+    string Text, string? SheetName = null, string? CellRange = null);
 public sealed record PreQuoteDraftItemGlassSnapshotSource(
     Guid SourceStructuredItemGlassId, Guid? GlassTypeId,
     string? RawSpecification, string? NormalizedCodeSnapshot,
@@ -380,20 +380,36 @@ public sealed class PreQuoteDraftItemGlassEvidence
     public Guid Id { get; private set; }
     public Guid GlassSnapshotId { get; private set; }
     public int Sequence { get; private set; }
-    public int PageNumber { get; private set; }
+    public int? PageNumber { get; private set; }
+    public string? SheetName { get; private set; }
+    public string? CellRange { get; private set; }
     public EvidenceSourceType SourceType { get; private set; }
     public string Text { get; private set; } = string.Empty;
 
     public static PreQuoteDraftItemGlassEvidence Create(
-        PreQuoteDraftItemGlassEvidenceSource source) => new()
+        PreQuoteDraftItemGlassEvidenceSource source)
     {
-        Id = Guid.NewGuid(),
-        GlassSnapshotId = Guid.Empty,
-        Sequence = source.Sequence,
-        PageNumber = source.PageNumber,
-        SourceType = source.SourceType,
-        Text = source.Text
-    };
+        if (source.Sequence < 1)
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        var text = GlassEvidenceValidation.ValidateEvidenceText(source.Text);
+        var location = GlassEvidenceValidation.ValidateEvidenceLocation(
+            source.SourceType, source.PageNumber, source.SheetName, source.CellRange);
+
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            GlassSnapshotId = Guid.Empty,
+            Sequence = source.Sequence,
+            PageNumber = location.PageNumber,
+            SourceType = source.SourceType,
+            SheetName = location.SheetName,
+            CellRange = location.CellRange,
+            Text = text
+        };
+    }
 }
 public sealed record PreQuoteDraftItemSource(
     Guid SourceId, int Sequence, string? Reference, string Description,

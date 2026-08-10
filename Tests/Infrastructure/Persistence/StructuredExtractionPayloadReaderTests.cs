@@ -107,6 +107,54 @@ public sealed class StructuredExtractionPayloadReaderTests
     }
 
     [Fact]
+    public void Read_WithSchema3ExactEighteenItemsAndTechnicalClassification_ReturnsCompleteDetails()
+    {
+        var fixture = CreateSchema3ExactEighteenItemsFixture();
+
+        var result = Read(fixture);
+
+        Assert.Equal(18, result.Items.Count);
+        Assert.All(result.Items, item => Assert.NotNull(item.Glass));
+        Assert.All(result.Items, item => Assert.NotNull(item.TechnicalClassification));
+        Assert.Equal(Enumerable.Range(1, 18), result.Items.Select(item => item.Sequence));
+        Assert.Equal(Enumerable.Range(1, 18), result.Items.Select(item =>
+            item.TechnicalClassification is null ? 0 : item.Sequence));
+        Assert.All(result.Items, item => Assert.False(item.RequiresReview));
+        Assert.All(
+            result.Items,
+            item => Assert.Empty(item.TechnicalClassification!.ReviewReasons));
+        Assert.Equal("V-01", result.Items[0].Reference);
+        Assert.Equal("P-06", result.Items[17].Reference);
+        Assert.Equal(0.95m, result.Items[0].TechnicalClassification!.SystemConfidence);
+        Assert.Empty(result.Requirements);
+        Assert.Empty(result.DocumentReferences);
+        Assert.Empty(result.Issues);
+        Assert.Empty(result.Conflicts);
+    }
+
+    [Fact]
+    public void Read_WithSchema3TechnicalEquivalentRepresentation_DoesNotFail()
+    {
+        var fixture = CreateSchema3ExactEighteenItemsFixture();
+        var root = JsonNode.Parse(fixture.PayloadJson)!.AsObject();
+        var technical = root["structuredExtraction"]!["items"]![0]!
+            ["technicalClassification"]!;
+        technical["systemCode"] = " k40 ";
+        technical["systemSource"] = " explicit ";
+        technical["frameCode"] = " marco_47 ";
+        technical["finishCode"] = " natural ";
+        technical["reviewReasons"] = new JsonArray();
+        fixture = fixture with { PayloadJson = root.ToJsonString() };
+
+        var result = Read(fixture);
+
+        Assert.Equal("K40", result.Items[0].TechnicalClassification!.SystemCode);
+        Assert.Equal(
+            TechnicalClassificationSource.Explicit,
+            result.Items[0].TechnicalClassification!.SystemSource);
+    }
+
+    [Fact]
     public void Read_WithSchema3RealTechnicalDifference_ThrowsDiagnosticException()
     {
         var fixture = CreateSchema3EighteenItemsFixture();
@@ -127,9 +175,52 @@ public sealed class StructuredExtractionPayloadReaderTests
             "Stage=technicalClassification",
             exception.InnerException.Message);
         Assert.Contains("ItemSequence=1", exception.InnerException.Message);
+        Assert.Contains("FieldName=systemCode", exception.InnerException.Message);
+    }
+
+    [Fact]
+    public void Read_WithSchema3RealTechnicalFieldDifference_IdentifiesField()
+    {
+        var fixture = CreateSchema3ExactEighteenItemsFixture();
+        fixture = fixture with
+        {
+            TechnicalClassifications = fixture.TechnicalClassifications
+                .Select((value, index) => index == 0
+                    ? value with { SystemCode = "K999" }
+                    : value)
+                .ToArray()
+        };
+
+        var exception = Assert.Throws<PreQuoteDocumentQueryException>(() =>
+            Read(fixture));
+
+        Assert.IsType<InvalidDataException>(exception.InnerException);
         Assert.Contains(
-            "FieldName=technicalClassification",
+            "Stage=technicalClassification",
             exception.InnerException.Message);
+        Assert.Contains("ItemSequence=1", exception.InnerException.Message);
+        Assert.Contains("FieldName=systemCode", exception.InnerException.Message);
+        Assert.Contains("PayloadValue=K40", exception.InnerException.Message);
+        Assert.Contains("PersistedValue=K999", exception.InnerException.Message);
+    }
+
+    [Fact]
+    public void Read_WithSchema3ExactCaseRegression_UsesEighteenItemPayload()
+    {
+        var fixture = CreateSchema3ExactEighteenItemsFixture();
+
+        var result = Read(fixture);
+
+        Assert.Equal(18, result.Summary.ItemCount);
+        Assert.Equal(18, result.Summary.IdentifiedGlassItemCount);
+        Assert.Equal(0, result.Summary.ItemsRequiringReview);
+        Assert.Equal(0, result.Summary.GlassItemsRequiringReview);
+        Assert.All(result.Items, item =>
+        {
+            Assert.NotNull(item.Glass);
+            Assert.NotNull(item.TechnicalClassification);
+            Assert.False(item.TechnicalClassification!.RequiresReview);
+        });
     }
 
     [Theory]
@@ -251,15 +342,15 @@ public sealed class StructuredExtractionPayloadReaderTests
             CreatedAt,
             state == DocumentProcessingState.Pending ? null : CreatedAt,
             state == DocumentProcessingState.Finished ? CreatedAt : null,
-            schemaVersion is null
-                ? null
-                : new PreQuoteDocumentQueryRepository.ResultMetadataProjection(
-                    schemaVersion,
-                    PdfClassification.PdfText,
-                    false,
-                    2,
-                    "pymupdf",
-                    1));
+                    schemaVersion is null
+                        ? null
+                        : new PreQuoteDocumentQueryRepository.ResultMetadataProjection(
+                            schemaVersion,
+                            DocumentClassification.PdfText,
+                            false,
+                            2,
+                            "pymupdf",
+                            1));
 
     private static StructuredExtractionDetailsReadModel Read(Fixture fixture) =>
         StructuredExtractionPayloadReader.Read(
@@ -581,12 +672,12 @@ public sealed class StructuredExtractionPayloadReaderTests
                     GlassAssignmentScope.Item, true,
                     [GlassReviewReason.GlassTypeAmbiguous],
                     [1, 2],
-                    [
-                        new PersistedGlassEvidence(
-                            1, EvidenceSourceType.Native, "Vidrio native"),
-                        new PersistedGlassEvidence(
-                            2, EvidenceSourceType.Ocr, "Vidrio OCR")
-                    ]),
+                        [
+                            new PersistedGlassEvidence(
+                                1, EvidenceSourceType.Native, "Vidrio native", null, null),
+                            new PersistedGlassEvidence(
+                                2, EvidenceSourceType.Ocr, "Vidrio OCR", null, null)
+                        ]),
                 new PersistedGlass(
                     2, null, "Sin identificar", null,
                     GlassAssignmentScope.Unassigned, true,
@@ -773,8 +864,8 @@ public sealed class StructuredExtractionPayloadReaderTests
                     false,
                     [],
                     [1],
-                    [new PersistedGlassEvidence(
-                        1, EvidenceSourceType.Native, "TEMP 8")]))
+	                    [new PersistedGlassEvidence(
+                            1, EvidenceSourceType.Native, "TEMP 8", null, null)]))
                 .ToArray(),
             Enumerable.Range(1, 18)
                 .Select(sequence => new PersistedTechnicalClassification(
@@ -796,6 +887,26 @@ public sealed class StructuredExtractionPayloadReaderTests
                         ? ["FINISH_REQUIRES_REVIEW"]
                         : []))
                 .ToArray());
+    }
+
+    private static Fixture CreateSchema3ExactEighteenItemsFixture()
+    {
+        var fixture = CreateSchema3EighteenItemsFixture();
+
+        return fixture with
+        {
+            Extraction = fixture.Extraction with { ItemsRequiringReview = 0 },
+            Items = fixture.Items
+                .Select(value => value with { RequiresReview = false })
+                .ToArray(),
+            TechnicalClassifications = fixture.TechnicalClassifications
+                .Select(value => value with
+                {
+                    RequiresReview = false,
+                    ReviewReasons = []
+                })
+                .ToArray()
+        };
     }
 
     private static object Requirement(string value) => new

@@ -340,16 +340,36 @@ public sealed class PreQuoteDraftItemGlassEvidenceConfiguration
         b.Property(x => x.PageNumber).HasColumnName("page_number");
         b.Property(x => x.SourceType).HasColumnName("source_type").HasConversion<string>().HasMaxLength(10);
         b.Property(x => x.Text).HasColumnName("text").HasMaxLength(500);
+        b.Property(x => x.SheetName).HasColumnName("sheet_name").HasMaxLength(100);
+        b.Property(x => x.CellRange).HasColumnName("cell_range").HasMaxLength(50);
         b.HasOne<PreQuoteDraftItemGlassSnapshot>()
             .WithMany(x => x.Evidence)
             .HasForeignKey(x => x.GlassSnapshotId)
             .OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => new { x.GlassSnapshotId, x.Sequence }).IsUnique();
-        b.HasIndex(x => new { x.GlassSnapshotId, x.PageNumber, x.SourceType, x.Text }).IsUnique();
+        b.HasIndex(x => new { x.GlassSnapshotId, x.PageNumber, x.SourceType, x.Text })
+            .IsUnique()
+            .HasFilter("((source_type = 'Native') OR (source_type = 'Ocr'))")
+            .HasDatabaseName("ix_pre_quote_draft_item_glass_evidence_pdf");
+        b.HasIndex(x => new { x.GlassSnapshotId, x.SheetName, x.CellRange, x.SourceType, x.Text })
+            .IsUnique()
+            .HasFilter("(source_type = 'Xlsx')")
+            .HasDatabaseName("ix_pre_quote_draft_item_glass_evidence_xlsx");
         b.ToTable("pre_quote_draft_item_glass_evidence", "core", t =>
         {
             t.HasCheckConstraint("ck_pre_quote_draft_item_glass_evidence_sequence", "\"sequence\" > 0");
-            t.HasCheckConstraint("ck_pre_quote_draft_item_glass_evidence_page_number", "\"page_number\" > 0");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_glass_evidence_source_type",
+                "\"source_type\" IN ('Native', 'Ocr', 'Xlsx')");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_glass_evidence_sheet_name",
+                "\"sheet_name\" IS NOT NULL AND btrim(\"sheet_name\") <> '' OR \"sheet_name\" IS NULL");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_glass_evidence_cell_range",
+                "\"cell_range\" IS NOT NULL AND btrim(\"cell_range\") <> '' OR \"cell_range\" IS NULL");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_glass_evidence_pdf_or_xlsx",
+                "(\"source_type\" IN ('Native', 'Ocr') AND \"page_number\" IS NOT NULL AND \"page_number\" > 0 AND \"sheet_name\" IS NULL AND \"cell_range\" IS NULL) OR (\"source_type\" = 'Xlsx' AND \"page_number\" IS NULL AND \"sheet_name\" IS NOT NULL AND btrim(\"sheet_name\") <> '' AND \"cell_range\" IS NOT NULL AND btrim(\"cell_range\") <> '')");
         });
     }
 }

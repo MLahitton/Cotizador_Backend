@@ -176,7 +176,7 @@ public sealed class StructuredItemGlassValuationPostgreSqlTests(
             At.AddMinutes(3));
         var payload = CreatePayload(document.Id, attempt.Id);
         var result = DocumentExtractionResult.Create(
-            attempt.Id, "3.0", PdfClassification.PdfText, false, 1,
+            attempt.Id, "3.0", DocumentClassification.PdfText, false, 1,
             "pymupdf", 15, payload, At.AddMinutes(2));
         var glassType = GlassType.Create(
             "LAM_4_4", "Laminated 4+4", null, At);

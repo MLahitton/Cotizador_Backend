@@ -16,8 +16,11 @@ public sealed class DocumentExtractionResultConfiguration
             tableBuilder =>
             {
                 tableBuilder.HasCheckConstraint(
-                    "ck_document_extraction_results_page_count_positive",
-                    "\"page_count\" >= 1");
+                    "ck_document_extraction_results_page_count_by_classification",
+                    "(\"classification\" = 'PdfText' AND \"page_count\" >= 1) " +
+                    "OR (\"classification\" = 'PdfScanned' AND \"page_count\" >= 1) " +
+                    "OR (\"classification\" = 'PdfMixed' AND \"page_count\" >= 1) " +
+                    "OR (\"classification\" = 'Xlsx' AND \"page_count\" = 0)");
 
                 tableBuilder.HasCheckConstraint(
                     "ck_document_extraction_results_duration_ms_non_negative",
@@ -30,7 +33,9 @@ public sealed class DocumentExtractionResultConfiguration
                     "OR (\"classification\" = 'PdfScanned' " +
                     "AND \"requires_ocr\" = true) " +
                     "OR (\"classification\" = 'PdfMixed' " +
-                    "AND \"requires_ocr\" = true))");
+                    "AND \"requires_ocr\" = true) " +
+                    "OR (\"classification\" = 'Xlsx' " +
+                    "AND \"requires_ocr\" = false))");
             });
 
         builder.HasKey(result => result.Id);

@@ -81,6 +81,7 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                     workItem.Attempt.Id,
                     workItem.Attempt.CorrelationId,
                     workItem.Source.OriginalFileName,
+                    workItem.Source.ContentType,
                     workItem.Source.SizeBytes,
                     content),
                 cancellationToken);
@@ -277,7 +278,8 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                     resolved.Item.Glass.Evidence.Select((value, index) =>
                         new StructuredItemGlassEvidenceInput(
                             index + 1, value.PageNumber,
-                            value.SourceType, value.Text)).ToArray()),
+                            value.SourceType, value.Text,
+                            value.SheetName, value.CellRange)).ToArray()),
                 response.SchemaVersion == "3.0" && !resolved.IsNotPriceable
                     ? CreateValuation(resolved.Item, glassTypes)
                     : null,

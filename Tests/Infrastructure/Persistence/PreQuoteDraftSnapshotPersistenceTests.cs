@@ -407,7 +407,7 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
         var result = DocumentExtractionResult.Create(
             attempt.Id,
             "3.0",
-            PdfClassification.PdfText,
+            DocumentClassification.PdfText,
             false,
             1,
             "pymupdf",

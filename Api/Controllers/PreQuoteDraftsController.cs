@@ -368,8 +368,10 @@ public sealed class PreQuoteDraftsController(
             Evidence: snapshot.Evidence
                 .OrderBy(e => e.Sequence)
                 .Select(e => new PreQuoteDraftItemGlassEvidenceResponse(
-                    e.Sequence, e.PageNumber, e.SourceType.ToString(),
-                    e.Text))
+                    e.Sequence, e.PageNumber, Map(e.SourceType),
+                    e.Text,
+                    e.SheetName,
+                    e.CellRange))
                 .ToArray());
     }
 
@@ -524,6 +526,13 @@ public sealed class PreQuoteDraftsController(
         TechnicalClassificationSource.Unresolved => "UNRESOLVED",
         null => null,
         _ => throw new ArgumentException()
+    };
+    private static string Map(EvidenceSourceType value) => value switch
+    {
+        EvidenceSourceType.Native => "NATIVE",
+        EvidenceSourceType.Ocr => "OCR",
+        EvidenceSourceType.Xlsx => "XLSX",
+        _ => throw new InvalidOperationException()
     };
     private static string Issue(StructuredIssueCode x) =>
         PreQuoteDraftIssueCodeMap.MapContractCode(x);

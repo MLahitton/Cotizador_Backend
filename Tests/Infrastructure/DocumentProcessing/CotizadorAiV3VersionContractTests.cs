@@ -362,7 +362,7 @@ public sealed class CotizadorAiV3VersionContractTests
         return await client.ProcessAsync(
             new DocumentProcessingClientRequest(
                 DocumentId, AttemptId, CorrelationId,
-                "document.pdf", 4,
+                "document.pdf", "application/pdf", 4,
                 new MemoryStream([1, 2, 3, 4])),
             TestContext.Current.CancellationToken);
     }

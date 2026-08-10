@@ -8,6 +8,7 @@ using CotizadorBackend.Tests.TestDoubles;
 using Domain.PreQuotes;
 using Infrastructure.DocumentProcessing;
 using Microsoft.Extensions.Configuration;
+using NSubstitute;
 using Xunit;
 
 namespace CotizadorBackend.Tests.Infrastructure.DocumentProcessing;
@@ -22,9 +23,14 @@ public sealed class CotizadorAiDocumentProcessingClientTests
 
     private static readonly Guid CorrelationId =
         Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private const string PdfContentType = "application/pdf";
+    private const string XlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string OpenxmlMetadataMethod = "openpyxl";
+    private const string PdfMetadataMethod = "pymupdf";
 
     [Fact]
-    public async Task ProcessAsync_SendsExactMultipartRequest()
+    public async Task ProcessAsync_SendsPdfMultipartRequest()
     {
         var payload = DocumentProcessingPayloadFactory.CreateSuccess(
             DocumentId,
@@ -62,9 +68,506 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         Assert.Equal(DocumentId.ToString("D"), documentIdPart.Text);
         Assert.Equal(AttemptId.ToString("D"), attemptIdPart.Text);
         Assert.Equal("document.pdf", filePart.FileName);
-        Assert.Equal("application/pdf", filePart.ContentType);
+        Assert.Equal(PdfContentType, filePart.ContentType);
         Assert.Equal([1, 2, 3, 4], filePart.Bytes);
         Assert.True(source.CanRead);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_SendsXlsxMultipartRequest()
+    {
+        var payload = CreateXlsxSuccessPayload();
+        var source = new MemoryStream([9, 8, 7, 6]);
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            source: source,
+            sourceFileName: "document.xlsx",
+            sourceContentType: XlsxContentType);
+
+        Assert.True(execution.Result.IsSuccess);
+        Assert.Equal(
+            "multipart/form-data",
+            execution.Request.ContentType);
+        var filePart = Assert.Single(
+            execution.Request.Parts,
+            part => part.Name == "file");
+        Assert.Equal("document.xlsx", filePart.FileName);
+        Assert.Equal(XlsxContentType, filePart.ContentType);
+        Assert.Equal([9, 8, 7, 6], filePart.Bytes);
+        Assert.True(source.CanRead);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithValidXlsxResponse_ReturnsSuccess()
+    {
+        var payload = CreateXlsxSuccessPayload();
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            sourceFileName: "document.xlsx",
+            sourceContentType: XlsxContentType);
+
+        Assert.True(execution.Result.IsSuccess);
+        Assert.NotNull(execution.Result.Response);
+        Assert.Equal(DocumentClassification.Xlsx,
+            execution.Result.Response.Document.Classification);
+        Assert.Equal(XlsxContentType, execution.Result.Response.Document.ContentType);
+        Assert.Equal(0, execution.Result.Response.Document.PageCount);
+        Assert.Empty(execution.Result.Response.Warnings);
+        Assert.Equal("openpyxl", execution.Result.Response.ProcessingMetadata.Method);
+        Assert.NotNull(execution.Result.Response.StructuredExtraction);
+
+        var projectEvidence = Assert.Single(
+            execution.Result.Response.StructuredExtraction.ProjectEvidence);
+        Assert.Equal(EvidenceSourceType.Xlsx, projectEvidence.SourceType);
+        Assert.Equal("Cotizacion", projectEvidence.SheetName);
+        Assert.Equal("A12:H12", projectEvidence.CellRange);
+
+        var item = Assert.Single(execution.Result.Response.StructuredExtraction.Items);
+        var itemEvidence = Assert.Single(item.Evidence);
+        Assert.Equal(EvidenceSourceType.Xlsx, itemEvidence.SourceType);
+        Assert.Equal("Cotizacion", itemEvidence.SheetName);
+        Assert.Equal("A12:H12", itemEvidence.CellRange);
+        Assert.NotNull(item.Glass);
+        var itemGlass = item.Glass!;
+        Assert.Equal(global::Domain.PreQuotes.GlassAssignmentScope.Unassigned,
+            itemGlass.AssignmentScope);
+        Assert.True(itemGlass.RequiresReview);
+        Assert.Equal(
+            [GlassReviewReason.GlassTypeNotIdentified],
+            itemGlass.ReviewReasons);
+        Assert.Empty(itemGlass.Evidence);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithAssignedXlsxGlassAndSourcePagesEmpty_ReturnsSuccess()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+              {
+                  var item = root["structuredExtraction"]!["items"]![0]!.AsObject();
+                  item["sourcePages"] = new JsonArray();
+                  item["requiresReview"] = false;
+                  item["reviewReasons"] = new JsonArray();
+                  root["structuredExtraction"]!["status"] = "COMPLETED";
+                  var glass = item["glass"]!.AsObject();
+                  glass["rawSpecification"] = "Vidrio templado 8 mm";
+                  glass["normalizedCode"] = "TEMP_8";
+                  glass["assignmentScope"] = "ITEM";
+                  glass["requiresReview"] = false;
+                glass["reviewReasons"] = new JsonArray();
+                glass["sourcePages"] = new JsonArray();
+                glass["evidence"] = CreateXlsxEvidenceArray();
+
+                var summary = root["structuredExtraction"]!["summary"]!.AsObject();
+                summary["itemsRequiringReview"] = 0;
+                summary["identifiedGlassItemCount"] = 1;
+                summary["glassItemsRequiringReview"] = 0;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            sourceFileName: "document.xlsx",
+            sourceContentType: XlsxContentType);
+
+        Assert.True(execution.Result.IsSuccess);
+        Assert.NotNull(execution.Result.Response);
+        Assert.NotNull(execution.Result.Response.StructuredExtraction);
+
+        var item = Assert.Single(execution.Result.Response.StructuredExtraction.Items);
+        Assert.NotNull(item.Glass);
+        var itemGlass = item.Glass!;
+        Assert.Equal(
+            global::Domain.PreQuotes.GlassAssignmentScope.Item,
+            itemGlass.AssignmentScope);
+        Assert.False(itemGlass.RequiresReview);
+        Assert.Equal("TEMP_8", itemGlass.NormalizedCode);
+        Assert.Equal("Vidrio templado 8 mm", itemGlass.RawSpecification);
+        Assert.Empty(itemGlass.SourcePages);
+        Assert.Single(itemGlass.Evidence);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithAssignedPdfGlassAndMatchingSourcePages_ReturnsSuccess()
+    {
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                classification: "PDF_TEXT",
+                pageCount: 1,
+                status: "COMPLETED"),
+            root =>
+            {
+                var item = root["structuredExtraction"]!["items"]![0]!.AsObject();
+                item["sourcePages"] = new JsonArray(JsonValue.Create(1));
+
+                var itemEvidence = CreatePdfEvidenceArray(1);
+                item["evidence"] = itemEvidence;
+
+                var glass = item["glass"]!.AsObject();
+                glass["rawSpecification"] = "Vidrio templado 8 mm";
+                glass["normalizedCode"] = "TEMP_8";
+                glass["assignmentScope"] = "ITEM";
+                glass["requiresReview"] = false;
+                glass["reviewReasons"] = new JsonArray();
+                glass["sourcePages"] = new JsonArray(JsonValue.Create(1));
+                glass["evidence"] = CreatePdfEvidenceArray(1);
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        Assert.True(execution.Result.IsSuccess);
+        Assert.NotNull(execution.Result.Response);
+        Assert.NotNull(execution.Result.Response.StructuredExtraction);
+
+        var item = Assert.Single(execution.Result.Response.StructuredExtraction.Items);
+        Assert.NotNull(item.Glass);
+        var itemGlass = item.Glass!;
+        Assert.Equal(
+            global::Domain.PreQuotes.GlassAssignmentScope.Item,
+            itemGlass.AssignmentScope);
+        Assert.False(itemGlass.RequiresReview);
+        Assert.Equal("TEMP_8", itemGlass.NormalizedCode);
+        Assert.Equal("Vidrio templado 8 mm", itemGlass.RawSpecification);
+        Assert.Equal(1, itemGlass.SourcePages.Single());
+        Assert.Single(itemGlass.Evidence);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithAssignedPdfGlassAndInconsistentSourcePages_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                classification: "PDF_TEXT",
+                pageCount: 1,
+                status: "COMPLETED"),
+            root =>
+            {
+                var item = root["structuredExtraction"]!["items"]![0]!.AsObject();
+                item["sourcePages"] = new JsonArray(JsonValue.Create(1));
+                item["evidence"] = CreatePdfEvidenceArray(1);
+
+                var glass = item["glass"]!.AsObject();
+                glass["rawSpecification"] = "Vidrio templado 8 mm";
+                glass["normalizedCode"] = "TEMP_8";
+                glass["assignmentScope"] = "ITEM";
+                glass["requiresReview"] = false;
+                glass["reviewReasons"] = new JsonArray();
+                glass["sourcePages"] = new JsonArray(JsonValue.Create(1));
+                glass["evidence"] = CreatePdfEvidenceArray(2);
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithXlsxAndPdfContentType_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+            {
+                root["document"]!["contentType"] = PdfContentType;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithXlsxAndPageCountOne_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+            {
+                root["document"]!["pageCount"] = 1;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithXlsxAndPlaceholderPage_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+            {
+                root["document"]!["pageCount"] = 0;
+                root["pages"] = new JsonArray(new JsonObject
+                {
+                    ["pageNumber"] = 1,
+                    ["text"] = "placeholder",
+                    ["characterCount"] = 11,
+                    ["hasExtractableText"] = true
+                });
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithXlsxAndRequiresOcr_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+            {
+                root["document"]!["requiresOcr"] = true;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithXlsxAndPdfMetadataMethod_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            CreateXlsxSuccessPayload(),
+            root =>
+            {
+                root["processingMetadata"]!["method"] = PdfMetadataMethod;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithPdfAndXlsxMetadataMethod_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                classification: "PDF_TEXT",
+                pageCount: 1,
+                status: "COMPLETED"),
+            root =>
+            {
+                root["processingMetadata"]!["method"] = OpenxmlMetadataMethod;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithPdfAndZeroPageCount_ReturnsInvalidResponse()
+    {
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                classification: "PDF_TEXT",
+                pageCount: 1,
+                status: "COMPLETED"),
+            root =>
+            {
+                root["document"]!["pageCount"] = 0;
+                root["pages"] = new JsonArray();
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload));
+
+        AssertInvalidResponse(execution.Result);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithUnsupportedContentType_Rejected()
+    {
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId);
+
+        var execution = await ExecuteAsyncWithoutRequestCapture(
+            () => CreateJsonResponse(200, payload),
+            sourceContentType: "application/unknown",
+            diagnostics: diagnostics);
+
+        Assert.Equal(
+            DocumentProcessingClientFailure.InvalidResponse,
+            execution.Result.Failure);
+        Assert.Null(execution.Result.Response);
+        Assert.Null(execution.Result.RemoteError);
+        Assert.Null(execution.Request);
+        diagnostics.Received(1).ContractRejected(
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: null,
+            stage: "content_type",
+            category: "unsupported_content_type",
+            itemSequence: null,
+            rejectedNormalizedCode: null,
+            acceptedNormalizedCodes: Arg.Is<IReadOnlyList<string>?>(values => values == null),
+            exceptionType: "ContractValidationException",
+            exceptionMessage:
+                "Contract validation failed at content_type: unsupported_content_type.",
+            rejectedValue: "application/unknown",
+            acceptedValues: Arg.Is<IReadOnlyList<string>>(values =>
+                values != null
+                && values.Count == 2
+                && values.Contains(PdfContentType)
+                && values.Contains(XlsxContentType)));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithMissingRootProperty_ReportsMissingProperties()
+    {
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                "PDF_TEXT",
+                1),
+            root =>
+            {
+                root.Remove("status");
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            diagnostics: diagnostics);
+
+        AssertInvalidResponse(execution.Result);
+        diagnostics.Received(1).ContractRejected(
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: 200,
+            stage: "root_shape",
+            category: "invalid_shape",
+            itemSequence: Arg.Any<int?>(),
+            rejectedNormalizedCode: Arg.Any<string?>(),
+            acceptedNormalizedCodes: Arg.Any<IReadOnlyList<string>?>(),
+            exceptionType: "ContractValidationException",
+            exceptionMessage: Arg.Is<string>(message =>
+                message.Contains("Path=$")
+                && message.Contains("Missing=[status]")
+                && message.Contains("Expected=")
+                && message.Contains("Actual=")),
+            jsonPath: Arg.Any<string>(),
+            fieldName: Arg.Any<string?>(),
+            rejectedValue: Arg.Any<string?>(),
+            lineNumber: Arg.Any<long?>(),
+            bytePositionInLine: Arg.Any<long?>(),
+            acceptedValues: Arg.Any<IReadOnlyList<string>?>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithExtraRootProperty_ReportsExtraProperties()
+    {
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                "PDF_TEXT",
+                1),
+            root =>
+            {
+                root["extraRootProperty"] = true;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            diagnostics: diagnostics);
+
+        AssertInvalidResponse(execution.Result);
+        diagnostics.Received(1).ContractRejected(
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: 200,
+            stage: "root_shape",
+            category: "invalid_shape",
+            itemSequence: Arg.Any<int?>(),
+            rejectedNormalizedCode: Arg.Any<string?>(),
+            acceptedNormalizedCodes: Arg.Any<IReadOnlyList<string>?>(),
+            exceptionType: "ContractValidationException",
+            exceptionMessage: Arg.Is<string>(message =>
+                message.Contains("Path=$")
+                && message.Contains("Extra=[extraRootProperty]")
+                && message.Contains("Expected=")),
+            jsonPath: Arg.Any<string>(),
+            fieldName: Arg.Any<string?>(),
+            rejectedValue: Arg.Any<string?>(),
+            lineNumber: Arg.Any<long?>(),
+            bytePositionInLine: Arg.Any<long?>(),
+            acceptedValues: Arg.Any<IReadOnlyList<string>?>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithInvalidPagesType_ReportsExpectedAndActualJsonKind()
+    {
+        var diagnostics = Substitute.For<IDocumentProcessingDiagnostics>();
+        var payload = MutateSuccessPayload(
+            DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                "PDF_TEXT",
+                1),
+            root =>
+            {
+                root["pages"] = 10;
+            });
+
+        var execution = await ExecuteAsync(
+            () => CreateJsonResponse(200, payload),
+            diagnostics: diagnostics);
+
+        AssertInvalidResponse(execution.Result);
+        diagnostics.Received(1).ContractRejected(
+            documentId: DocumentId,
+            processingAttemptId: AttemptId,
+            correlationId: CorrelationId,
+            httpStatusCode: 200,
+            stage: "root_shape",
+            category: "invalid_shape",
+            itemSequence: Arg.Any<int?>(),
+            rejectedNormalizedCode: Arg.Any<string?>(),
+            acceptedNormalizedCodes: Arg.Any<IReadOnlyList<string>?>(),
+            exceptionType: "ContractValidationException",
+            exceptionMessage: Arg.Is<string>(message =>
+                message.Contains("Path=$")
+                && message.Contains("Property=$.pages")
+                && message.Contains("ExpectedKind=Array")
+                && message.Contains("ActualKind=Number")),
+            jsonPath: Arg.Any<string>(),
+            fieldName: Arg.Any<string?>(),
+            rejectedValue: Arg.Any<string?>(),
+            lineNumber: Arg.Any<long?>(),
+            bytePositionInLine: Arg.Any<long?>(),
+            acceptedValues: Arg.Any<IReadOnlyList<string>?>());
     }
 
     [Theory]
@@ -72,35 +575,51 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         "PDF_TEXT",
         1,
         DocumentProcessingOutcome.Completed,
-        PdfClassification.PdfText,
+        DocumentClassification.PdfText,
         false)]
     [InlineData(
         "PDF_SCANNED",
         2,
         DocumentProcessingOutcome.RequiresReview,
-        PdfClassification.PdfScanned,
+        DocumentClassification.PdfScanned,
         true)]
     [InlineData(
         "PDF_MIXED",
         2,
         DocumentProcessingOutcome.RequiresReview,
-        PdfClassification.PdfMixed,
+        DocumentClassification.PdfMixed,
         true)]
+    [InlineData(
+        "XLSX",
+        0,
+        DocumentProcessingOutcome.RequiresReview,
+        DocumentClassification.Xlsx,
+        false)]
     public async Task ProcessAsync_WithValidSuccess_ReturnsMappedResponse(
         string externalClassification,
         int pageCount,
         DocumentProcessingOutcome expectedOutcome,
-        PdfClassification expectedClassification,
+        DocumentClassification expectedClassification,
         bool expectedRequiresOcr)
     {
-        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
-            DocumentId,
-            AttemptId,
-            externalClassification,
-            pageCount);
+        var payload = externalClassification == "XLSX"
+            ? CreateXlsxSuccessPayload()
+            : DocumentProcessingPayloadFactory.CreateSuccess(
+                DocumentId,
+                AttemptId,
+                externalClassification,
+                pageCount);
+        var fileName = externalClassification == "XLSX"
+            ? "document.xlsx"
+            : "document.pdf";
+        var contentType = externalClassification == "XLSX"
+            ? XlsxContentType
+            : PdfContentType;
 
         var execution = await ExecuteAsync(
-            () => CreateJsonResponse(200, payload));
+            () => CreateJsonResponse(200, payload),
+            sourceFileName: fileName,
+            sourceContentType: contentType);
 
         Assert.True(execution.Result.IsSuccess);
         Assert.NotNull(execution.Result.Response);
@@ -1096,7 +1615,10 @@ public sealed class CotizadorAiDocumentProcessingClientTests
     private static async Task<ClientExecution> ExecuteAsync(
         Func<HttpResponseMessage> responseFactory,
         CotizadorAiOptions? options = null,
-        MemoryStream? source = null)
+        MemoryStream? source = null,
+        string sourceContentType = PdfContentType,
+        string sourceFileName = "document.pdf",
+        IDocumentProcessingDiagnostics? diagnostics = null)
     {
         var handler = new StubHttpMessageHandler(responseFactory);
         using var httpClient = new HttpClient(handler)
@@ -1105,7 +1627,8 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         };
         var client = new CotizadorAiDocumentProcessingClient(
             httpClient,
-            options ?? CreateOptions());
+            options ?? CreateOptions(),
+            diagnostics);
         var content = source ?? new MemoryStream([1, 2, 3, 4]);
 
         var result = await client.ProcessAsync(
@@ -1113,14 +1636,52 @@ public sealed class CotizadorAiDocumentProcessingClientTests
                 DocumentId,
                 AttemptId,
                 CorrelationId,
-                "document.pdf",
-                4,
+                sourceFileName,
+                sourceContentType,
+                content.Length,
                 content),
             CancellationToken.None);
 
         return new ClientExecution(
             result,
             Assert.IsType<CapturedHttpRequest>(handler.LastRequest),
+            content);
+    }
+
+    private static async Task<ClientExecutionWithoutRequestCapture> ExecuteAsyncWithoutRequestCapture(
+        Func<HttpResponseMessage> responseFactory,
+        CotizadorAiOptions? options = null,
+        MemoryStream? source = null,
+        string sourceContentType = PdfContentType,
+        string sourceFileName = "document.pdf",
+        IDocumentProcessingDiagnostics? diagnostics = null)
+    {
+        var handler = new StubHttpMessageHandler(responseFactory);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost:8000/")
+        };
+        var client = new CotizadorAiDocumentProcessingClient(
+            httpClient,
+            options ?? CreateOptions(),
+            diagnostics);
+        var content = source ?? new MemoryStream([1, 2, 3, 4]);
+
+        var result = await client.ProcessAsync(
+            new DocumentProcessingClientRequest(
+                DocumentId,
+                AttemptId,
+                CorrelationId,
+                sourceFileName,
+                sourceContentType,
+                content.Length,
+                content),
+            CancellationToken.None);
+
+        Assert.Null(handler.LastRequest);
+        return new ClientExecutionWithoutRequestCapture(
+            result,
+            handler.LastRequest,
             content);
     }
 
@@ -1274,8 +1835,125 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         Assert.Null(result.RemoteError);
     }
 
+    private static string CreateXlsxSuccessPayload()
+    {
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: "XLSX",
+            pageCount: 0,
+            status: "REQUIRES_REVIEW",
+            requiresOcr: false,
+            warnings: [],
+            method: OpenxmlMetadataMethod,
+            contentType: XlsxContentType,
+            fileName: "document.xlsx");
+        return NormalizeXlsxStructuredContent(
+            JsonNode.Parse(payload)!.AsObject()).ToJsonString();
+    }
+
+    private static JsonObject NormalizeXlsxStructuredContent(
+        JsonObject root)
+    {
+        root["pages"] = new JsonArray();
+        root["document"]!["contentType"] = XlsxContentType;
+        root["document"]!["classification"] = "XLSX";
+        var structured = root["structuredExtraction"]!.AsObject();
+
+        var project = structured["project"]!.AsObject();
+        project["sourcePages"] = new JsonArray();
+        project["evidence"] = CreateXlsxEvidenceArray();
+
+        var requirements = structured["requirements"]!.AsObject();
+        foreach (var item in requirements["glassSpecifications"]!.AsArray())
+        {
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        foreach (var item in requirements["profileSpecifications"]!.AsArray())
+        {
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        foreach (var item in requirements["finishes"]!.AsArray())
+        {
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        foreach (var item in requirements["accessoriesAndSealants"]!.AsArray())
+        {
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        foreach (var item in requirements["generalNotes"]!.AsArray())
+        {
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        foreach (var item in structured["items"]!.AsArray())
+        {
+            var itemObject = item.AsObject();
+            itemObject["sourcePages"] = new JsonArray();
+            itemObject["evidence"] = CreateXlsxEvidenceArray();
+
+            var glass = itemObject["glass"]!.AsObject();
+            glass["rawSpecification"] = null;
+            glass["normalizedCode"] = null;
+            glass["assignmentScope"] = "UNASSIGNED";
+            glass["requiresReview"] = true;
+            glass["reviewReasons"] = new JsonArray(JsonValue.Create("GLASS_TYPE_NOT_IDENTIFIED"));
+            glass["sourcePages"] = new JsonArray();
+            glass["evidence"] = new JsonArray();
+        }
+
+        foreach (var item in structured["documentReferences"]!.AsArray())
+        {
+            item.AsObject()["sourcePages"] = new JsonArray();
+            item.AsObject()["evidence"] = CreateXlsxEvidenceArray();
+        }
+
+        structured["issues"] = new JsonArray();
+        structured["conflicts"] = new JsonArray();
+
+        var summary = structured["summary"]!.AsObject();
+        structured["project"]!["sourcePages"] = new JsonArray();
+        summary["itemsRequiringReview"] = 1;
+        summary["identifiedGlassItemCount"] = 0;
+        summary["glassItemsRequiringReview"] = 1;
+
+        return root;
+    }
+
+    private static JsonArray CreateXlsxEvidenceArray()
+    {
+        var evidence = new JsonArray();
+        evidence.Add(new JsonObject
+        {
+            ["sourceType"] = "XLSX",
+            ["text"] = "Hoja 1",
+            ["sheetName"] = "Cotizacion",
+            ["cellRange"] = "A12:H12"
+        });
+        return evidence;
+    }
+
+    private static JsonArray CreatePdfEvidenceArray(int pageNumber)
+    {
+        return new JsonArray(new JsonObject
+        {
+            ["sourceType"] = "NATIVE",
+            ["pageNumber"] = pageNumber,
+            ["text"] = "Hoja 1"
+        });
+    }
+
     private sealed record ClientExecution(
         DocumentProcessingClientResult Result,
         CapturedHttpRequest Request,
+        MemoryStream Source);
+
+    private sealed record ClientExecutionWithoutRequestCapture(
+        DocumentProcessingClientResult Result,
+        CapturedHttpRequest? Request,
         MemoryStream Source);
 }

@@ -45,6 +45,7 @@ public sealed record DocumentProcessingClientRequest(
     Guid ProcessingAttemptId,
     Guid CorrelationId,
     string FileName,
+    string ContentType,
     long SizeBytes,
     Stream Content);
 
@@ -69,7 +70,7 @@ public sealed record ProcessedDocumentData(
     string ContentType,
     long SizeBytes,
     int PageCount,
-    PdfClassification Classification,
+    DocumentClassification Classification,
     bool RequiresOcr);
 
 public sealed record ProcessedPageData(
@@ -88,9 +89,11 @@ public sealed record ProcessingMetadataData(
     int DurationMs);
 
 public sealed record SourceEvidenceData(
-    int PageNumber,
+    int? PageNumber,
     EvidenceSourceType SourceType,
-    string Text);
+    string Text,
+    string? SheetName = null,
+    string? CellRange = null);
 
 public sealed record StructuredItemTechnicalClassificationData(
     string? SystemCode,

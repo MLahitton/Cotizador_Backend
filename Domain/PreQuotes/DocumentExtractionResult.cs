@@ -2,8 +2,19 @@ using System.Text.Json;
 
 namespace Domain.PreQuotes;
 
+public enum DocumentClassification
+{
+    PdfText = 1,
+    PdfScanned = 2,
+    PdfMixed = 3,
+    Xlsx = 4
+}
+
 public sealed class DocumentExtractionResult
 {
+    private const string PdfMethod = "pymupdf";
+    private const string XlsxMethod = "openpyxl";
+
     private DocumentExtractionResult()
     {
     }
@@ -12,7 +23,7 @@ public sealed class DocumentExtractionResult
         Guid id,
         Guid documentProcessingAttemptId,
         string schemaVersion,
-        PdfClassification classification,
+        DocumentClassification classification,
         bool requiresOcr,
         int pageCount,
         string processingMethod,
@@ -38,7 +49,7 @@ public sealed class DocumentExtractionResult
 
     public string SchemaVersion { get; private set; } = string.Empty;
 
-    public PdfClassification Classification { get; private set; }
+    public DocumentClassification Classification { get; private set; }
 
     public bool RequiresOcr { get; private set; }
 
@@ -60,7 +71,7 @@ public sealed class DocumentExtractionResult
     public static DocumentExtractionResult Create(
         Guid documentProcessingAttemptId,
         string schemaVersion,
-        PdfClassification classification,
+        DocumentClassification classification,
         bool requiresOcr,
         int pageCount,
         string processingMethod,
@@ -81,25 +92,34 @@ public sealed class DocumentExtractionResult
             "La versión del esquema",
             nameof(schemaVersion));
 
-        if (!Enum.IsDefined(typeof(PdfClassification), classification))
+        if (!Enum.IsDefined(typeof(DocumentClassification), classification))
         {
             throw new ArgumentException(
-                "La clasificación del PDF no es válida.",
+                "La clasificación del documento no es válida.",
                 nameof(classification));
         }
 
-        var expectedRequiresOcr =
-            classification is PdfClassification.PdfScanned
-                or PdfClassification.PdfMixed;
+        var expectedRequiresOcr = classification is
+            DocumentClassification.PdfScanned or
+            DocumentClassification.PdfMixed;
 
         if (requiresOcr != expectedRequiresOcr)
         {
             throw new ArgumentException(
-                "La necesidad de OCR no es coherente con la clasificación del PDF.",
+                "La necesidad de OCR no es coherente con la clasificación del documento.",
                 nameof(requiresOcr));
         }
 
-        if (pageCount < 1)
+        if (classification == DocumentClassification.Xlsx)
+        {
+            if (pageCount != 0)
+            {
+                throw new ArgumentException(
+                    "La cantidad de páginas debe ser cero para XLSX.",
+                    nameof(pageCount));
+            }
+        }
+        else if (pageCount < 1)
         {
             throw new ArgumentException(
                 "La cantidad de páginas debe ser al menos uno.",
@@ -111,6 +131,31 @@ public sealed class DocumentExtractionResult
             100,
             "El método de procesamiento",
             nameof(processingMethod));
+
+        if (classification == DocumentClassification.Xlsx)
+        {
+            if (!string.Equals(
+                    normalizedProcessingMethod,
+                    XlsxMethod,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "El método de procesamiento de XLSX debe ser openpyxl.",
+                    nameof(processingMethod));
+            }
+        }
+        else
+        {
+            if (!string.Equals(
+                    normalizedProcessingMethod,
+                    PdfMethod,
+                    StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    "El método de procesamiento de PDF debe ser pymupdf.",
+                    nameof(processingMethod));
+            }
+        }
 
         if (durationMs < 0)
         {

@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809154610_AddXlsxEvidenceSupport")]
+    partial class AddXlsxEvidenceSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1221,11 +1224,11 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.ToTable("document_extraction_results", "core", t =>
                         {
-                            t.HasCheckConstraint("ck_document_extraction_results_classification_ocr", "((\"classification\" = 'PdfText' AND \"requires_ocr\" = false) OR (\"classification\" = 'PdfScanned' AND \"requires_ocr\" = true) OR (\"classification\" = 'PdfMixed' AND \"requires_ocr\" = true) OR (\"classification\" = 'Xlsx' AND \"requires_ocr\" = false))");
+                            t.HasCheckConstraint("ck_document_extraction_results_classification_ocr", "((\"classification\" = 'PdfText' AND \"requires_ocr\" = false) OR (\"classification\" = 'PdfScanned' AND \"requires_ocr\" = true) OR (\"classification\" = 'PdfMixed' AND \"requires_ocr\" = true))");
 
                             t.HasCheckConstraint("ck_document_extraction_results_duration_ms_non_negative", "\"duration_ms\" >= 0");
 
-                            t.HasCheckConstraint("ck_document_extraction_results_page_count_by_classification", "(\"classification\" = 'PdfText' AND \"page_count\" >= 1) OR (\"classification\" = 'PdfScanned' AND \"page_count\" >= 1) OR (\"classification\" = 'PdfMixed' AND \"page_count\" >= 1) OR (\"classification\" = 'Xlsx' AND \"page_count\" = 0)");
+                            t.HasCheckConstraint("ck_document_extraction_results_page_count_positive", "\"page_count\" >= 1");
                         });
                 });
 

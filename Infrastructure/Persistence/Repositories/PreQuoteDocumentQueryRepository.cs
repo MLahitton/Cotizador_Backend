@@ -326,7 +326,9 @@ public sealed class PreQuoteDocumentQueryRepository(
                     .Select(evidence => new PersistedGlassEvidence(
                         evidence.PageNumber,
                         evidence.SourceType,
-                        evidence.Text)).ToArray()))
+                        evidence.Text,
+                        evidence.SheetName,
+                        evidence.CellRange)).ToArray()))
             .ToArrayAsync(cancellationToken);
 
         var valuations = await dbContext.StructuredExtractionItemGlassValuations
@@ -552,7 +554,7 @@ public sealed class PreQuoteDocumentQueryRepository(
         DateTimeOffset CreatedAtUtc, DateTimeOffset? StartedAtUtc,
         DateTimeOffset? CompletedAtUtc, ResultMetadataProjection? Result);
     internal sealed record ResultMetadataProjection(
-        string SchemaVersion, PdfClassification Classification,
+        string SchemaVersion, DocumentClassification Classification,
         bool RequiresOcr, int PageCount, string ProcessingMethod,
         int DurationMs);
     private sealed record ExtractionSummaryProjection(
@@ -611,7 +613,11 @@ internal sealed record PersistedGlass(
     int[] SourcePages,
     PersistedGlassEvidence[] Evidence);
 internal sealed record PersistedGlassEvidence(
-    int PageNumber, EvidenceSourceType SourceType, string Text);
+    int? PageNumber,
+    EvidenceSourceType SourceType,
+    string Text,
+    string? SheetName,
+    string? CellRange);
 internal sealed record PersistedTechnicalClassification(
     int ItemSequence,
     string? SystemCode,

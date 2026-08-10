@@ -3,7 +3,7 @@ using Domain.Catalogs;
 namespace Domain.PreQuotes;
 
 public enum StructuredExtractionStatus { Completed = 1, RequiresReview = 2 }
-public enum EvidenceSourceType { Native = 1, Ocr = 2 }
+public enum EvidenceSourceType { Native = 1, Ocr = 2, Xlsx = 3 }
 public enum GlassAssignmentScope { Item = 1, Section, General, Unassigned }
 public enum GlassReviewReason
 {
@@ -102,7 +102,8 @@ public sealed record StructuredItemInput(
     StructuredItemGlassValuationInput? Valuation = null,
     StructuredItemTechnicalClassificationInput? TechnicalClassification = null);
 public sealed record StructuredItemGlassEvidenceInput(
-    int Sequence, int PageNumber, EvidenceSourceType SourceType, string Text);
+    int Sequence, int? PageNumber, EvidenceSourceType SourceType, string Text,
+    string? SheetName = null, string? CellRange = null);
 public sealed record StructuredItemGlassInput(
     Guid? GlassTypeId,
     string? RawSpecification,
@@ -604,7 +605,9 @@ public sealed class StructuredExtractionItemGlassDetection
             {
                 value.PageNumber,
                 value.SourceType,
-                value.Text
+                value.Text,
+                value.SheetName,
+                value.CellRange
             }).Distinct().Count() != entity._evidence.Count
             || !entity._evidence.Select(value => value.Sequence)
                 .SequenceEqual(Enumerable.Range(1, entity._evidence.Count)))
@@ -635,7 +638,10 @@ public sealed class StructuredExtractionItemGlassDetection
         {
             return false;
         }
-        var evidencePages = input.Evidence.Select(value => value.PageNumber)
+        var evidencePages = input.Evidence
+            .Select(value => value.PageNumber)
+            .Where(page => page is not null)
+            .Select(page => page!.Value)
             .Distinct().Order();
         return input.SourcePages.SequenceEqual(evidencePages)
             && (code is not null
@@ -697,7 +703,9 @@ public sealed class StructuredExtractionItemGlassEvidence
     public Guid Id { get; private set; }
     public Guid GlassDetectionId { get; private set; }
     public int Sequence { get; private set; }
-    public int PageNumber { get; private set; }
+    public int? PageNumber { get; private set; }
+    public string? SheetName { get; private set; }
+    public string? CellRange { get; private set; }
     public EvidenceSourceType SourceType { get; private set; }
     public string Text { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; private set; }
@@ -708,17 +716,112 @@ public sealed class StructuredExtractionItemGlassEvidence
         StructuredItemGlassEvidenceInput input,
         DateTimeOffset at)
     {
-        if (input.Sequence < 1 || input.PageNumber < 1
-            || !Enum.IsDefined(input.SourceType)
-            || string.IsNullOrWhiteSpace(input.Text)
-            || input.Text.Length > 500 || input.Text != input.Text.Trim())
+        if (input.Sequence < 1) throw new ArgumentException("Evidence de vidrio invalida.");
+        var text = GlassEvidenceValidation.ValidateEvidenceText(input.Text);
+        var location = GlassEvidenceValidation.ValidateEvidenceLocation(
+            input.SourceType, input.PageNumber, input.SheetName, input.CellRange);
+        return new() { Id = Guid.NewGuid(), GlassDetectionId = parentId,
+            Sequence = input.Sequence, PageNumber = location.PageNumber,
+            SourceType = input.SourceType, SheetName = location.SheetName,
+            CellRange = location.CellRange, Text = text,
+            CreatedAtUtc = at };
+    }
+}
+
+internal static class GlassEvidenceValidation
+{
+    public const int MaxTextLength = 500;
+    public const int MaxSheetNameLength = 100;
+    public const int MaxCellRangeLength = 50;
+
+    public static string ValidateEvidenceText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
         {
             throw new ArgumentException("Evidence de vidrio invalida.");
         }
-        return new() { Id = Guid.NewGuid(), GlassDetectionId = parentId,
-            Sequence = input.Sequence, PageNumber = input.PageNumber,
-            SourceType = input.SourceType, Text = input.Text,
-            CreatedAtUtc = at };
+
+        var normalized = text.Trim();
+        if (normalized.Length > MaxTextLength || normalized != text)
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        return normalized;
+    }
+
+    public static (int? PageNumber, string? SheetName, string? CellRange) ValidateEvidenceLocation(
+        EvidenceSourceType sourceType,
+        int? pageNumber,
+        string? sheetName,
+        string? cellRange)
+    {
+        if (!Enum.IsDefined(sourceType))
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        return sourceType switch
+        {
+            EvidenceSourceType.Native or EvidenceSourceType.Ocr =>
+                ValidatePdfLocator(pageNumber, sheetName, cellRange),
+            EvidenceSourceType.Xlsx =>
+                ValidateXlsxLocator(pageNumber, sheetName, cellRange),
+            _ => throw new ArgumentException("Evidence de vidrio invalida.")
+        };
+    }
+
+    private static (int? PageNumber, string? SheetName, string? CellRange) ValidatePdfLocator(
+        int? pageNumber,
+        string? sheetName,
+        string? cellRange)
+    {
+        if (pageNumber is not { } number || number < 1
+            || sheetName is not null
+            || cellRange is not null)
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        return (number, null, null);
+    }
+
+    private static (int? PageNumber, string? SheetName, string? CellRange) ValidateXlsxLocator(
+        int? pageNumber,
+        string? sheetName,
+        string? cellRange)
+    {
+        if (pageNumber is not null)
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        var normalizedSheetName = NormalizeOptionalWithLimit(sheetName, MaxSheetNameLength);
+        var normalizedCellRange = NormalizeOptionalWithLimit(cellRange, MaxCellRangeLength);
+
+        if (string.IsNullOrWhiteSpace(normalizedSheetName)
+            || string.IsNullOrWhiteSpace(normalizedCellRange))
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        return (null, normalizedSheetName.Trim(), normalizedCellRange.Trim());
+    }
+
+    private static string? NormalizeOptionalWithLimit(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim();
+        if (normalized.Length > maxLength)
+        {
+            throw new ArgumentException("Evidence de vidrio invalida.");
+        }
+
+        return normalized;
     }
 }
 

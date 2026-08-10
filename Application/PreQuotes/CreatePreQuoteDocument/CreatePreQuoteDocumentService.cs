@@ -1,3 +1,4 @@
+using System.IO;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
@@ -20,6 +21,22 @@ public sealed class CreatePreQuoteDocumentService(
     ILogger<CreatePreQuoteDocumentService> logger)
 {
     public const long MaximumFileSizeBytes = 20 * 1024 * 1024;
+    private const string PdfContentType = "application/pdf";
+    private const string XlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    private static readonly Dictionary<string, string> SupportedContentTypesByExtension =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [PdfContentType] = ".pdf",
+            [XlsxContentType] = ".xlsx"
+        };
+    private static readonly Dictionary<string, string> SupportedExtensionsByContentType =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            [".pdf"] = PdfContentType,
+            [".xlsx"] = XlsxContentType
+        };
 
     public async Task<CreatePreQuoteDocumentResult> ExecuteAsync(
         CreatePreQuoteDocumentCommand command,
@@ -44,16 +61,45 @@ public sealed class CreatePreQuoteDocumentService(
                 CreatePreQuoteDocumentFailure.InvalidFileName);
         }
 
-        var contentType = command.ContentType?.Trim().ToLowerInvariant();
+        var contentType = command.ContentType?.Trim();
 
-        if (!string.Equals(
-                contentType,
-                "application/pdf",
-                StringComparison.Ordinal))
+        if (contentType is null or { Length: 0 })
         {
             return CreatePreQuoteDocumentResult.Failed(
                 CreatePreQuoteDocumentFailure.UnsupportedFileType);
         }
+
+        var extension = Path.GetExtension(originalFileName);
+        if (extension is null or { Length: 0 })
+        {
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.UnsupportedFileType);
+        }
+
+        var contentTypeIsSupported = SupportedContentTypesByExtension.ContainsKey(
+            contentType);
+        var extensionIsSupported = SupportedExtensionsByContentType.ContainsKey(
+            extension);
+
+        if (!contentTypeIsSupported || !extensionIsSupported)
+        {
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.UnsupportedFileType);
+        }
+
+        if (!SupportedExtensionsByContentType.TryGetValue(
+                extension,
+                out var requiredContentType)
+            || !string.Equals(requiredContentType, contentType, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreatePreQuoteDocumentResult.Failed(
+                CreatePreQuoteDocumentFailure.UnsupportedFileType);
+        }
+
+        var canonicalContentType = requiredContentType;
+        var storageFileName = contentTypeIsSupported && requiredContentType == XlsxContentType
+            ? "original.xlsx"
+            : "original.pdf";
 
         if (command.SizeBytes < 0)
         {
@@ -194,12 +240,12 @@ public sealed class CreatePreQuoteDocumentService(
         var documentId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
         var storageKey =
-            $"prequotes/{preQuote.Id:D}/documents/{documentId:D}/original.pdf";
+            $"prequotes/{preQuote.Id:D}/documents/{documentId:D}/{storageFileName}";
         var document = PreQuoteDocument.Create(
             documentId,
             preQuote.Id,
             originalFileName,
-            contentType!,
+            canonicalContentType,
             command.SizeBytes,
             storageKey,
             userId,

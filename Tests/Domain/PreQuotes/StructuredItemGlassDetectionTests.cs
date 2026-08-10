@@ -34,6 +34,97 @@ public sealed class StructuredItemGlassDetectionTests
         Assert.Null(Assert.Single(extraction.Items).GlassDetection!.GlassTypeId);
     }
 
+    [Fact]
+    public void Create_WithXlsxEvidenceDifferentCellRanges_IsAllowed()
+    {
+        var extraction = Create(new StructuredItemGlassInput(
+            Guid.NewGuid(), "Vidrio templado", "TEMP_8",
+            GlassAssignmentScope.Item, false, [], [],
+            [
+                new StructuredItemGlassEvidenceInput(
+                    1, null, EvidenceSourceType.Xlsx, "TEXTO",
+                    "Sheet1", "A1:A10"),
+                new StructuredItemGlassEvidenceInput(
+                    2, null, EvidenceSourceType.Xlsx, "TEXTO",
+                    "Sheet1", "A11:A20")
+            ]));
+
+        var glass = Assert.Single(extraction.Items).GlassDetection;
+        Assert.NotNull(glass);
+        Assert.Equal(2, glass.Evidence.Count);
+    }
+
+    [Fact]
+    public void Create_WithXlsxEvidenceSameRangeDifferentSheets_IsAllowed()
+    {
+        var extraction = Create(new StructuredItemGlassInput(
+            Guid.NewGuid(), "Vidrio templado", "TEMP_8",
+            GlassAssignmentScope.Item, false, [], [],
+            [
+                new StructuredItemGlassEvidenceInput(
+                    1, null, EvidenceSourceType.Xlsx, "TEXTO",
+                    "Sheet1", "A1:A10"),
+                new StructuredItemGlassEvidenceInput(
+                    2, null, EvidenceSourceType.Xlsx, "TEXTO",
+                    "Sheet2", "A1:A10")
+            ]));
+
+        var glass = Assert.Single(extraction.Items).GlassDetection;
+        Assert.NotNull(glass);
+        Assert.Equal(2, glass.Evidence.Count);
+    }
+
+    [Fact]
+    public void Create_WithIdenticalXlsxEvidenceDuplicates_IsRejected()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(new StructuredItemGlassInput(
+                Guid.NewGuid(), "Vidrio templado", "TEMP_8",
+                GlassAssignmentScope.Item, false, [], [],
+                [
+                    new StructuredItemGlassEvidenceInput(
+                        1, null, EvidenceSourceType.Xlsx, "TEXTO",
+                        "Sheet1", "A1:A10"),
+                    new StructuredItemGlassEvidenceInput(
+                        2, null, EvidenceSourceType.Xlsx, "TEXTO",
+                        "Sheet1", "A1:A10")
+                ])));
+    }
+
+    [Fact]
+    public void Create_WithNonConsecutiveEvidenceSequence_MustReject()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(new StructuredItemGlassInput(
+                Guid.NewGuid(), "Vidrio templado", "TEMP_8",
+                GlassAssignmentScope.Item, false, [], [],
+                [
+                    new StructuredItemGlassEvidenceInput(
+                        1, null, EvidenceSourceType.Xlsx, "TEXTO",
+                        "Sheet1", "A1:A10"),
+                    new StructuredItemGlassEvidenceInput(
+                        3, null, EvidenceSourceType.Xlsx, "TEXTO",
+                        "Sheet1", "A11:A20")
+                ])));
+    }
+
+    [Fact]
+    public void Create_WithIdenticalPdfEvidenceDuplicates_IsRejected()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            Create(new StructuredItemGlassInput(
+                Guid.NewGuid(), "Vidrio laminado", "LAM_4_4",
+                GlassAssignmentScope.Item, false, [], [],
+                [
+                    new StructuredItemGlassEvidenceInput(
+                        1, 1, EvidenceSourceType.Native, "PDF LAM 4-4",
+                        null, null),
+                    new StructuredItemGlassEvidenceInput(
+                        2, 1, EvidenceSourceType.Native, "PDF LAM 4-4",
+                        null, null)
+                ])));
+    }
+
     [Theory]
     [InlineData("code_without_id")]
     [InlineData("id_without_code")]

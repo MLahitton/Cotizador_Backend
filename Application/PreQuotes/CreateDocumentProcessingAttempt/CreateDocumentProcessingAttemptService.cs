@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.DocumentProcessing;
 using Domain.PreQuotes;
 using FluentValidation;
+using System.IO;
 
 namespace Application.PreQuotes.CreateDocumentProcessingAttempt;
 
@@ -12,8 +13,10 @@ public sealed class CreateDocumentProcessingAttemptService(
     IDocumentProcessingRepository documentProcessingRepository,
     TimeProvider timeProvider)
 {
-    private const long MaximumPdfSizeBytes = 20 * 1024 * 1024;
+    private const long MaximumSupportedFileSizeBytes = 20 * 1024 * 1024;
     private const string ApplicationPdfContentType = "application/pdf";
+    private const string ApplicationXlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     public async Task<CreateDocumentProcessingAttemptResult> ExecuteAsync(
         CreateDocumentProcessingAttemptCommand command,
@@ -155,16 +158,66 @@ public sealed class CreateDocumentProcessingAttemptService(
                 source.OriginalFileName.Trim(),
                 StringComparison.Ordinal)
             && source.OriginalFileName.Length <= 255
-            && string.Equals(
-                source.ContentType,
-                ApplicationPdfContentType,
-                StringComparison.Ordinal)
+            && IsSupportedContentType(source.ContentType)
             && source.SizeBytes > 0
-            && source.SizeBytes <= MaximumPdfSizeBytes
             && !string.IsNullOrWhiteSpace(source.StorageKey)
             && string.Equals(
                 source.StorageKey,
                 source.StorageKey.Trim(),
-                StringComparison.Ordinal);
+                StringComparison.Ordinal)
+            && source.SizeBytes <= MaximumSupportedFileSizeBytes
+            && IsSupportedExtensionForContentType(
+                source.OriginalFileName,
+                source.ContentType,
+                source.StorageKey);
+    }
+
+    private static bool IsSupportedExtensionForContentType(
+        string fileName,
+        string contentType,
+        string storageKey)
+    {
+        var extension = Path.GetExtension(fileName);
+        if (!string.Equals(
+                extension,
+                contentType switch
+                {
+                    var t when string.Equals(
+                        t,
+                        ApplicationPdfContentType,
+                        StringComparison.OrdinalIgnoreCase) => ".pdf",
+                    var t when string.Equals(
+                        t,
+                        ApplicationXlsxContentType,
+                        StringComparison.OrdinalIgnoreCase) => ".xlsx",
+                    _ => null
+                },
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(storageKey))
+        {
+        return extension is not null
+                && string.Equals(
+                    Path.GetExtension(storageKey),
+                    extension,
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        return false;
+    }
+
+    private static bool IsSupportedContentType(string contentType)
+    {
+        return string.Equals(
+            contentType,
+            ApplicationPdfContentType,
+            StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                ApplicationXlsxContentType,
+                StringComparison.OrdinalIgnoreCase);
     }
 }

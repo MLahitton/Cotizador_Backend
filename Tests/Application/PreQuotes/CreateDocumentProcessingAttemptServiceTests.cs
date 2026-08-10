@@ -19,6 +19,9 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
         Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly DateTimeOffset Now =
         new(2026, 8, 1, 12, 0, 0, TimeSpan.Zero);
+    private const string ApplicationPdfContentType = "application/pdf";
+    private const string ApplicationXlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     [Fact]
     public async Task ExecuteAsync_WithValidRequest_EnqueuesPendingAttempt()
@@ -48,6 +51,57 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
             TestContext.Current.CancellationToken);
         context.Repository.DidNotReceive().AddResult(
             Arg.Any<DocumentExtractionResult>());
+    }
+
+    [Theory]
+    [InlineData("document.pdf", ApplicationPdfContentType, "prequotes/document.pdf")]
+    [InlineData("document.xlsx", ApplicationXlsxContentType, "prequotes/document.xlsx")]
+    public async Task ExecuteAsync_WithValidSupportedMetadata_ForPdfAndXlsx_EnqueuesPendingAttempt(
+        string fileName,
+        string contentType,
+        string storageKey)
+    {
+        var context = new Context
+        {
+            Source = Context.CreateSource(
+                fileName,
+                contentType,
+                storageKey: storageKey)
+        };
+
+        var result = await context.ExecuteAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(context.AddedAttempt);
+        context.Repository.Received(1).AddAttempt(context.AddedAttempt!);
+    }
+
+    [Theory]
+    [InlineData("document.xlsx", ApplicationPdfContentType, "prequotes/document.xlsx")]
+    [InlineData("document.pdf", ApplicationXlsxContentType, "prequotes/document.pdf")]
+    [InlineData("document.xlsx", ApplicationPdfContentType, "prequotes/document.pdf")]
+    [InlineData("document.pdf", ApplicationXlsxContentType, "prequotes/document.xlsx")]
+    [InlineData("document.pdf", "text/plain", "prequotes/document.pdf")]
+    public async Task ExecuteAsync_WithInvalidMetadataContentTypeOrExtensions_ReturnsQueryError(
+        string fileName,
+        string contentType,
+        string storageKey)
+    {
+        var context = new Context
+        {
+            Source = Context.CreateSource(
+                fileName,
+                contentType,
+                storageKey: storageKey)
+        };
+
+        var result = await context.ExecuteAsync();
+
+        AssertFailure(
+            result,
+            CreateDocumentProcessingAttemptFailure.QueryError);
+        context.Repository.DidNotReceive().AddAttempt(
+            Arg.Any<DocumentProcessingAttempt>());
     }
 
     [Fact]

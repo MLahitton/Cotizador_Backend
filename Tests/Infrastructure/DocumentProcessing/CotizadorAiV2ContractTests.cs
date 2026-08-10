@@ -249,6 +249,7 @@ public sealed class CotizadorAiV2ContractTests
                 AttemptId,
                 CorrelationId,
                 "document.pdf",
+                "application/pdf",
                 4,
                 new MemoryStream([1, 2, 3, 4])),
             TestContext.Current.CancellationToken);

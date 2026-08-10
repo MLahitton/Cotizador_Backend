@@ -11,6 +11,10 @@ namespace CotizadorBackend.Tests.Application.PreQuotes;
 
 public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
 {
+    private const string PdfContentType =
+        "application/pdf";
+    private const string XlsxContentType =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private static readonly Guid AttemptId =
         Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid DocumentId =
@@ -20,6 +24,103 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
     private static readonly DateTimeOffset CompletedAt =
         CreatedAt.AddSeconds(10);
 
+    [Fact]
+    public async Task ProcessAsync_SendsPdfContentTypeToClient()
+    {
+        var context = new Context(contentType: PdfContentType);
+        var requestStream = new MemoryStream([1, 2, 3]);
+        context.Storage.OpenReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<Stream>(requestStream));
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateSuccess(DocumentProcessingOutcome.Completed));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ProcessClaimedDocumentProcessingAttemptResult.Completed,
+            result);
+        await context.Client.Received(1).ProcessAsync(
+            Arg.Is<DocumentProcessingClientRequest>(request =>
+                request.ContentType == PdfContentType
+                && request.FileName == "document.pdf"
+                && request.Content == requestStream),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_SendsXlsxContentTypeToClient()
+    {
+        var context = new Context(
+            contentType: XlsxContentType,
+            originalFileName: "document.xlsx",
+            storageKey: "prequotes/document.xlsx");
+        var requestStream = new MemoryStream([1, 2, 3, 4]);
+        context.Storage.OpenReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<Stream>(requestStream));
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateSuccess(DocumentProcessingOutcome.Completed));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ProcessClaimedDocumentProcessingAttemptResult.Completed,
+            result);
+        await context.Client.Received(1).ProcessAsync(
+            Arg.Is<DocumentProcessingClientRequest>(request =>
+                request.ContentType == XlsxContentType
+                && request.FileName == "document.xlsx"
+                && request.Content == requestStream),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(DocumentProcessingOutcome.Completed, DocumentClassification.PdfText, false, "pymupdf", 1)]
+    [InlineData(DocumentProcessingOutcome.Completed, DocumentClassification.PdfScanned, true, "pymupdf", 1)]
+    [InlineData(DocumentProcessingOutcome.Completed, DocumentClassification.PdfMixed, true, "pymupdf", 1)]
+    [InlineData(DocumentProcessingOutcome.Completed, DocumentClassification.Xlsx, false, "openpyxl", 0)]
+    public async Task ProcessAsync_PreservesDocumentClassificationInExtractionResult(
+        DocumentProcessingOutcome outcome,
+        DocumentClassification classification,
+        bool requiresOcr,
+        string processingMethod,
+        int pageCount)
+    {
+        var context = new Context();
+        DocumentExtractionResult? extractionResult = null;
+        context.Repository.When(value => value.AddResult(
+                Arg.Any<DocumentExtractionResult>()))
+            .Do(call => extractionResult = call.Arg<DocumentExtractionResult>());
+        context.Client.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(CreateSuccess(
+                outcome,
+                classification,
+                requiresOcr,
+                processingMethod,
+                pageCount));
+
+        var result = await context.Service.ProcessAsync(
+            context.Attempt.Id,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ProcessClaimedDocumentProcessingAttemptResult.Completed,
+            result);
+        Assert.NotNull(extractionResult);
+        Assert.Equal(classification, extractionResult!.Classification);
+        Assert.Equal(requiresOcr, extractionResult!.RequiresOcr);
+        Assert.Equal(pageCount, extractionResult!.PageCount);
+        Assert.Equal(processingMethod, extractionResult!.ProcessingMethod);
+    }
     [Theory]
     [InlineData(DocumentProcessingOutcome.Completed)]
     [InlineData(DocumentProcessingOutcome.RequiresReview)]
@@ -30,7 +131,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
         context.Client.ProcessAsync(
                 Arg.Any<DocumentProcessingClientRequest>(),
                 Arg.Any<CancellationToken>())
-            .Returns(CreateSuccess(outcome));
+            .Returns(CreateSuccess(
+                outcome,
+                classification: DocumentClassification.PdfText,
+                requiresOcr: false));
 
         var result = await context.Service.ProcessAsync(
             context.Attempt.Id,
@@ -569,9 +673,51 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
     }
 
     private static DocumentProcessingClientResult CreateSuccess(
-        DocumentProcessingOutcome outcome)
+        DocumentProcessingOutcome outcome,
+        DocumentClassification classification = DocumentClassification.PdfText,
+        bool? requiresOcr = null,
+        string processingMethod = "pymupdf",
+        int pageCount = 1)
     {
-        var requiresOcr = outcome == DocumentProcessingOutcome.RequiresReview;
+        var isXlsx = classification == DocumentClassification.Xlsx;
+        var resolvedRequiresOcr = requiresOcr
+            ?? outcome == DocumentProcessingOutcome.RequiresReview
+                || outcome == DocumentProcessingOutcome.Completed
+                    && classification
+                        is DocumentClassification.PdfScanned
+                        or DocumentClassification.PdfMixed;
+        var classificationValue = classification switch
+        {
+            DocumentClassification.PdfText => "PDF_TEXT",
+            DocumentClassification.PdfScanned => "PDF_SCANNED",
+            DocumentClassification.PdfMixed => "PDF_MIXED",
+            DocumentClassification.Xlsx => "XLSX",
+            _ => throw new InvalidOperationException()
+        };
+        var payloadStatus = outcome == DocumentProcessingOutcome.Completed
+            ? "COMPLETED"
+            : "REQUIRES_REVIEW";
+        var schemaVersion = "2.0";
+        var payload = DocumentProcessingPayloadFactory.CreateSuccess(
+            DocumentId,
+            AttemptId,
+            classification: classificationValue,
+            pageCount: pageCount,
+            status: payloadStatus,
+            requiresOcr: resolvedRequiresOcr,
+            fileName: isXlsx
+                ? "document.xlsx"
+                : "document.pdf",
+            contentType: isXlsx
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "application/pdf",
+            sizeBytes: 100,
+            method: processingMethod,
+            schemaVersion: schemaVersion,
+            durationMs: 10,
+            structuredMethod: schemaVersion is "3.0"
+                ? processingMethod
+                : "rule_based_v1");
         return DocumentProcessingClientResult.Success(
             new DocumentProcessingResponseData(
                 "2.0",
@@ -579,18 +725,23 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                 AttemptId,
                 outcome,
                 new ProcessedDocumentData(
-                    "document.pdf",
-                    "application/pdf",
+                    isXlsx
+                        ? "document.xlsx"
+                        : "document.pdf",
+                    isXlsx
+                        ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        : "application/pdf",
                     100,
-                    1,
-                    requiresOcr
-                        ? PdfClassification.PdfScanned
-                        : PdfClassification.PdfText,
-                    requiresOcr),
-                [new ProcessedPageData(1, requiresOcr ? "" : "Text", requiresOcr ? 0 : 4, !requiresOcr)],
+                    pageCount,
+                    classification,
+                    resolvedRequiresOcr),
+                [new ProcessedPageData(1,
+                    resolvedRequiresOcr ? "" : "Text",
+                    resolvedRequiresOcr ? 0 : 4,
+                    !resolvedRequiresOcr)],
                 [],
-                new ProcessingMetadataData("pymupdf", 10),
-                """{"schemaVersion":"2.0","status":"COMPLETED","document":{},"pages":[],"warnings":[],"processingMetadata":{},"structuredExtraction":{}}""",
+                new ProcessingMetadataData(processingMethod, 10),
+                payload,
                 CreateStructuredExtraction(outcome)));
     }
 
@@ -659,7 +810,11 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
 
     private sealed class Context
     {
-        public Context(bool started = true)
+        public Context(
+            bool started = true,
+            string contentType = PdfContentType,
+            string originalFileName = "document.pdf",
+            string storageKey = "prequotes/document.pdf")
         {
             Repository = Substitute.For<IDocumentProcessingRepository>();
             Storage = Substitute.For<IFileStorage>();
@@ -683,10 +838,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
             Source = new DocumentProcessingSource(
                 DocumentId,
                 Guid.Parse("55555555-5555-5555-5555-555555555555"),
-                "document.pdf",
-                "application/pdf",
+                originalFileName,
+                contentType,
                 100,
-                "prequotes/document.pdf",
+                storageKey,
                 Guid.Parse("66666666-6666-6666-6666-666666666666"),
                 Guid.Parse("88888888-8888-8888-8888-888888888888"),
                 true,

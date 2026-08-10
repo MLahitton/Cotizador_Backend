@@ -1,9 +1,11 @@
 namespace Contracts.PreQuotes;
 
 public sealed record StructuredEvidenceResponse(
-    int PageNumber,
+    int? PageNumber,
     string SourceType,
-    string Text);
+    string Text,
+    string? SheetName,
+    string? CellRange);
 
 public sealed record StructuredItemTechnicalClassificationResponse(
     string? SystemCode,
@@ -70,9 +72,11 @@ public sealed record StructuredExtractionItemGlassValuationResponse(
     DateTimeOffset CalculatedAtUtc);
 
 public sealed record StructuredExtractionItemGlassEvidenceResponse(
-    int PageNumber,
+    int? PageNumber,
     string SourceType,
-    string Text);
+    string Text,
+    string? SheetName,
+    string? CellRange);
 
 public sealed record StructuredExtractionItemGlassResponse(
     Guid? GlassTypeId,

@@ -89,7 +89,9 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                                         evidence.Sequence,
                                         evidence.PageNumber,
                                         evidence.SourceType,
-                                        evidence.Text))
+                                        evidence.Text,
+                                        evidence.SheetName,
+                                        evidence.CellRange))
                                 .ToArray()),
                     x.GlassValuation == null
                         ? null
