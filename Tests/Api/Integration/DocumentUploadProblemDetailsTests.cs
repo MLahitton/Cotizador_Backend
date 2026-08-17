@@ -39,6 +39,8 @@ public sealed class DocumentUploadProblemDetailsTests
     private const string PdfContentType = "application/pdf";
     private const string XlsxContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string JpegContentType = "image/jpeg";
+    private const string PngContentType = "image/png";
 
     [Theory]
     [InlineData("unauthorized", 401, PreQuoteErrorCodes.Unauthorized)]
@@ -118,6 +120,8 @@ public sealed class DocumentUploadProblemDetailsTests
     [Theory]
     [InlineData(PdfContentType, "document.PDF", "original.pdf")]
     [InlineData(XlsxContentType, "document.XLSX", "original.xlsx")]
+    [InlineData(JpegContentType, "document.JPG", "original.jpg")]
+    [InlineData(PngContentType, "document.PNG", "original.png")]
     public async Task Post_SupportedFileTypeWithAllowedExtension_IsAccepted(
         string contentType,
         string fileName,

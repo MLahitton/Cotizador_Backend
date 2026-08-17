@@ -9,6 +9,8 @@ public interface IDocumentProcessingClient
         CancellationToken cancellationToken);
 }
 
+public interface IAi2DocumentProcessingClient : IDocumentProcessingClient;
+
 public interface IDocumentProcessingDiagnostics
 {
     void ContractRejected(
@@ -40,14 +42,76 @@ public interface IDocumentProcessingDiagnostics
         IReadOnlyList<string>? acceptedNormalizedCodes = null);
 }
 
-public sealed record DocumentProcessingClientRequest(
+public sealed record DocumentProcessingFile(
     Guid DocumentId,
-    Guid ProcessingAttemptId,
-    Guid CorrelationId,
     string FileName,
     string ContentType,
     long SizeBytes,
     Stream Content);
+
+public sealed record DocumentProcessingClientRequest
+{
+    public DocumentProcessingClientRequest(
+        Guid documentId,
+        Guid processingAttemptId,
+        Guid correlationId,
+        IReadOnlyList<DocumentProcessingFile> files,
+        Guid? projectId = null,
+        Guid? requirementId = null)
+    {
+        DocumentId = documentId;
+        ProcessingAttemptId = processingAttemptId;
+        CorrelationId = correlationId;
+        Files = files;
+        ProjectId = projectId;
+        RequirementId = requirementId;
+    }
+
+    public DocumentProcessingClientRequest(
+        Guid documentId,
+        Guid processingAttemptId,
+        Guid correlationId,
+        string fileName,
+        string contentType,
+        long sizeBytes,
+        Stream content)
+        : this(
+            documentId,
+            processingAttemptId,
+            correlationId,
+            [new DocumentProcessingFile(
+                documentId, fileName, contentType, sizeBytes, content)])
+    {
+    }
+
+    public Guid DocumentId { get; }
+    public Guid ProcessingAttemptId { get; }
+    public Guid CorrelationId { get; }
+    public IReadOnlyList<DocumentProcessingFile> Files { get; }
+    public Guid? ProjectId { get; }
+    public Guid? RequirementId { get; }
+
+    public DocumentProcessingFile PrimaryFile => Files[0];
+    public string FileName => PrimaryFile.FileName;
+    public string ContentType => PrimaryFile.ContentType;
+    public long SizeBytes => PrimaryFile.SizeBytes;
+    public Stream Content => PrimaryFile.Content;
+}
+
+public enum DocumentProcessingProvider
+{
+    LegacyAi = 1,
+    Ai2 = 2
+}
+
+public enum CanonicalExtractionValueStatus
+{
+    Explicit = 1,
+    Inferred = 2,
+    Ambiguous = 3,
+    Unknown = 4,
+    NotApplicable = 5
+}
 
 public enum DocumentProcessingClientFailure
 {
@@ -93,7 +157,11 @@ public sealed record SourceEvidenceData(
     EvidenceSourceType SourceType,
     string Text,
     string? SheetName = null,
-    string? CellRange = null);
+    string? CellRange = null,
+    string? SourceId = null,
+    decimal? Confidence = null,
+    CanonicalExtractionValueStatus Status =
+        CanonicalExtractionValueStatus.Explicit);
 
 public sealed record StructuredItemTechnicalClassificationData(
     string? SystemCode,
@@ -130,7 +198,12 @@ public sealed record StructuredItemData(
     IReadOnlyList<int> SourcePages,
     IReadOnlyList<SourceEvidenceData> Evidence,
     StructuredItemGlassData? Glass = null,
-    StructuredItemTechnicalClassificationData? TechnicalClassification = null);
+    StructuredItemTechnicalClassificationData? TechnicalClassification = null,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    decimal? Confidence = null,
+    CanonicalExtractionValueStatus ExtractionStatus =
+        CanonicalExtractionValueStatus.Explicit);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,
@@ -195,7 +268,11 @@ public sealed record DocumentProcessingResponseData(
     IReadOnlyList<ProcessingWarningData> Warnings,
     ProcessingMetadataData ProcessingMetadata,
     string PayloadJson,
-    StructuredExtractionData? StructuredExtraction = null);
+    StructuredExtractionData? StructuredExtraction = null,
+    DocumentProcessingProvider Provider =
+        DocumentProcessingProvider.LegacyAi,
+    bool RequiresResolvedGlassCatalog = false,
+    bool SupportsPreliminaryValuation = false);
 
 public sealed record DocumentProcessingClientResult(
     DocumentProcessingClientFailure Failure,

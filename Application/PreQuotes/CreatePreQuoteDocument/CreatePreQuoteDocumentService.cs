@@ -24,18 +24,25 @@ public sealed class CreatePreQuoteDocumentService(
     private const string PdfContentType = "application/pdf";
     private const string XlsxContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string JpegContentType = "image/jpeg";
+    private const string PngContentType = "image/png";
 
     private static readonly Dictionary<string, string> SupportedContentTypesByExtension =
         new(StringComparer.OrdinalIgnoreCase)
         {
             [PdfContentType] = ".pdf",
-            [XlsxContentType] = ".xlsx"
+            [XlsxContentType] = ".xlsx",
+            [JpegContentType] = ".jpg",
+            [PngContentType] = ".png"
         };
     private static readonly Dictionary<string, string> SupportedExtensionsByContentType =
         new(StringComparer.OrdinalIgnoreCase)
         {
             [".pdf"] = PdfContentType,
-            [".xlsx"] = XlsxContentType
+            [".xlsx"] = XlsxContentType,
+            [".jpg"] = JpegContentType,
+            [".jpeg"] = JpegContentType,
+            [".png"] = PngContentType
         };
 
     public async Task<CreatePreQuoteDocumentResult> ExecuteAsync(
@@ -97,9 +104,17 @@ public sealed class CreatePreQuoteDocumentService(
         }
 
         var canonicalContentType = requiredContentType;
-        var storageFileName = contentTypeIsSupported && requiredContentType == XlsxContentType
-            ? "original.xlsx"
-            : "original.pdf";
+        var storageFileName = requiredContentType switch
+        {
+            XlsxContentType => "original.xlsx",
+            JpegContentType when string.Equals(
+                extension,
+                ".jpeg",
+                StringComparison.OrdinalIgnoreCase) => "original.jpeg",
+            JpegContentType => "original.jpg",
+            PngContentType => "original.png",
+            _ => "original.pdf"
+        };
 
         if (command.SizeBytes < 0)
         {

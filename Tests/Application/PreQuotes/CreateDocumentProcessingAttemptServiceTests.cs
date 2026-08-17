@@ -22,6 +22,8 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
     private const string ApplicationPdfContentType = "application/pdf";
     private const string ApplicationXlsxContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string ImageJpegContentType = "image/jpeg";
+    private const string ImagePngContentType = "image/png";
 
     [Fact]
     public async Task ExecuteAsync_WithValidRequest_EnqueuesPendingAttempt()
@@ -56,6 +58,8 @@ public sealed class CreateDocumentProcessingAttemptServiceTests
     [Theory]
     [InlineData("document.pdf", ApplicationPdfContentType, "prequotes/document.pdf")]
     [InlineData("document.xlsx", ApplicationXlsxContentType, "prequotes/document.xlsx")]
+    [InlineData("document.jpg", ImageJpegContentType, "prequotes/document.jpg")]
+    [InlineData("document.png", ImagePngContentType, "prequotes/document.png")]
     public async Task ExecuteAsync_WithValidSupportedMetadata_ForPdfAndXlsx_EnqueuesPendingAttempt(
         string fileName,
         string contentType,

@@ -127,6 +127,43 @@ public sealed class DocumentProcessingRepository(
         }
     }
 
+    public async Task<IReadOnlyList<DocumentProcessingSource>>
+        ListDocumentSourcesByPreQuoteIdAsync(
+            Guid preQuoteId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await (
+                    from document in dbContext.PreQuoteDocuments.AsNoTracking()
+                    join preQuote in dbContext.PreQuotes.AsNoTracking()
+                        on document.PreQuoteId equals preQuote.Id
+                    join project in dbContext.Projects.AsNoTracking()
+                        on preQuote.ProjectId equals project.Id
+                    join client in dbContext.Clients.AsNoTracking()
+                        on project.ClientId equals client.Id
+                    where document.PreQuoteId == preQuoteId
+                    orderby document.CreatedAtUtc, document.Id
+                    select new DocumentProcessingSource(
+                        document.Id,
+                        document.PreQuoteId,
+                        document.OriginalFileName,
+                        document.ContentType,
+                        document.SizeBytes,
+                        document.StorageKey,
+                        project.Id,
+                        project.CreatedByUserId,
+                        project.IsActive,
+                        client.Id,
+                        client.IsActive))
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new DocumentProcessingQueryException(exception);
+        }
+    }
+
     public async Task<DocumentProcessingAttemptStatusSnapshot?>
         FindAttemptStatusAsync(
             Guid documentId,

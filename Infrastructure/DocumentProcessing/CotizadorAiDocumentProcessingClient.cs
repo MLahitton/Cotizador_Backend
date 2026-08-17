@@ -11,8 +11,9 @@ namespace Infrastructure.DocumentProcessing;
 public sealed class CotizadorAiDocumentProcessingClient(
     HttpClient httpClient,
     CotizadorAiOptions options,
-    IDocumentProcessingDiagnostics? diagnostics = null)
-    : IDocumentProcessingClient
+    IDocumentProcessingDiagnostics? diagnostics = null,
+    LegacyDocumentProcessingResponseAdapter? responseAdapter = null)
+    : ILegacyDocumentProcessingClient
 {
     private const string DocumentExtractionPath =
         "api/v3/prequotes/document-extractions";
@@ -754,7 +755,9 @@ public sealed class CotizadorAiDocumentProcessingClient(
             response.Document.RequiresOcr,
             response.SchemaVersion);
 
-        return new DocumentProcessingResponseData(
+        return (responseAdapter
+                ?? new LegacyDocumentProcessingResponseAdapter()).Adapt(
+            new DocumentProcessingResponseData(
             response.SchemaVersion!,
             response.DocumentId,
             response.ProcessingAttemptId,
@@ -772,7 +775,7 @@ public sealed class CotizadorAiDocumentProcessingClient(
                 response.ProcessingMetadata.Method!,
                 response.ProcessingMetadata.DurationMs),
             canonicalPayloadJson,
-            structuredExtraction);
+            structuredExtraction));
     }
 
     private static DocumentProcessingClientResult ParseErrorResponse(

@@ -17,6 +17,8 @@ public sealed class CreateDocumentProcessingAttemptService(
     private const string ApplicationPdfContentType = "application/pdf";
     private const string ApplicationXlsxContentType =
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    private const string ImageJpegContentType = "image/jpeg";
+    private const string ImagePngContentType = "image/png";
 
     public async Task<CreateDocumentProcessingAttemptResult> ExecuteAsync(
         CreateDocumentProcessingAttemptCommand command,
@@ -190,6 +192,20 @@ public sealed class CreateDocumentProcessingAttemptService(
                         t,
                         ApplicationXlsxContentType,
                         StringComparison.OrdinalIgnoreCase) => ".xlsx",
+                    var t when string.Equals(
+                        t,
+                        ImageJpegContentType,
+                        StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(extension, ".jpeg",
+                            StringComparison.OrdinalIgnoreCase) => ".jpeg",
+                    var t when string.Equals(
+                        t,
+                        ImageJpegContentType,
+                        StringComparison.OrdinalIgnoreCase) => ".jpg",
+                    var t when string.Equals(
+                        t,
+                        ImagePngContentType,
+                        StringComparison.OrdinalIgnoreCase) => ".png",
                     _ => null
                 },
                 StringComparison.OrdinalIgnoreCase))
@@ -218,6 +234,14 @@ public sealed class CreateDocumentProcessingAttemptService(
             || string.Equals(
                 contentType,
                 ApplicationXlsxContentType,
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                ImageJpegContentType,
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                contentType,
+                ImagePngContentType,
                 StringComparison.OrdinalIgnoreCase);
     }
 }

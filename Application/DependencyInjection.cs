@@ -1,3 +1,5 @@
+using Application.Common.Abstractions.HistoricalPricing;
+using Application.HistoricalPricing;
 using Application.Authentication.GetCurrentUser;
 using Application.Authentication.GoogleSignIn;
 using Application.Clients.CreateClient;
@@ -68,6 +70,8 @@ public static class DependencyInjection
         services.AddScoped<GetProjectPreQuotesService>();
         services.AddScoped<GetPreQuoteDocumentsService>();
         services.AddScoped<GetStructuredDocumentExtractionService>();
+        services.AddScoped<IHistoricalDocumentEstimatePipeline, HistoricalDocumentEstimatePipeline>();
+        services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
         services.AddScoped<CreatePreQuoteDraftService>();
         services.AddScoped<GetPreQuoteDraftService>();
         services.AddScoped<UpdatePreQuoteDraftService>();

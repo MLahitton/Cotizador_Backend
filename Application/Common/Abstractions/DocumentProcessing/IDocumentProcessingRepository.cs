@@ -20,6 +20,11 @@ public interface IDocumentProcessingRepository
         Guid processingAttemptId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<DocumentProcessingSource>>
+        ListDocumentSourcesByPreQuoteIdAsync(
+            Guid preQuoteId,
+            CancellationToken cancellationToken);
+
     Task<DocumentProcessingAttemptStatusSnapshot?> FindAttemptStatusAsync(
         Guid documentId,
         Guid processingAttemptId,

@@ -851,6 +851,10 @@ public sealed class ProcessClaimedDocumentProcessingAttemptServiceTests
                     Arg.Any<Guid>(),
                     Arg.Any<CancellationToken>())
                 .Returns(_ => new DocumentProcessingWorkItem(Attempt, Source));
+            Repository.ListDocumentSourcesByPreQuoteIdAsync(
+                    Source.PreQuoteId,
+                    Arg.Any<CancellationToken>())
+                .Returns(_ => new[] { Source });
             Repository.SaveChangesAsync(Arg.Any<CancellationToken>())
                 .Returns(Task.CompletedTask);
             Storage.OpenReadAsync(

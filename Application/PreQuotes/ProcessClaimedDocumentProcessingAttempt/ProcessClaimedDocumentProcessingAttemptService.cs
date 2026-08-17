@@ -72,18 +72,40 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
 
         try
         {
-            await using var content = await fileStorage.OpenReadAsync(
-                workItem.Source.StorageKey,
-                cancellationToken);
+            var relatedSources = await repository
+                .ListDocumentSourcesByPreQuoteIdAsync(
+                    workItem.Source.PreQuoteId,
+                    cancellationToken);
+            if (relatedSources.Count == 0)
+            {
+                relatedSources = [workItem.Source];
+            }
+
+            var openedStreams = new List<Stream>(relatedSources.Count);
+            try
+            {
+                foreach (var source in relatedSources)
+                {
+                    openedStreams.Add(await fileStorage.OpenReadAsync(
+                        source.StorageKey,
+                        cancellationToken));
+                }
+
+                var files = relatedSources.Select((source, index) =>
+                    new DocumentProcessingFile(
+                        source.DocumentId,
+                        source.OriginalFileName,
+                        source.ContentType,
+                        source.SizeBytes,
+                        openedStreams[index])).ToArray();
             var clientResult = await client.ProcessAsync(
                 new DocumentProcessingClientRequest(
                     workItem.Source.DocumentId,
                     workItem.Attempt.Id,
                     workItem.Attempt.CorrelationId,
-                    workItem.Source.OriginalFileName,
-                    workItem.Source.ContentType,
-                    workItem.Source.SizeBytes,
-                    content),
+                    files,
+                    workItem.Source.ProjectId,
+                    workItem.Source.PreQuoteId),
                 cancellationToken);
 
             if (clientResult.IsSuccess
@@ -99,6 +121,14 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                 workItem.Attempt,
                 MapClientFailure(clientResult),
                 cancellationToken);
+            }
+            finally
+            {
+                foreach (var stream in openedStreams)
+                {
+                    await stream.DisposeAsync();
+                }
+            }
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -137,7 +167,11 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
 
         IReadOnlyDictionary<string, GlassTypeCatalogReadModel> glassTypes =
             new Dictionary<string, GlassTypeCatalogReadModel>(StringComparer.Ordinal);
-        if (response.SchemaVersion == "3.0")
+        var hasNormalizedGlass = structured.Items.Any(
+            item => item.Glass?.NormalizedCode is not null);
+        if (response.RequiresResolvedGlassCatalog
+            || response.SupportsPreliminaryValuation
+            || hasNormalizedGlass)
         {
             IReadOnlyList<GlassTypeCatalogReadModel> catalog;
             try
@@ -161,8 +195,9 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                 value => value,
                 StringComparer.Ordinal);
             var invalidGlassContractItem = structured.Items.FirstOrDefault(
-                item => item.Glass is null
-                    || item.Glass.NormalizedCode is { } code
+                item => response.RequiresResolvedGlassCatalog
+                        && item.Glass is null
+                    || item.Glass?.NormalizedCode is { } code
                         && !glassTypes.ContainsKey(code));
             if (invalidGlassContractItem is not null)
             {
@@ -185,11 +220,6 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                 return await FailAsync(
                     attempt, AiInvalidResponseCode, cancellationToken);
             }
-        }
-        else if (response.SchemaVersion != "2.0")
-        {
-            return await FailAsync(
-                attempt, AiInvalidResponseCode, cancellationToken);
         }
 
         IReadOnlyDictionary<string, ProductSystemCatalogReadModel> systems;
@@ -280,7 +310,8 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                             index + 1, value.PageNumber,
                             value.SourceType, value.Text,
                             value.SheetName, value.CellRange)).ToArray()),
-                response.SchemaVersion == "3.0" && !resolved.IsNotPriceable
+                (response.SupportsPreliminaryValuation || hasNormalizedGlass)
+                    && !resolved.IsNotPriceable
                     ? CreateValuation(resolved.Item, glassTypes)
                     : null,
                 resolved.TechnicalClassification is null
