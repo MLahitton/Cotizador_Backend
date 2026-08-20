@@ -104,6 +104,7 @@ public sealed record PreQuoteDraftItemTechnicalSelectionSource(
     string? RequestedHardwareOriginalText = null,
     string? SuggestedHardwareCode = null,
     string? SelectedHardwareCode = null,
+    string? AppliedSystemRuleCode = null,
     PreQuoteDraftTechnicalSelectionState SelectionState =
         PreQuoteDraftTechnicalSelectionState.Pending,
     bool RequiresReview = false,
@@ -406,6 +407,7 @@ public sealed class PreQuoteDraftItemTechnicalSelection
     public string? RequestedHardwareOriginalText { get; private set; }
     public string? SuggestedHardwareCode { get; private set; }
     public string? SelectedHardwareCode { get; private set; }
+    public string? AppliedSystemRuleCode { get; private set; }
     public PreQuoteDraftTechnicalSelectionState SelectionState { get; private set; }
     public bool RequiresReview { get; private set; }
     public decimal? Confidence { get; private set; }
@@ -456,6 +458,7 @@ public sealed class PreQuoteDraftItemTechnicalSelection
             RequestedHardwareOriginalText = NormalizeOptionalText(source.RequestedHardwareOriginalText),
             SuggestedHardwareCode = NormalizeOptionalCode(source.SuggestedHardwareCode),
             SelectedHardwareCode = NormalizeOptionalCode(source.SelectedHardwareCode),
+            AppliedSystemRuleCode = NormalizeOptionalCode(source.AppliedSystemRuleCode),
             SelectionState = source.SelectionState,
             RequiresReview = source.RequiresReview,
             Confidence = source.Confidence,
@@ -628,7 +631,18 @@ public sealed record PreQuoteDraftItemSource(
     PreQuoteDraftItemGlassSnapshotSource? Glass = null,
     PreQuoteDraftItemValuationSnapshotSource? Valuation = null,
     PreQuoteDraftItemTechnicalSnapshotSource? TechnicalSnapshot = null,
-    PreQuoteDraftItemTechnicalSelectionSource? TechnicalSelection = null);
+    PreQuoteDraftItemTechnicalSelectionSource? TechnicalSelection = null,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 public sealed record PreQuoteDraftRequirementSource(
     Guid SourceId, int Sequence, RequirementCategory Category, string Value);
 public sealed record PreQuoteDraftReferenceSource(

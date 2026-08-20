@@ -131,7 +131,8 @@ public sealed record PreQuoteDraftItemTechnicalSelectionResponse(
     IReadOnlyList<string> ReviewReasons,
     string RequestedSource,
     string? SuggestedSource,
-    string? SelectedSource);
+    string? SelectedSource,
+    string? AppliedSystemRuleCode = null);
 
 public sealed record PreQuoteDraftItemTechnicalSnapshotResponse(
     Guid SourceStructuredItemTechnicalClassificationId,

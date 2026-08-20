@@ -252,6 +252,8 @@ public sealed class PreQuoteDraftItemTechnicalSelectionConfiguration
             .HasColumnName("suggested_hardware_code").HasMaxLength(60);
         b.Property(x => x.SelectedHardwareCode)
             .HasColumnName("selected_hardware_code").HasMaxLength(60);
+        b.Property(x => x.AppliedSystemRuleCode)
+            .HasColumnName("applied_system_rule_code").HasMaxLength(100);
         b.Property(x => x.SelectionState).HasColumnName("selection_state")
             .HasConversion<string>().HasMaxLength(20);
         b.Property(x => x.RequiresReview).HasColumnName("requires_review");

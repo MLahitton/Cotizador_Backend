@@ -8,8 +8,25 @@ public sealed class CreatePreQuoteDraftService(
     ICurrentUser currentUser,
     IIdentityRepository identity,
     IPreQuoteDraftRepository repository,
+    ISgTechnicalSelector technicalSelector,
     TimeProvider timeProvider)
 {
+    public CreatePreQuoteDraftService(
+        IValidator<CreatePreQuoteDraftCommand> validator,
+        ICurrentUser currentUser,
+        IIdentityRepository identity,
+        IPreQuoteDraftRepository repository,
+        TimeProvider timeProvider)
+        : this(
+            validator,
+            currentUser,
+            identity,
+            repository,
+            new NoopSgTechnicalSelector(),
+            timeProvider)
+    {
+    }
+
     public async Task<CreatePreQuoteDraftResult> ExecuteAsync(
         CreatePreQuoteDraftCommand command, CancellationToken cancellationToken)
     {
@@ -32,10 +49,13 @@ public sealed class CreatePreQuoteDraftService(
                 return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.DraftAlreadyExists);
             if (!source.ProjectIsActive) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveProject);
             if (!source.ClientIsActive) return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.InactiveClient);
+            var items = await BuildTechnicalSelectionsAsync(
+                source.Items,
+                cancellationToken);
             var draft = PreQuoteDraft.Create(
                 source.PreQuoteId, source.DocumentId, source.StructuredExtractionId,
                 source.ProjectName, source.ClientName, source.Location, userId,
-                timeProvider.GetUtcNow(), source.Items, source.Requirements,
+                timeProvider.GetUtcNow(), items, source.Requirements,
                 source.DocumentReferences, source.Issues, source.Conflicts);
             repository.Add(draft);
             await repository.SaveChangesAsync(cancellationToken);
@@ -44,5 +64,97 @@ public sealed class CreatePreQuoteDraftService(
         catch (PreQuoteDraftConflictException) { return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.DraftAlreadyExists); }
         catch (PreQuoteDraftQueryException) { return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.QueryError); }
         catch (PreQuoteDraftPersistenceException) { return CreatePreQuoteDraftResult.Failed(PreQuoteDraftFailure.PersistenceError); }
+    }
+
+    private async Task<IReadOnlyList<PreQuoteDraftItemSource>>
+        BuildTechnicalSelectionsAsync(
+            IReadOnlyList<PreQuoteDraftItemSource> items,
+            CancellationToken cancellationToken)
+    {
+        var result = new List<PreQuoteDraftItemSource>(items.Count);
+        foreach (var item in items)
+        {
+            var selection = await technicalSelector.SelectAsync(
+                new SgTechnicalSelectionInput(
+                    item.FunctionalType,
+                    item.Operation,
+                    item.WidthMillimeters,
+                    item.HeightMillimeters,
+                    item.AreaSquareMeters,
+                    item.PanelCount,
+                    item.MovablePanelCount,
+                    item.FixedPanelCount,
+                    item.Modulation,
+                    item.OpeningDirection,
+                    item.SpecialFeatures ?? [],
+                    item.GeometryType,
+                    null,
+                    item.TechnicalSnapshot?.SystemOriginalText
+                        ?? item.TechnicalSnapshot?.SystemCode,
+                    item.Configuration),
+                cancellationToken);
+            result.Add(item with
+            {
+                TechnicalSelection = BuildSelection(item, selection)
+            });
+        }
+        return result;
+    }
+
+    private static PreQuoteDraftItemTechnicalSelectionSource? BuildSelection(
+        PreQuoteDraftItemSource item,
+        SgTechnicalSelectionResult selection)
+    {
+        if (HasSelectedValue(item.TechnicalSelection))
+        {
+            return item.TechnicalSelection;
+        }
+
+        if (selection.SuggestedSystemCode is null
+            && !selection.RequiresReview
+            && selection.ReviewReasons.Count == 0)
+        {
+            return item.TechnicalSelection;
+        }
+
+        return new(
+            RequestedSystemCode: item.TechnicalSnapshot?.SystemCode,
+            RequestedSystemOriginalText: item.TechnicalSnapshot?.SystemOriginalText,
+            SuggestedSystemCode: selection.SuggestedSystemCode,
+            RequestedGlassCode: item.Glass?.NormalizedCodeSnapshot,
+            RequestedGlassOriginalText: item.Glass?.RawSpecification,
+            RequestedFinishCode: item.TechnicalSnapshot?.FinishCode,
+            RequestedFinishOriginalText: item.TechnicalSnapshot?.FinishOriginalText,
+            AppliedSystemRuleCode: selection.AppliedRuleCode,
+            SelectionState: selection.SuggestedSystemCode is null
+                ? PreQuoteDraftTechnicalSelectionState.Pending
+                : PreQuoteDraftTechnicalSelectionState.Suggested,
+            RequiresReview: selection.RequiresReview,
+            Confidence: selection.Confidence == 0m ? null : selection.Confidence,
+            ReviewReasons: selection.ReviewReasons,
+            SuggestedSource: selection.SuggestedSystemCode is null
+                ? null
+                : PreQuoteDraftTechnicalSelectionSource.Rule);
+    }
+
+    private static bool HasSelectedValue(
+        PreQuoteDraftItemTechnicalSelectionSource? selection) =>
+        selection?.SelectedSystemCode is not null
+        || selection?.SelectedGlassCode is not null
+        || selection?.SelectedFinishCode is not null
+        || selection?.SelectedHardwareCode is not null;
+
+    private sealed class NoopSgTechnicalSelector : ISgTechnicalSelector
+    {
+        public Task<SgTechnicalSelectionResult> SelectAsync(
+            SgTechnicalSelectionInput input,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new SgTechnicalSelectionResult(
+                null,
+                SgTechnicalSelectionRuleCodes.SystemNoMatchRequiresReview,
+                0m,
+                false,
+                [],
+                []));
     }
 }

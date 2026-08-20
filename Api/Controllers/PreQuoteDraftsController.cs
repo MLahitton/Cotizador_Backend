@@ -489,7 +489,8 @@ public sealed class PreQuoteDraftsController(
             selection.ReviewReasons,
             SelectionSource(selection.RequestedSource),
             SelectionSource(selection.SuggestedSource),
-            SelectionSource(selection.SelectedSource));
+            SelectionSource(selection.SelectedSource),
+            selection.AppliedSystemRuleCode);
     }
 
     private static PreQuoteDraftTechnicalSelectionPartResponse Part(

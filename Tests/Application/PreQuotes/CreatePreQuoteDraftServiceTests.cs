@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes;
 using Application.PreQuotes.CreatePreQuoteDraft;
@@ -173,6 +174,108 @@ public sealed class CreatePreQuoteDraftServiceTests
         Assert.Equal(12345.123456m, valuation.UnitAmount);
         Assert.Equal(67890.987654m, valuation.TotalAmount);
         Assert.Equal(44444.444444m, valuation.UnitPricePerSquareMeter);
+    }
+
+    [Fact]
+    public async Task Create_WithFixedFunctionalType_WritesSuggestedSystemWithoutSelected()
+    {
+        var source = CreateSourceContext(
+            includeGlass: true,
+            includeValuation: false,
+            includeTechnical: true,
+            requestedSystemCode: "3831",
+            requestedSystemOriginalText: "Sistema solicitado 3831",
+            functionalType: "FIXED");
+        var repository = CreateRepository();
+        var currentUser = CreateCurrentUser();
+        var identity = CreateIdentity(CreateUser());
+
+        repository.FindSourceAsync(
+            PreQuoteId, DocumentId, ExtractionId, Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>()).Returns(source);
+        repository.ExistsAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var service = new CreatePreQuoteDraftService(
+            new CreatePreQuoteDraftCommandValidator(),
+            currentUser,
+            identity,
+            repository,
+            new DeterministicSgTechnicalSelector(
+                new ProductSystemCatalog([System("K40", "FIXED", "VENECIA FERMO", null, "ESSENTIAL")])),
+            new FixedProvider(At));
+
+        var result = await service.ExecuteAsync(
+            new CreatePreQuoteDraftCommand(PreQuoteId, DocumentId, ExtractionId),
+            TestContext.Current.CancellationToken);
+
+        var selection = Assert.Single(result.Draft!.Items).TechnicalSelection;
+        Assert.NotNull(selection);
+        Assert.Equal("3831", selection.RequestedSystemCode);
+        Assert.Equal("K40", selection.SuggestedSystemCode);
+        Assert.Null(selection.SelectedSystemCode);
+        Assert.Equal(
+            PreQuoteDraftTechnicalSelectionState.Suggested,
+            selection.SelectionState);
+        Assert.Equal(
+            PreQuoteDraftTechnicalSelectionSource.Rule,
+            selection.SuggestedSource);
+        Assert.Equal(
+            SgTechnicalSelectionRuleCodes.SystemFixedFermo,
+            selection.AppliedSystemRuleCode);
+    }
+
+    [Fact]
+    public async Task Create_WithExistingSelectedTechnicalSelection_DoesNotOverwriteSelected()
+    {
+        var existing = new PreQuoteDraftItemTechnicalSelectionSource(
+            RequestedSystemCode: "3831",
+            RequestedSystemOriginalText: "Sistema solicitado 3831",
+            SelectedSystemCode: "MANUAL_SYSTEM",
+            SelectionState: PreQuoteDraftTechnicalSelectionState.Modified,
+            RequiresReview: false,
+            ReviewReasons: [],
+            SelectedSource: PreQuoteDraftTechnicalSelectionSource.Manual);
+        var source = CreateSourceContext(
+            includeGlass: true,
+            includeValuation: false,
+            includeTechnical: true,
+            requestedSystemCode: "3831",
+            requestedSystemOriginalText: "Sistema solicitado 3831",
+            functionalType: "FIXED",
+            technicalSelection: existing);
+        var repository = CreateRepository();
+        var currentUser = CreateCurrentUser();
+        var identity = CreateIdentity(CreateUser());
+
+        repository.FindSourceAsync(
+            PreQuoteId, DocumentId, ExtractionId, Arg.Any<Guid>(),
+            Arg.Any<CancellationToken>()).Returns(source);
+        repository.ExistsAsync(
+            Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(false);
+
+        var service = new CreatePreQuoteDraftService(
+            new CreatePreQuoteDraftCommandValidator(),
+            currentUser,
+            identity,
+            repository,
+            new DeterministicSgTechnicalSelector(
+                new ProductSystemCatalog([System("K40", "FIXED", "VENECIA FERMO", null, "ESSENTIAL")])),
+            new FixedProvider(At));
+
+        var result = await service.ExecuteAsync(
+            new CreatePreQuoteDraftCommand(PreQuoteId, DocumentId, ExtractionId),
+            TestContext.Current.CancellationToken);
+
+        var selection = Assert.Single(result.Draft!.Items).TechnicalSelection;
+        Assert.NotNull(selection);
+        Assert.Equal("MANUAL_SYSTEM", selection.SelectedSystemCode);
+        Assert.Null(selection.SuggestedSystemCode);
+        Assert.Equal(
+            PreQuoteDraftTechnicalSelectionSource.Manual,
+            selection.SelectedSource);
     }
 
     [Fact]
@@ -426,7 +529,12 @@ public sealed class CreatePreQuoteDraftServiceTests
         decimal valuationTotalArea = 4.500000m,
         decimal valuationUnitPrice = 90000.123456m,
         decimal valuationUnitAmount = 270000.370368m,
-        decimal valuationTotalAmount = 810001.111104m)
+        decimal valuationTotalAmount = 810001.111104m,
+        bool includeTechnical = false,
+        string? requestedSystemCode = null,
+        string? requestedSystemOriginalText = null,
+        string? functionalType = null,
+        PreQuoteDraftItemTechnicalSelectionSource? technicalSelection = null)
     {
         var reviewReasons = glassReviewReasons ?? Array.Empty<GlassReviewReason>();
         var sourcePages = glassSourcePages?.ToArray() ?? (glassRequiresReview ? new[] { 1, 2, 3 } : new[] { 1 });
@@ -489,7 +597,29 @@ public sealed class CreatePreQuoteDraftServiceTests
                         At,
                         null,
                         null)
-                    : null))
+                    : null,
+                includeTechnical
+                    ? new PreQuoteDraftItemTechnicalSnapshotSource(
+                        Guid.NewGuid(),
+                        requestedSystemCode,
+                        requestedSystemOriginalText,
+                        TechnicalClassificationSource.Explicit,
+                        0.95m,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        false,
+                        [])
+                    : null,
+                technicalSelection,
+                null,
+                null,
+                functionalType))
             .ToArray();
 
         return new(
@@ -517,6 +647,49 @@ public sealed class CreatePreQuoteDraftServiceTests
             At);
 
     private static readonly Guid glassTypeId = Guid.NewGuid();
+
+    private static ProductSystemCatalogReadModel System(
+        string code,
+        string functionalType,
+        string? family,
+        string? variant,
+        string commercialLine) =>
+        new(
+            Guid.NewGuid(),
+            code,
+            code,
+            code,
+            code,
+            functionalType,
+            family,
+            null,
+            commercialLine,
+            variant,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
+
+    private sealed class ProductSystemCatalog(
+        IReadOnlyList<ProductSystemCatalogReadModel> systems)
+        : IProductSystemCatalogRepository
+    {
+        public Task<IReadOnlyList<ProductSystemCatalogReadModel>>
+            ListActiveAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(systems);
+
+        public Task<IReadOnlyList<ProductSystemCatalogReadModel>>
+            ListActiveSelectableAsync(CancellationToken cancellationToken) =>
+            Task.FromResult(systems);
+
+        public Task<ProductSystemCatalogReadModel?> FindActiveByCodeAsync(
+            string code,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(systems.SingleOrDefault(system =>
+                system.Code == code));
+    }
 
     private sealed class FixedProvider(DateTimeOffset value) : TimeProvider
     {

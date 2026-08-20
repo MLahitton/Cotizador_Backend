@@ -137,7 +137,18 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.TechnicalClassification.FinishConfidence,
                             x.TechnicalClassification.RequiresReview,
                             x.TechnicalClassification.ReviewReasons),
-                    null))
+                    null,
+                    x.AreaSquareMeters,
+                    x.Configuration,
+                    x.FunctionalType,
+                    x.Operation,
+                    x.PanelCount,
+                    x.MovablePanelCount,
+                    x.FixedPanelCount,
+                    x.Modulation,
+                    x.OpeningDirection,
+                    x.SpecialFeatures,
+                    x.GeometryType))
                 .ToArrayAsync(cancellationToken);
             var requirements = await dbContext.Set<StructuredExtractionRequirement>()
                 .AsNoTracking().Where(x => x.StructuredDocumentExtractionId == extractionId)
