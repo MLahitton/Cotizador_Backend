@@ -37,6 +37,21 @@ public sealed class ProductSystemCatalogRepository(
         }
     }
 
+    public async Task<IReadOnlyList<ProductSystemCatalogReadModel>>
+        ListActiveSelectableAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await Query()
+                .Where(value => value.IsSelectable)
+                .ToArrayAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new CanonicalCatalogQueryException(exception);
+        }
+    }
+
     private IQueryable<ProductSystemCatalogReadModel> Query() =>
         dbContext.ProductSystems.AsNoTracking()
             .Where(value => value.IsActive)
@@ -45,6 +60,14 @@ public sealed class ProductSystemCatalogRepository(
                 value.Id,
                 value.Code,
                 value.Name,
+                value.TechnicalName,
+                value.CommercialName,
+                value.FunctionalType,
+                value.Family,
+                value.Series,
+                value.CommercialLine,
+                value.Variant,
+                value.IsSelectable,
                 value.ActiveForRecognition,
                 value.Priceable,
                 value.FuturePriceable,

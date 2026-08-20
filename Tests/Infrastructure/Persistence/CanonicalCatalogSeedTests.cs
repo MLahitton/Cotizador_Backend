@@ -12,7 +12,10 @@ public sealed class CanonicalCatalogSeedTests
     private static readonly string[] SystemCodes =
     [
         "3890", "BARANDA", "DIVISION_BANO", "K100", "K40", "K50",
-        "K55", "K70", "K90", "S35", "S50", "S80", "SG45"
+        "K55", "K70", "K90", "S35", "S50", "S80", "SG45",
+        "SG_BATH_DIV_INOX", "SG_LOUVER", "SG_PERGOLA",
+        "SG_PRIM_SIENA_CASEMENT", "SG_PRIM_SIENA_DBL_CASE",
+        "SG_SKYLIGHT", "SG_SYS_NA", "SG_VEN70_POCKET_DOOR"
     ];
 
     private static readonly string[] FrameCodes = ["MARCO_47", "MARCO_58"];
@@ -30,7 +33,7 @@ public sealed class CanonicalCatalogSeedTests
         var byCode = systems.ToDictionary(value => Text(value, "Code"));
 
         Assert.Equal(SystemCodes, byCode.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(13, byCode.Count);
+        Assert.Equal(21, byCode.Count);
         Assert.All(systems, value => Assert.True((bool)value["IsActive"]!));
         Assert.False((bool)byCode["BARANDA"]["Priceable"]!);
         Assert.False((bool)byCode["DIVISION_BANO"]["Priceable"]!);
@@ -41,8 +44,20 @@ public sealed class CanonicalCatalogSeedTests
         Assert.True((bool)byCode["BARANDA"]["RequiresReview"]!);
         Assert.True((bool)byCode["DIVISION_BANO"]["RequiresReview"]!);
         Assert.All(
-            byCode.Where(pair => pair.Key is not ("BARANDA" or "DIVISION_BANO")),
+            byCode.Where(pair => pair.Key is not ("BARANDA"
+                or "DIVISION_BANO"
+                or "SG_BATH_DIV_INOX"
+                or "SG_LOUVER"
+                or "SG_PERGOLA"
+                or "SG_SKYLIGHT"
+                or "SG_SYS_NA")),
             pair => Assert.True((bool)pair.Value["Priceable"]!));
+        Assert.Equal("VENECIA NAPOLES", Text(byCode["K70"], "CommercialName"));
+        Assert.Equal("SLIDING_DOOR", Text(byCode["K70"], "FunctionalType"));
+        Assert.True((bool)byCode["K70"]["IsSelectable"]!);
+        Assert.Equal("POCKET", Text(byCode["SG_VEN70_POCKET_DOOR"], "Variant"));
+        Assert.Equal("CASEMENT", Text(byCode["SG_PRIM_SIENA_CASEMENT"], "FunctionalType"));
+        Assert.False((bool)byCode["SG_SYS_NA"]["IsSelectable"]!);
     }
 
     [Fact]

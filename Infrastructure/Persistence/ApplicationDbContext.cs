@@ -57,6 +57,9 @@ public sealed class ApplicationDbContext(
     public DbSet<PreQuoteDraftItemTechnicalSnapshot>
         PreQuoteDraftItemTechnicalSnapshots =>
             Set<PreQuoteDraftItemTechnicalSnapshot>();
+    public DbSet<PreQuoteDraftItemTechnicalSelection>
+        PreQuoteDraftItemTechnicalSelections =>
+            Set<PreQuoteDraftItemTechnicalSelection>();
     public DbSet<PreQuoteDraftRequirement> PreQuoteDraftRequirements =>
         Set<PreQuoteDraftRequirement>();
     public DbSet<PreQuoteDraftDocumentReference> PreQuoteDraftDocumentReferences =>

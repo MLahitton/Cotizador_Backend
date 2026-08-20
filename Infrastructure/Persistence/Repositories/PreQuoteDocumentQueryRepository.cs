@@ -268,7 +268,12 @@ public sealed class PreQuoteDocumentQueryRepository(
                 item.Sequence, item.Reference, item.Description,
                 item.ElementType, item.RawMeasurements,
                 item.WidthMillimeters, item.HeightMillimeters,
-                item.Quantity, item.RequiresReview))
+                item.Quantity, item.RequiresReview,
+                item.AreaSquareMeters,
+                item.Configuration, item.FunctionalType, item.Operation,
+                item.PanelCount, item.MovablePanelCount, item.FixedPanelCount,
+                item.Modulation, item.OpeningDirection,
+                item.SpecialFeatures, item.GeometryType))
             .ToArrayAsync(cancellationToken);
         var requirements = await dbContext.Set<StructuredExtractionRequirement>()
             .AsNoTracking()
@@ -590,7 +595,18 @@ internal sealed record PersistedItem(
     int Sequence, string? Reference, string Description,
     StructuredElementType ElementType, string? RawMeasurements,
     int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
-    bool RequiresReview);
+    bool RequiresReview,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 internal sealed record PersistedRequirement(
     int Sequence, RequirementCategory Category, string Value);
 internal sealed record PersistedReference(

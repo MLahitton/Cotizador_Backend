@@ -8,6 +8,7 @@ using Api.Controllers;
 using Api.ErrorHandling;
 using Contracts.Common;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.CreatePreQuoteDraft;
@@ -509,6 +510,9 @@ public sealed class PreQuoteDraftHttpContractTests
             var currentUser = Substitute.For<ICurrentUser>();
             var identity = Substitute.For<IIdentityRepository>();
             var repository = Substitute.For<IPreQuoteDraftRepository>();
+            var productSystems = Substitute.For<IProductSystemCatalogRepository>();
+            var glassTypes = Substitute.For<IGlassTypeCatalogRepository>();
+            var finishes = Substitute.For<IFinishTypeCatalogRepository>();
             currentUser.IsAuthenticated.Returns(true);
             currentUser.UserId.Returns(UserId);
             identity.FindUserByIdAsync(
@@ -543,6 +547,9 @@ public sealed class PreQuoteDraftHttpContractTests
             builder.Services.AddSingleton(currentUser);
             builder.Services.AddSingleton(identity);
             builder.Services.AddSingleton(repository);
+            builder.Services.AddSingleton(productSystems);
+            builder.Services.AddSingleton(glassTypes);
+            builder.Services.AddSingleton(finishes);
             builder.Services.AddSingleton<TimeProvider>(
                 new FixedProvider(At.AddMinutes(1)));
             builder.Services.AddSingleton<

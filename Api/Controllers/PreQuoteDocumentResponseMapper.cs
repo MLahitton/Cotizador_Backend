@@ -124,7 +124,12 @@ internal static class PreQuoteDocumentResponseMapper
                             ? Map(finishSource) : null,
                         item.TechnicalClassification.FinishConfidence,
                         item.TechnicalClassification.RequiresReview,
-                        item.TechnicalClassification.ReviewReasons))).ToArray(),
+                        item.TechnicalClassification.ReviewReasons),
+                item.AreaSquareMeters, item.Configuration,
+                item.FunctionalType, item.Operation, item.PanelCount,
+                item.MovablePanelCount, item.FixedPanelCount,
+                item.Modulation, item.OpeningDirection,
+                item.SpecialFeatures ?? [], item.GeometryType)).ToArray(),
             value.DocumentReferences.Select(item =>
                 new StructuredDocumentReferenceResponse(
                     item.Sequence, item.Reference, item.Description,

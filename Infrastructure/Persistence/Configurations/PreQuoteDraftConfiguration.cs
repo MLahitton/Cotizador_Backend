@@ -108,6 +108,10 @@ public sealed class PreQuoteDraftItemConfiguration : IEntityTypeConfiguration<Pr
             .HasForeignKey<PreQuoteDraftItemTechnicalSnapshot>(
                 x => x.PreQuoteDraftItemId)
             .OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.TechnicalSelection).WithOne()
+            .HasForeignKey<PreQuoteDraftItemTechnicalSelection>(
+                x => x.PreQuoteDraftItemId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -192,6 +196,75 @@ public sealed class PreQuoteDraftItemGlassSnapshotConfiguration
         b.Property(x => x.NormalizedCodeSnapshot).HasColumnName("normalized_code_snapshot").HasMaxLength(30);
         b.Property(x => x.AssignmentScope).HasColumnName("assignment_scope").HasConversion<string>().HasMaxLength(20);
         b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
+    }
+}
+
+public sealed class PreQuoteDraftItemTechnicalSelectionConfiguration
+    : IEntityTypeConfiguration<PreQuoteDraftItemTechnicalSelection>
+{
+    public void Configure(EntityTypeBuilder<PreQuoteDraftItemTechnicalSelection> b)
+    {
+        b.ToTable("pre_quote_draft_item_technical_selections", "core", t =>
+        {
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_technical_selection_confidence",
+                "\"confidence\" IS NULL OR \"confidence\" >= 0 AND \"confidence\" <= 1");
+            t.HasCheckConstraint(
+                "ck_pre_quote_draft_item_technical_selection_review",
+                "(\"requires_review\" = false AND cardinality(\"review_reasons\") = 0) OR (\"requires_review\" = true AND cardinality(\"review_reasons\") > 0)");
+        });
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Id).HasColumnName("id").HasColumnType("uuid")
+            .ValueGeneratedNever();
+        b.Property(x => x.PreQuoteDraftItemId)
+            .HasColumnName("pre_quote_draft_item_id")
+            .HasColumnType("uuid");
+        b.Property(x => x.RequestedSystemCode)
+            .HasColumnName("requested_system_code").HasMaxLength(60);
+        b.Property(x => x.RequestedSystemOriginalText)
+            .HasColumnName("requested_system_original_text").HasMaxLength(500);
+        b.Property(x => x.SuggestedSystemCode)
+            .HasColumnName("suggested_system_code").HasMaxLength(60);
+        b.Property(x => x.SelectedSystemCode)
+            .HasColumnName("selected_system_code").HasMaxLength(60);
+        b.Property(x => x.RequestedGlassCode)
+            .HasColumnName("requested_glass_code").HasMaxLength(60);
+        b.Property(x => x.RequestedGlassOriginalText)
+            .HasColumnName("requested_glass_original_text").HasMaxLength(500);
+        b.Property(x => x.SuggestedGlassCode)
+            .HasColumnName("suggested_glass_code").HasMaxLength(60);
+        b.Property(x => x.SelectedGlassCode)
+            .HasColumnName("selected_glass_code").HasMaxLength(60);
+        b.Property(x => x.RequestedFinishCode)
+            .HasColumnName("requested_finish_code").HasMaxLength(60);
+        b.Property(x => x.RequestedFinishOriginalText)
+            .HasColumnName("requested_finish_original_text").HasMaxLength(500);
+        b.Property(x => x.SuggestedFinishCode)
+            .HasColumnName("suggested_finish_code").HasMaxLength(60);
+        b.Property(x => x.SelectedFinishCode)
+            .HasColumnName("selected_finish_code").HasMaxLength(60);
+        b.Property(x => x.RequestedHardwareCode)
+            .HasColumnName("requested_hardware_code").HasMaxLength(60);
+        b.Property(x => x.RequestedHardwareOriginalText)
+            .HasColumnName("requested_hardware_original_text").HasMaxLength(500);
+        b.Property(x => x.SuggestedHardwareCode)
+            .HasColumnName("suggested_hardware_code").HasMaxLength(60);
+        b.Property(x => x.SelectedHardwareCode)
+            .HasColumnName("selected_hardware_code").HasMaxLength(60);
+        b.Property(x => x.SelectionState).HasColumnName("selection_state")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.RequiresReview).HasColumnName("requires_review");
+        b.Property(x => x.Confidence).HasColumnName("confidence")
+            .HasPrecision(5, 4);
+        b.Property(x => x.ReviewReasons).HasColumnName("review_reasons")
+            .HasColumnType("text[]");
+        b.Property(x => x.RequestedSource).HasColumnName("requested_source")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.SuggestedSource).HasColumnName("suggested_source")
+            .HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.SelectedSource).HasColumnName("selected_source")
+            .HasConversion<string>().HasMaxLength(20);
         b.HasIndex(x => x.PreQuoteDraftItemId).IsUnique();
     }
 }

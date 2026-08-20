@@ -176,6 +176,17 @@ internal static class StructuredExtractionPayloadReader
             || dto.WidthMillimeters != row.WidthMillimeters
             || dto.HeightMillimeters != row.HeightMillimeters
             || dto.Quantity != row.Quantity
+            || dto.AreaSquareMeters != row.AreaSquareMeters
+            || dto.Configuration != row.Configuration
+            || dto.FunctionalType != row.FunctionalType
+            || dto.Operation != row.Operation
+            || dto.PanelCount != row.PanelCount
+            || dto.MovablePanelCount != row.MovablePanelCount
+            || dto.FixedPanelCount != row.FixedPanelCount
+            || dto.Modulation != row.Modulation
+            || dto.OpeningDirection != row.OpeningDirection
+            || !((dto.SpecialFeatures ?? []).SequenceEqual(row.SpecialFeatures ?? []))
+            || dto.GeometryType != row.GeometryType
             || !ItemRequiresReviewMatches(
                 schemaVersion,
                 dto.RequiresReview,
@@ -207,7 +218,18 @@ internal static class StructuredExtractionPayloadReader
                 structuredExtractionId,
                 dto.TechnicalClassification,
                 technical,
-                schemaVersion));
+                schemaVersion),
+            row.AreaSquareMeters,
+            row.Configuration,
+            row.FunctionalType,
+            row.Operation,
+            row.PanelCount,
+            row.MovablePanelCount,
+            row.FixedPanelCount,
+            row.Modulation,
+            row.OpeningDirection,
+            row.SpecialFeatures ?? [],
+            row.GeometryType);
     }
 
     private static StructuredItemTechnicalClassificationReadModel?
@@ -1011,6 +1033,17 @@ internal static class StructuredExtractionPayloadReader
         public int? WidthMillimeters { get; init; }
         public int? HeightMillimeters { get; init; }
         public int? Quantity { get; init; }
+        public decimal? AreaSquareMeters { get; init; }
+        public string? Configuration { get; init; }
+        public string? FunctionalType { get; init; }
+        public string? Operation { get; init; }
+        public int? PanelCount { get; init; }
+        public int? MovablePanelCount { get; init; }
+        public int? FixedPanelCount { get; init; }
+        public string? Modulation { get; init; }
+        public string? OpeningDirection { get; init; }
+        public string[]? SpecialFeatures { get; init; }
+        public string? GeometryType { get; init; }
         public bool RequiresReview { get; init; }
         public string[]? ReviewReasons { get; init; }
         public int[]? SourcePages { get; init; }

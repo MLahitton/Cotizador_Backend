@@ -109,8 +109,19 @@ public sealed class StructuredExtractionItemConfiguration : StructuredChildConfi
         b.Property(x => x.WidthMillimeters).HasColumnName("width_millimeters");
         b.Property(x => x.HeightMillimeters).HasColumnName("height_millimeters");
         b.Property(x => x.Quantity).HasColumnName("quantity");
+        b.Property(x => x.AreaSquareMeters).HasColumnName("area_square_meters").HasPrecision(18, 6);
+        b.Property(x => x.Configuration).HasColumnName("configuration").HasMaxLength(500);
+        b.Property(x => x.FunctionalType).HasColumnName("functional_type").HasMaxLength(60);
+        b.Property(x => x.Operation).HasColumnName("operation").HasMaxLength(60);
+        b.Property(x => x.PanelCount).HasColumnName("panel_count");
+        b.Property(x => x.MovablePanelCount).HasColumnName("movable_panel_count");
+        b.Property(x => x.FixedPanelCount).HasColumnName("fixed_panel_count");
+        b.Property(x => x.Modulation).HasColumnName("modulation").HasMaxLength(60);
+        b.Property(x => x.OpeningDirection).HasColumnName("opening_direction").HasMaxLength(60);
+        b.Property(x => x.SpecialFeatures).HasColumnName("special_features").HasColumnType("text[]");
+        b.Property(x => x.GeometryType).HasColumnName("geometry_type").HasMaxLength(60);
         b.Property(x => x.RequiresReview).HasColumnName("requires_review");
-        b.ToTable(Table, "core", t => t.HasCheckConstraint("ck_structured_items_values", "(\"width_millimeters\" IS NULL AND \"height_millimeters\" IS NULL OR \"width_millimeters\" > 0 AND \"height_millimeters\" > 0) AND (\"quantity\" IS NULL OR \"quantity\" > 0) AND \"sequence\" > 0"));
+        b.ToTable(Table, "core", t => t.HasCheckConstraint("ck_structured_items_values", "(\"width_millimeters\" IS NULL AND \"height_millimeters\" IS NULL OR \"width_millimeters\" > 0 AND \"height_millimeters\" > 0) AND (\"quantity\" IS NULL OR \"quantity\" > 0) AND (\"area_square_meters\" IS NULL OR \"area_square_meters\" > 0) AND (\"panel_count\" IS NULL OR \"panel_count\" > 0) AND (\"movable_panel_count\" IS NULL OR \"movable_panel_count\" >= 0) AND (\"fixed_panel_count\" IS NULL OR \"fixed_panel_count\" >= 0) AND \"sequence\" > 0"));
     }
 }
 public sealed class StructuredExtractionRequirementConfiguration : StructuredChildConfiguration<StructuredExtractionRequirement>

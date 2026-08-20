@@ -199,7 +199,8 @@ public sealed class CanonicalCatalogHttpTests
             string code,
             bool priceable = true,
             bool requiresReview = false) =>
-            new(Guid.NewGuid(), code, code, true, priceable, true,
+            new(Guid.NewGuid(), code, code, null, null, null, null, null,
+                null, null, false, true, priceable, true,
                 requiresReview, true);
 
         private static IReadOnlyList<FrameTypeCatalogReadModel> Frames() =>

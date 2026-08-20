@@ -6,6 +6,14 @@ public sealed record ProductSystemCatalogReadModel(
     Guid Id,
     string Code,
     string Name,
+    string? TechnicalName,
+    string? CommercialName,
+    string? FunctionalType,
+    string? Family,
+    string? Series,
+    string? CommercialLine,
+    string? Variant,
+    bool IsSelectable,
     bool ActiveForRecognition,
     bool Priceable,
     bool FuturePriceable,
@@ -39,6 +47,9 @@ public sealed record CatalogAliasReadModel(
 public interface IProductSystemCatalogRepository
 {
     Task<IReadOnlyList<ProductSystemCatalogReadModel>> ListActiveAsync(
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ProductSystemCatalogReadModel>> ListActiveSelectableAsync(
         CancellationToken cancellationToken);
 
     Task<ProductSystemCatalogReadModel?> FindActiveByCodeAsync(

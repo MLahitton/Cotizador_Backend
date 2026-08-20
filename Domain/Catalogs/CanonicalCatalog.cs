@@ -23,6 +23,14 @@ public sealed class ProductSystem
     public Guid Id { get; private set; }
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
+    public string? TechnicalName { get; private set; }
+    public string? CommercialName { get; private set; }
+    public string? FunctionalType { get; private set; }
+    public string? Family { get; private set; }
+    public string? Series { get; private set; }
+    public string? CommercialLine { get; private set; }
+    public string? Variant { get; private set; }
+    public bool IsSelectable { get; private set; }
     public bool ActiveForRecognition { get; private set; }
     public bool Priceable { get; private set; }
     public bool FuturePriceable { get; private set; }
@@ -38,7 +46,15 @@ public sealed class ProductSystem
         bool priceable,
         bool futurePriceable,
         bool requiresReview,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        string? technicalName = null,
+        string? commercialName = null,
+        string? functionalType = null,
+        string? family = null,
+        string? series = null,
+        string? commercialLine = null,
+        string? variant = null,
+        bool isSelectable = false)
     {
         CatalogText.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
         return new ProductSystem
@@ -46,6 +62,14 @@ public sealed class ProductSystem
             Id = Guid.NewGuid(),
             Code = CatalogText.NormalizeCode(code, nameof(code)),
             Name = CatalogText.RequiredText(name, 100, nameof(name)),
+            TechnicalName = CatalogText.OptionalText(technicalName, 100, nameof(technicalName)),
+            CommercialName = CatalogText.OptionalText(commercialName, 100, nameof(commercialName)),
+            FunctionalType = CatalogText.OptionalText(functionalType, 60, nameof(functionalType)),
+            Family = CatalogText.OptionalText(family, 60, nameof(family)),
+            Series = CatalogText.OptionalText(series, 60, nameof(series)),
+            CommercialLine = CatalogText.OptionalText(commercialLine, 60, nameof(commercialLine)),
+            Variant = CatalogText.OptionalText(variant, 60, nameof(variant)),
+            IsSelectable = isSelectable,
             ActiveForRecognition = activeForRecognition,
             Priceable = priceable,
             FuturePriceable = futurePriceable,
@@ -244,6 +268,19 @@ internal static class CatalogText
         }
 
         return normalized;
+    }
+
+    public static string? OptionalText(
+        string? value,
+        int maximumLength,
+        string name)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return RequiredText(value, maximumLength, name);
     }
 
     public static void EnsureUtc(DateTimeOffset value, string name)

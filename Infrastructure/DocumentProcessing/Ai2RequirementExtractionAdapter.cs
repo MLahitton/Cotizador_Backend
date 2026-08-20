@@ -337,6 +337,17 @@ public sealed class Ai2RequirementExtractionAdapter
                     widthMillimeters = item.WidthMillimeters,
                     heightMillimeters = item.HeightMillimeters,
                     quantity = item.Quantity,
+                    areaSquareMeters = item.AreaSquareMeters,
+                    configuration = item.Configuration,
+                    functionalType = item.FunctionalType,
+                    operation = item.Operation,
+                    panelCount = item.PanelCount,
+                    movablePanelCount = item.MovablePanelCount,
+                    fixedPanelCount = item.FixedPanelCount,
+                    modulation = item.Modulation,
+                    openingDirection = item.OpeningDirection,
+                    specialFeatures = item.SpecialFeatures,
+                    geometryType = item.GeometryType,
                     requiresReview = item.RequiresReview,
                     reviewReasons = item.ReviewReasons.Select(IssueCode).ToArray(),
                     sourcePages = item.SourcePages,
@@ -433,6 +444,8 @@ public sealed class Ai2RequirementExtractionAdapter
         var glass = MapGlass(element, evidenceById);
         var technical = MapTechnicalClassification(element);
         var status = ItemStatus(element);
+        var configuration = Object(element, "configuration");
+        var geometry = Object(element, "geometry");
         var missingFields = StringArray(element, "missing_fields");
         var reviewReasons = new List<StructuredIssueCode>();
         if (width is null || height is null)
@@ -491,7 +504,37 @@ public sealed class Ai2RequirementExtractionAdapter
             area,
             ConfigurationText(element),
             Decimal(element, "confidence"),
-            status);
+            status,
+            FlexibleString(element, "functional_type"),
+            configuration is { } configurationValue
+                ? FlexibleString(configurationValue, "operation")
+                : null,
+            configuration is { } configurationValueForPanels
+                ? FlexibleInt(configurationValueForPanels, "panel_count")
+                : null,
+            configuration is { } configurationValueForMovablePanels
+                ? FlexibleInt(configurationValueForMovablePanels, "movable_panel_count")
+                : null,
+            configuration is { } configurationValueForFixedPanels
+                ? FlexibleInt(configurationValueForFixedPanels, "fixed_panel_count")
+                : null,
+            configuration is { } configurationValueForModulation
+                ? FirstNonEmpty(
+                    FlexibleString(configurationValueForModulation, "modulation"),
+                    FlexibleString(configurationValueForModulation, "arrangement"))
+                : null,
+            configuration is { } configurationValueForOpening
+                ? FlexibleString(configurationValueForOpening, "opening_direction")
+                : null,
+            configuration is { } configurationValueForFeatures
+                ? FlexibleStringArray(configurationValueForFeatures, "special_features")
+                : [],
+            geometry is { } geometryValue
+                ? FirstNonEmpty(
+                    FlexibleString(geometryValue, "normalized_type"),
+                    FlexibleString(geometryValue, "type"),
+                    FlexibleString(geometryValue, "raw_type"))
+                : null);
     }
 
     private static StructuredItemGlassData? MapGlass(
@@ -1046,6 +1089,25 @@ public sealed class Ai2RequirementExtractionAdapter
                 Normalized(value),
                 IsUsable(Status(value)) ? Raw(value) : null)
             : null;
+    private static string? FlexibleString(JsonElement parent, string name) =>
+        FirstNonEmpty(
+            NormalizedOrRawString(parent, name),
+            String(parent, name));
+    private static int? FlexibleInt(JsonElement parent, string name) =>
+        TraceableInt(parent, name) ?? Int(parent, name);
+    private static IReadOnlyList<string> FlexibleStringArray(
+        JsonElement parent,
+        string name)
+    {
+        if (TryArray(parent, name, out var direct))
+        {
+            return ReadStringArray(direct);
+        }
+        return Object(parent, name) is { } value
+            && TryArray(value, "value", out var nested)
+                ? ReadStringArray(nested)
+                : [];
+    }
     private static string? Normalized(JsonElement value) =>
         ScalarString(value, "normalized") ?? ScalarString(value, "value");
     private static string? Raw(JsonElement value) =>
@@ -1058,13 +1120,16 @@ public sealed class Ai2RequirementExtractionAdapter
         JsonElement value,
         string name) =>
         TryArray(value, name, out var array)
-            ? array.EnumerateArray()
-                .Where(item => item.ValueKind == JsonValueKind.String)
-                .Select(item => item.GetString())
-                .Where(item => !string.IsNullOrWhiteSpace(item))
-                .Select(item => item!)
-                .ToArray()
+            ? ReadStringArray(array)
             : [];
+
+    private static IReadOnlyList<string> ReadStringArray(JsonElement array) =>
+        array.EnumerateArray()
+            .Where(item => item.ValueKind == JsonValueKind.String)
+            .Select(item => item.GetString())
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .Select(item => item!.Trim())
+            .ToArray();
 
     private static JsonElement Array(JsonElement value, string name) =>
         TryArray(value, name, out var result)

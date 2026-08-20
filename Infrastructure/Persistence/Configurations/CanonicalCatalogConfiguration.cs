@@ -17,6 +17,14 @@ public sealed class ProductSystemConfiguration
         builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(value => value.Code).HasColumnName("code").HasMaxLength(30).IsRequired();
         builder.Property(value => value.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        builder.Property(value => value.TechnicalName).HasColumnName("technical_name").HasMaxLength(100);
+        builder.Property(value => value.CommercialName).HasColumnName("commercial_name").HasMaxLength(100);
+        builder.Property(value => value.FunctionalType).HasColumnName("functional_type").HasMaxLength(60);
+        builder.Property(value => value.Family).HasColumnName("family").HasMaxLength(60);
+        builder.Property(value => value.Series).HasColumnName("series").HasMaxLength(60);
+        builder.Property(value => value.CommercialLine).HasColumnName("commercial_line").HasMaxLength(60);
+        builder.Property(value => value.Variant).HasColumnName("variant").HasMaxLength(60);
+        builder.Property(value => value.IsSelectable).HasColumnName("is_selectable").IsRequired();
         builder.Property(value => value.ActiveForRecognition).HasColumnName("active_for_recognition").IsRequired();
         builder.Property(value => value.Priceable).HasColumnName("priceable").IsRequired();
         builder.Property(value => value.FuturePriceable).HasColumnName("future_priceable").IsRequired();
@@ -27,19 +35,73 @@ public sealed class ProductSystemConfiguration
         builder.HasIndex(value => value.Code).IsUnique().HasDatabaseName("ux_product_systems_code");
 
         builder.HasData(
-            Seed(1, "K40", "Sistema K40", true, true, true, false),
-            Seed(2, "K50", "Sistema K50", true, true, true, false),
-            Seed(3, "K55", "Sistema K55", true, true, true, false),
-            Seed(4, "K70", "Sistema K70", true, true, true, false),
+            Seed(1, "K40", "Sistema K40", true, true, true, false,
+                "CUERPO FIJO SISTEMA VENECIA SERIE 40",
+                "VENECIA FERMO", "FIXED", "VENECIA FERMO", "40",
+                "ESSENTIAL", "STANDARD", true),
+            Seed(2, "K50", "Sistema K50", true, true, true, false,
+                "VENTANA CORREDIZA SISTEMA VENECIA SERIE 50",
+                "VENECIA MONZA", "SLIDING_WINDOW", "VENECIA MONZA", "50",
+                "ESSENTIAL", "STANDARD", true),
+            Seed(3, "K55", "Sistema K55", true, true, true, false,
+                "PUERTA PLEGABLE SISTEMA VENECIA SERIE 55",
+                "VENECIA PIEGA", "FOLDING_DOOR", "VENECIA PIEGA", "55",
+                "ESSENTIAL", "STANDARD", true),
+            Seed(4, "K70", "Sistema K70", true, true, true, false,
+                "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 70",
+                "VENECIA NAPOLES", "SLIDING_DOOR", "VENECIA NAPOLES", "70",
+                "ESSENTIAL", "STANDARD", true),
             Seed(5, "K90", "Sistema K90", true, true, true, false),
-            Seed(6, "K100", "Sistema K100", true, true, true, false),
-            Seed(7, "S35", "Sistema S35", true, true, true, false),
-            Seed(8, "S50", "Sistema S50", true, true, true, false),
-            Seed(9, "S80", "Sistema S80", true, true, true, false),
-            Seed(10, "3890", "Sistema 3890", true, true, true, false),
+            Seed(6, "K100", "Sistema K100", true, true, true, false,
+                "VENTANA CORREDIZA SISTEMA VENECIA SERIE 100",
+                "VENECIA MONACO", "SLIDING_WINDOW", "VENECIA MONACO", "100",
+                "ESSENTIAL", "STANDARD", true),
+            Seed(7, "S35", "Sistema S35", true, true, true, false,
+                "CUERPO PROYECTANTE SISTEMA PRIMAVERA SG 4",
+                "PRIMAVERA SIENA", "PROJECTING", "PRIMAVERA SIENA", "SG 4",
+                "CLASSIC", "STANDARD", true),
+            Seed(8, "S50", "Sistema S50", true, true, true, false,
+                "VENTANA CORREDIZA SISTEMA PRIMAVERA SG 5",
+                "PRIMAVERA LAGO", "SLIDING_WINDOW", "PRIMAVERA LAGO", "SG 5",
+                "CLASSIC", "STANDARD", true),
+            Seed(9, "S80", "Sistema S80", true, true, true, false,
+                "VENTANA CORREDIZA SISTEMA PRIMAVERA SG 8",
+                "PRIMAVERA LUCCA", "SLIDING_WINDOW", "PRIMAVERA LUCCA", "SG 8",
+                "CLASSIC", "STANDARD", true),
+            Seed(10, "3890", "Sistema 3890", true, true, true, false,
+                "PUERTA BATIENTE SISTEMA SG 3890",
+                "SG 3890", "SWING_DOOR", "SG 3890", "3890",
+                "CLASSIC", "STANDARD", true),
             Seed(11, "SG45", "Sistema SG45", true, true, true, false),
             Seed(12, "BARANDA", "Sistema para barandas", true, false, true, true),
-            Seed(13, "DIVISION_BANO", "Sistema para divisiones de bano", true, false, true, true));
+            Seed(13, "DIVISION_BANO", "Sistema para divisiones de bano", true, false, true, true),
+            Seed(14, "SG_VEN70_POCKET_DOOR", "Puerta corrediza pocket Venecia serie 70", true, true, true, false,
+                "PUERTA CORREDIZA POCKET SISTEMA VENECIA SERIE 70",
+                "VENECIA NAPOLES POCKET", "SLIDING_DOOR", "VENECIA NAPOLES", "70",
+                "ESSENTIAL", "POCKET", true),
+            Seed(15, "SG_PRIM_SIENA_CASEMENT", "Ventana batiente Primavera Siena", true, true, true, false,
+                "VENTANA BATIENTE SISTEMA PRIMAVERA SG 4",
+                "PRIMAVERA SIENA", "CASEMENT", "PRIMAVERA SIENA", "SG 4",
+                "CLASSIC", "STANDARD", true),
+            Seed(16, "SG_PRIM_SIENA_DBL_CASE", "Ventana doble batiente Primavera Siena", true, true, true, false,
+                "VENTANA DOBLE BATIENTE SISTEMA PRIMAVERA SG 4",
+                "PRIMAVERA SIENA", "DOUBLE_CASEMENT", "PRIMAVERA SIENA", "SG 4",
+                "CLASSIC", "DOUBLE", true),
+            Seed(17, "SG_PERGOLA", "Pergola", true, false, true, true,
+                "PERGOLA", "PERGOLA", "PERGOLA", null, null,
+                "SPECIAL", "STANDARD", true),
+            Seed(18, "SG_BATH_DIV_INOX", "Division de bano inox", true, false, true, true,
+                "DIVISION DE BANO INOX", "DIVISION DE BANO INOX",
+                "BATHROOM_DIVISION", null, null,
+                "SPECIAL", "INOX", true),
+            Seed(19, "SG_LOUVER", "Persiana", true, false, true, true,
+                "PERSIANA", "PERSIANA", "LOUVER", null, null,
+                "SPECIAL", "STANDARD", true),
+            Seed(20, "SG_SKYLIGHT", "Claraboia", true, false, true, true,
+                "CLARABOYA", "CLARABOYA", "SKYLIGHT", null, null,
+                "SPECIAL", "STANDARD", true),
+            Seed(21, "SG_SYS_NA", "N.A", true, false, false, true,
+                "N.A", "N.A", null, null, null, null, null, false));
     }
 
     private static object Seed(
@@ -49,7 +111,15 @@ public sealed class ProductSystemConfiguration
         bool activeForRecognition,
         bool priceable,
         bool futurePriceable,
-        bool requiresReview) => new
+        bool requiresReview,
+        string? technicalName = null,
+        string? commercialName = null,
+        string? functionalType = null,
+        string? family = null,
+        string? series = null,
+        string? commercialLine = null,
+        string? variant = null,
+        bool isSelectable = false) => new
     {
         Id = Guid.Parse($"30000000-0000-0000-0000-{sequence:000000000000}"),
         Code = code,
@@ -60,7 +130,15 @@ public sealed class ProductSystemConfiguration
         RequiresReview = requiresReview,
         IsActive = true,
         CreatedAtUtc = SeededAtUtc,
-        UpdatedAtUtc = (DateTimeOffset?)null
+        UpdatedAtUtc = (DateTimeOffset?)null,
+        TechnicalName = technicalName,
+        CommercialName = commercialName,
+        FunctionalType = functionalType,
+        Family = family,
+        Series = series,
+        CommercialLine = commercialLine,
+        Variant = variant,
+        IsSelectable = isSelectable
     };
 }
 

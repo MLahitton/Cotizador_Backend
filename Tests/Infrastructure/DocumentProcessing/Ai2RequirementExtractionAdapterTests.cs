@@ -31,7 +31,20 @@ public sealed class Ai2RequirementExtractionAdapterTests
                   {"type":"area","value":1.8,"unit":"m2","status":"inferred","evidence_ids":["ev-item"]}
                 ],
                 "quantity":{"value":2,"status":"explicit","evidence_ids":["ev-item"]},
-                "configuration":{"raw_description":"2 hojas","status":"explicit","evidence_ids":["ev-item"]},
+                "functional_type":{"normalized":"SLIDING_WINDOW","raw":"Ventana corrediza","status":"inferred","confidence":0.86,"evidence_ids":["ev-item"]},
+                "configuration":{
+                  "raw_description":"2 hojas",
+                  "operation":{"normalized":"SLIDING","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                  "panel_count":{"value":2,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                  "movable_panel_count":{"value":1,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                  "fixed_panel_count":{"value":1,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                  "modulation":{"normalized":"TWO_PANELS","raw":"2 hojas","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                  "opening_direction":{"normalized":"LEFT","raw":"izquierda","status":"inferred","confidence":0.70,"evidence_ids":["ev-item"]},
+                  "special_features":["mosquitero","riel triple"],
+                  "status":"explicit",
+                  "evidence_ids":["ev-item"]
+                },
+                "geometry":{"normalized_type":"RECTANGULAR","status":"explicit","confidence":0.95,"evidence_ids":["ev-item"]},
                 "glass":[{"type":{"normalized":"TEMP_8","raw":"Templado 8 mm","status":"explicit","evidence_ids":["ev-glass"]},"status":"explicit","confidence":0.95,"evidence_ids":["ev-glass"]}],
                 "profiles":[{"code":{"value":"K50","status":"explicit","evidence_ids":["ev-item"]},"status":"explicit","confidence":0.91,"evidence_ids":["ev-item"]}],
                 "finish":{"normalized_type":"ANODIZED","raw_description":"Anodizado natural","status":"inferred","confidence":0.75,"evidence_ids":["ev-item"]},
@@ -71,6 +84,15 @@ public sealed class Ai2RequirementExtractionAdapterTests
         Assert.Equal("K50", item.TechnicalClassification?.SystemCode);
         Assert.Equal("ANODIZED", item.TechnicalClassification?.FinishCode);
         Assert.Equal("2 hojas", item.Configuration);
+        Assert.Equal("SLIDING_WINDOW", item.FunctionalType);
+        Assert.Equal("SLIDING", item.Operation);
+        Assert.Equal(2, item.PanelCount);
+        Assert.Equal(1, item.MovablePanelCount);
+        Assert.Equal(1, item.FixedPanelCount);
+        Assert.Equal("TWO_PANELS", item.Modulation);
+        Assert.Equal("LEFT", item.OpeningDirection);
+        Assert.Equal(["mosquitero", "riel triple"], item.SpecialFeatures);
+        Assert.Equal("RECTANGULAR", item.GeometryType);
         Assert.Equal(CanonicalExtractionValueStatus.Inferred, item.ExtractionStatus);
         Assert.Contains(item.Evidence, evidence =>
             evidence.SheetName == "Cotizacion"

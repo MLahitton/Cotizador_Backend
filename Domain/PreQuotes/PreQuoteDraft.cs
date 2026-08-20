@@ -19,6 +19,21 @@ public enum PreQuoteDraftValuationInvalidationReason
     HeightChanged,
     QuantityChanged
 }
+public enum PreQuoteDraftTechnicalSelectionState
+{
+    Pending = 1,
+    Suggested,
+    Confirmed,
+    Modified
+}
+public enum PreQuoteDraftTechnicalSelectionSource
+{
+    Extracted = 1,
+    Requested,
+    Rule,
+    AiSuggestion,
+    Manual
+}
 
 public sealed record PreQuoteDraftItemGlassReviewReasonSource(
     int Sequence, GlassReviewReason Code);
@@ -72,6 +87,38 @@ public sealed record PreQuoteDraftItemTechnicalSnapshotSource(
     decimal? FinishConfidence,
     bool RequiresReview,
     IReadOnlyList<string> ReviewReasons);
+public sealed record PreQuoteDraftItemTechnicalSelectionSource(
+    string? RequestedSystemCode,
+    string? RequestedSystemOriginalText,
+    string? SuggestedSystemCode = null,
+    string? SelectedSystemCode = null,
+    string? RequestedGlassCode = null,
+    string? RequestedGlassOriginalText = null,
+    string? SuggestedGlassCode = null,
+    string? SelectedGlassCode = null,
+    string? RequestedFinishCode = null,
+    string? RequestedFinishOriginalText = null,
+    string? SuggestedFinishCode = null,
+    string? SelectedFinishCode = null,
+    string? RequestedHardwareCode = null,
+    string? RequestedHardwareOriginalText = null,
+    string? SuggestedHardwareCode = null,
+    string? SelectedHardwareCode = null,
+    PreQuoteDraftTechnicalSelectionState SelectionState =
+        PreQuoteDraftTechnicalSelectionState.Pending,
+    bool RequiresReview = false,
+    decimal? Confidence = null,
+    IReadOnlyList<string>? ReviewReasons = null,
+    PreQuoteDraftTechnicalSelectionSource RequestedSource =
+        PreQuoteDraftTechnicalSelectionSource.Extracted,
+    PreQuoteDraftTechnicalSelectionSource? SuggestedSource = null,
+    PreQuoteDraftTechnicalSelectionSource? SelectedSource = null);
+public sealed record PreQuoteDraftItemTechnicalSelectionEdit(
+    string? SelectedSystemCode,
+    string? SelectedGlassCode,
+    string? SelectedFinishCode,
+    string? SelectedHardwareCode,
+    bool ConfirmSelection);
 
 public sealed class PreQuoteDraftItemGlassSnapshot
 {
@@ -338,6 +385,169 @@ public sealed class PreQuoteDraftItemTechnicalSnapshot
     }
 }
 
+public sealed class PreQuoteDraftItemTechnicalSelection
+{
+    private PreQuoteDraftItemTechnicalSelection() { }
+    public Guid Id { get; private set; }
+    public Guid PreQuoteDraftItemId { get; private set; }
+    public string? RequestedSystemCode { get; private set; }
+    public string? RequestedSystemOriginalText { get; private set; }
+    public string? SuggestedSystemCode { get; private set; }
+    public string? SelectedSystemCode { get; private set; }
+    public string? RequestedGlassCode { get; private set; }
+    public string? RequestedGlassOriginalText { get; private set; }
+    public string? SuggestedGlassCode { get; private set; }
+    public string? SelectedGlassCode { get; private set; }
+    public string? RequestedFinishCode { get; private set; }
+    public string? RequestedFinishOriginalText { get; private set; }
+    public string? SuggestedFinishCode { get; private set; }
+    public string? SelectedFinishCode { get; private set; }
+    public string? RequestedHardwareCode { get; private set; }
+    public string? RequestedHardwareOriginalText { get; private set; }
+    public string? SuggestedHardwareCode { get; private set; }
+    public string? SelectedHardwareCode { get; private set; }
+    public PreQuoteDraftTechnicalSelectionState SelectionState { get; private set; }
+    public bool RequiresReview { get; private set; }
+    public decimal? Confidence { get; private set; }
+    public string[] ReviewReasons { get; private set; } = [];
+    public PreQuoteDraftTechnicalSelectionSource RequestedSource { get; private set; }
+    public PreQuoteDraftTechnicalSelectionSource? SuggestedSource { get; private set; }
+    public PreQuoteDraftTechnicalSelectionSource? SelectedSource { get; private set; }
+
+    public static PreQuoteDraftItemTechnicalSelection Create(
+        Guid preQuoteDraftItemId,
+        PreQuoteDraftItemTechnicalSelectionSource source)
+    {
+        if (preQuoteDraftItemId == Guid.Empty
+            || !Enum.IsDefined(source.SelectionState)
+            || !Enum.IsDefined(source.RequestedSource)
+            || source.SuggestedSource is { } suggestedSource
+                && !Enum.IsDefined(suggestedSource)
+            || source.SelectedSource is { } selectedSource
+                && !Enum.IsDefined(selectedSource)
+            || source.Confidence is < 0 or > 1)
+        {
+            throw new ArgumentException("Seleccion tecnica invalida.");
+        }
+
+        var reasons = NormalizeReasons(source.ReviewReasons ?? []);
+        if (source.RequiresReview != (reasons.Length > 0))
+        {
+            throw new ArgumentException("Seleccion tecnica incoherente.");
+        }
+
+        return new()
+        {
+            Id = Guid.NewGuid(),
+            PreQuoteDraftItemId = preQuoteDraftItemId,
+            RequestedSystemCode = NormalizeOptionalCode(source.RequestedSystemCode),
+            RequestedSystemOriginalText = NormalizeOptionalText(source.RequestedSystemOriginalText),
+            SuggestedSystemCode = NormalizeOptionalCode(source.SuggestedSystemCode),
+            SelectedSystemCode = NormalizeOptionalCode(source.SelectedSystemCode),
+            RequestedGlassCode = NormalizeOptionalCode(source.RequestedGlassCode),
+            RequestedGlassOriginalText = NormalizeOptionalText(source.RequestedGlassOriginalText),
+            SuggestedGlassCode = NormalizeOptionalCode(source.SuggestedGlassCode),
+            SelectedGlassCode = NormalizeOptionalCode(source.SelectedGlassCode),
+            RequestedFinishCode = NormalizeOptionalCode(source.RequestedFinishCode),
+            RequestedFinishOriginalText = NormalizeOptionalText(source.RequestedFinishOriginalText),
+            SuggestedFinishCode = NormalizeOptionalCode(source.SuggestedFinishCode),
+            SelectedFinishCode = NormalizeOptionalCode(source.SelectedFinishCode),
+            RequestedHardwareCode = NormalizeOptionalCode(source.RequestedHardwareCode),
+            RequestedHardwareOriginalText = NormalizeOptionalText(source.RequestedHardwareOriginalText),
+            SuggestedHardwareCode = NormalizeOptionalCode(source.SuggestedHardwareCode),
+            SelectedHardwareCode = NormalizeOptionalCode(source.SelectedHardwareCode),
+            SelectionState = source.SelectionState,
+            RequiresReview = source.RequiresReview,
+            Confidence = source.Confidence,
+            ReviewReasons = reasons,
+            RequestedSource = source.RequestedSource,
+            SuggestedSource = source.SuggestedSource,
+            SelectedSource = source.SelectedSource
+        };
+    }
+
+    public void UpdateSelected(
+        PreQuoteDraftItemTechnicalSelectionEdit edit)
+    {
+        SelectedSystemCode = NormalizeOptionalCode(edit.SelectedSystemCode);
+        SelectedGlassCode = NormalizeOptionalCode(edit.SelectedGlassCode);
+        SelectedFinishCode = NormalizeOptionalCode(edit.SelectedFinishCode);
+        SelectedHardwareCode = NormalizeOptionalCode(edit.SelectedHardwareCode);
+        if (edit.ConfirmSelection && !HasSelectedValue())
+        {
+            SelectedSystemCode = SuggestedSystemCode;
+            SelectedGlassCode = SuggestedGlassCode;
+            SelectedFinishCode = SuggestedFinishCode;
+            SelectedHardwareCode = SuggestedHardwareCode;
+        }
+
+        SelectedSource = HasSelectedValue()
+            ? PreQuoteDraftTechnicalSelectionSource.Manual
+            : null;
+        SelectionState = HasSelectedValue()
+            ? MatchesSuggestion()
+                ? PreQuoteDraftTechnicalSelectionState.Confirmed
+                : PreQuoteDraftTechnicalSelectionState.Modified
+            : SuggestedSource is null
+                ? PreQuoteDraftTechnicalSelectionState.Pending
+                : PreQuoteDraftTechnicalSelectionState.Suggested;
+    }
+
+    private bool HasSelectedValue() =>
+        SelectedSystemCode is not null
+        || SelectedGlassCode is not null
+        || SelectedFinishCode is not null
+        || SelectedHardwareCode is not null;
+
+    private bool MatchesSuggestion() =>
+        string.Equals(SelectedSystemCode, SuggestedSystemCode, StringComparison.Ordinal)
+        && string.Equals(SelectedGlassCode, SuggestedGlassCode, StringComparison.Ordinal)
+        && string.Equals(SelectedFinishCode, SuggestedFinishCode, StringComparison.Ordinal)
+        && string.Equals(SelectedHardwareCode, SuggestedHardwareCode, StringComparison.Ordinal);
+
+    private static string[] NormalizeReasons(IReadOnlyList<string> reasons) =>
+        reasons
+            .Select(value => NormalizeRequiredCode(value, 100))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private static string? NormalizeOptionalCode(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : NormalizeRequiredCode(value, 60);
+
+    private static string NormalizeRequiredCode(string value, int maximum)
+    {
+        var code = value.Trim().ToUpperInvariant();
+        if (code.Length == 0 || code.Length > maximum
+            || !code.All(character =>
+                character is >= 'A' and <= 'Z'
+                || character is >= '0' and <= '9'
+                || character is '_' or '-'))
+        {
+            throw new ArgumentException("Codigo de seleccion invalido.");
+        }
+
+        return code;
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var text = value.Trim();
+        if (text.Length > 500)
+        {
+            throw new ArgumentException("Texto de seleccion invalido.");
+        }
+
+        return text;
+    }
+}
+
 public sealed class PreQuoteDraftItemGlassReviewReason
 {
     private PreQuoteDraftItemGlassReviewReason() { }
@@ -417,7 +627,8 @@ public sealed record PreQuoteDraftItemSource(
     int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
     PreQuoteDraftItemGlassSnapshotSource? Glass = null,
     PreQuoteDraftItemValuationSnapshotSource? Valuation = null,
-    PreQuoteDraftItemTechnicalSnapshotSource? TechnicalSnapshot = null);
+    PreQuoteDraftItemTechnicalSnapshotSource? TechnicalSnapshot = null,
+    PreQuoteDraftItemTechnicalSelectionSource? TechnicalSelection = null);
 public sealed record PreQuoteDraftRequirementSource(
     Guid SourceId, int Sequence, RequirementCategory Category, string Value);
 public sealed record PreQuoteDraftReferenceSource(
@@ -479,7 +690,8 @@ public sealed record PreQuoteDraftItemEdit(
     Guid? Id, int Sequence, string? Reference, string Description,
     StructuredElementType ElementType, string? RawMeasurements,
     int? WidthMillimeters, int? HeightMillimeters, int? Quantity,
-    bool IsIncluded);
+    bool IsIncluded,
+    PreQuoteDraftItemTechnicalSelectionEdit? TechnicalSelection = null);
 public sealed record PreQuoteDraftRequirementEdit(
     Guid? Id, int Sequence, RequirementCategory Category, string Value,
     bool IsIncluded);
@@ -976,12 +1188,13 @@ public sealed class PreQuoteDraftItem
     public PreQuoteDraftItemGlassSnapshot? GlassSnapshot { get; private set; }
     public PreQuoteDraftItemValuationSnapshot? ValuationSnapshot { get; private set; }
     public PreQuoteDraftItemTechnicalSnapshot? TechnicalSnapshot { get; private set; }
+    public PreQuoteDraftItemTechnicalSelection? TechnicalSelection { get; private set; }
     public Guid CreatedByUserId { get; private set; } public Guid UpdatedByUserId { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; } public DateTimeOffset UpdatedAtUtc { get; private set; }
     public PreQuoteDraft Draft { get; private set; } = null!;
     public bool IsCompleteForApproval => !string.IsNullOrWhiteSpace(Description) && ElementType != StructuredElementType.Other && WidthMillimeters > 0 && HeightMillimeters > 0 && Quantity > 0;
     internal static PreQuoteDraftItem FromAi(Guid draftId, PreQuoteDraftItemSource x, Guid user, DateTimeOffset at) =>
-        Create(draftId, x.Sequence, PreQuoteDraftOrigin.Ai, x.SourceId, x.Sequence, x.Reference, x.Description, x.ElementType, x.RawMeasurements, x.WidthMillimeters, x.HeightMillimeters, x.Quantity, true, user, at, x.Glass, x.Valuation, x.TechnicalSnapshot);
+        Create(draftId, x.Sequence, PreQuoteDraftOrigin.Ai, x.SourceId, x.Sequence, x.Reference, x.Description, x.ElementType, x.RawMeasurements, x.WidthMillimeters, x.HeightMillimeters, x.Quantity, true, user, at, x.Glass, x.Valuation, x.TechnicalSnapshot, x.TechnicalSelection ?? BuildInitialSelection(x.Glass, x.TechnicalSnapshot));
     internal static PreQuoteDraftItem Manual(
         Guid draftId, PreQuoteDraftItemEdit x, Guid user, DateTimeOffset at) =>
         Create(draftId, x.Sequence, PreQuoteDraftOrigin.Manual, null, null,
@@ -995,7 +1208,8 @@ public sealed class PreQuoteDraftItem
         int? quantity, bool included, Guid user, DateTimeOffset at,
         PreQuoteDraftItemGlassSnapshotSource? glass,
         PreQuoteDraftItemValuationSnapshotSource? valuation,
-        PreQuoteDraftItemTechnicalSnapshotSource? technical)
+        PreQuoteDraftItemTechnicalSnapshotSource? technical,
+        PreQuoteDraftItemTechnicalSelectionSource? selection = null)
     {
         PreQuoteDraft.Dimensions(width, height); PreQuoteDraft.Quantity(quantity);
         if (!Enum.IsDefined(type)) throw new ArgumentException("Tipo inválido.");
@@ -1016,6 +1230,9 @@ public sealed class PreQuoteDraftItem
         var technicalSnapshot = technical is null
             ? null
             : PreQuoteDraftItemTechnicalSnapshot.Create(itemId, technical);
+        var technicalSelection = selection is null
+            ? null
+            : PreQuoteDraftItemTechnicalSelection.Create(itemId, selection);
         var preliminaryPricing = valuation is null
             ? null
             : PreQuotePreliminaryPricing.TryCalculate(
@@ -1071,11 +1288,33 @@ public sealed class PreQuoteDraftItem
             GlassSnapshot = glassSnapshot,
             ValuationSnapshot = valuationSnapshot,
             TechnicalSnapshot = technicalSnapshot,
+            TechnicalSelection = technicalSelection,
             CreatedByUserId = user,
             UpdatedByUserId = user,
             CreatedAtUtc = at,
             UpdatedAtUtc = at
         };
+    }
+
+    private static PreQuoteDraftItemTechnicalSelectionSource?
+        BuildInitialSelection(
+            PreQuoteDraftItemGlassSnapshotSource? glass,
+            PreQuoteDraftItemTechnicalSnapshotSource? technical)
+    {
+        if (glass is null && technical is null)
+        {
+            return null;
+        }
+
+        return new(
+            RequestedSystemCode: technical?.SystemCode,
+            RequestedSystemOriginalText: technical?.SystemOriginalText,
+            RequestedGlassCode: glass?.NormalizedCodeSnapshot,
+            RequestedGlassOriginalText: glass?.RawSpecification,
+            RequestedFinishCode: technical?.FinishCode,
+            RequestedFinishOriginalText: technical?.FinishOriginalText,
+            RequiresReview: false,
+            ReviewReasons: []);
     }
     internal void Update(PreQuoteDraftItemEdit x, Guid user, DateTimeOffset at)
     {
@@ -1120,6 +1359,13 @@ public sealed class PreQuoteDraftItem
             ValuationSnapshot.Invalidate(at, reason);
             ValuationStatus = PreQuoteDraftValuationStatus.Stale;
         }
+
+        TechnicalSelection?.UpdateSelected(x.TechnicalSelection ?? new(
+            TechnicalSelection.SelectedSystemCode,
+            TechnicalSelection.SelectedGlassCode,
+            TechnicalSelection.SelectedFinishCode,
+            TechnicalSelection.SelectedHardwareCode,
+            ConfirmSelection: false));
 
         UpdatedByUserId = user;
         UpdatedAtUtc = at;

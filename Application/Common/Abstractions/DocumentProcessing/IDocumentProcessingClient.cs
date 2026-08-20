@@ -203,7 +203,16 @@ public sealed record StructuredItemData(
     string? Configuration = null,
     decimal? Confidence = null,
     CanonicalExtractionValueStatus ExtractionStatus =
-        CanonicalExtractionValueStatus.Explicit);
+        CanonicalExtractionValueStatus.Explicit,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,

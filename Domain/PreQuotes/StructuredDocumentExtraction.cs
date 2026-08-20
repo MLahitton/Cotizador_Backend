@@ -100,7 +100,18 @@ public sealed record StructuredItemInput(
     bool RequiresReview,
     StructuredItemGlassInput? Glass = null,
     StructuredItemGlassValuationInput? Valuation = null,
-    StructuredItemTechnicalClassificationInput? TechnicalClassification = null);
+    StructuredItemTechnicalClassificationInput? TechnicalClassification = null,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 public sealed record StructuredItemGlassEvidenceInput(
     int Sequence, int? PageNumber, EvidenceSourceType SourceType, string Text,
     string? SheetName = null, string? CellRange = null);
@@ -266,6 +277,17 @@ public sealed class StructuredExtractionItem
     public int? WidthMillimeters { get; private set; }
     public int? HeightMillimeters { get; private set; }
     public int? Quantity { get; private set; }
+    public decimal? AreaSquareMeters { get; private set; }
+    public string? Configuration { get; private set; }
+    public string? FunctionalType { get; private set; }
+    public string? Operation { get; private set; }
+    public int? PanelCount { get; private set; }
+    public int? MovablePanelCount { get; private set; }
+    public int? FixedPanelCount { get; private set; }
+    public string? Modulation { get; private set; }
+    public string? OpeningDirection { get; private set; }
+    public string[] SpecialFeatures { get; private set; } = [];
+    public string? GeometryType { get; private set; }
     public bool RequiresReview { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public StructuredDocumentExtraction StructuredDocumentExtraction { get; private set; } = null!;
@@ -278,12 +300,28 @@ public sealed class StructuredExtractionItem
             || !Enum.IsDefined(x.ElementType)
             || (x.WidthMillimeters is null) != (x.HeightMillimeters is null)
             || x.WidthMillimeters is <= 0 || x.HeightMillimeters is <= 0
-            || x.Quantity is <= 0) throw new ArgumentException("Item estructurado inválido.");
+            || x.Quantity is <= 0
+            || x.AreaSquareMeters is <= 0
+            || x.PanelCount is <= 0
+            || x.MovablePanelCount is < 0
+            || x.FixedPanelCount is < 0)
+            throw new ArgumentException("Item estructurado invalido.");
         var item = new StructuredExtractionItem { Id = Guid.NewGuid(), StructuredDocumentExtractionId = parentId,
             Sequence = x.Sequence, Reference = Trim(x.Reference),
             Description = x.Description.Trim(), ElementType = x.ElementType,
             RawMeasurements = Trim(x.RawMeasurements), WidthMillimeters = x.WidthMillimeters,
             HeightMillimeters = x.HeightMillimeters, Quantity = x.Quantity,
+            AreaSquareMeters = x.AreaSquareMeters,
+            Configuration = TrimLimited(x.Configuration, 500),
+            FunctionalType = Code(x.FunctionalType, 60),
+            Operation = Code(x.Operation, 60),
+            PanelCount = x.PanelCount,
+            MovablePanelCount = x.MovablePanelCount,
+            FixedPanelCount = x.FixedPanelCount,
+            Modulation = Code(x.Modulation, 60),
+            OpeningDirection = Code(x.OpeningDirection, 60),
+            SpecialFeatures = NormalizeCodes(x.SpecialFeatures ?? [], 60),
+            GeometryType = Code(x.GeometryType, 60),
             RequiresReview = x.RequiresReview, CreatedAtUtc = at };
         item.GlassDetection = x.Glass is null
             ? null
@@ -300,6 +338,31 @@ public sealed class StructuredExtractionItem
         return item;
     }
     private static string? Trim(string? x) => string.IsNullOrWhiteSpace(x) ? null : x.Trim();
+    private static string? TrimLimited(string? value, int maximumLength)
+    {
+        var normalized = Trim(value);
+        return normalized is null
+            ? null
+            : normalized.Length <= maximumLength
+                ? normalized
+                : normalized[..maximumLength];
+    }
+
+    private static string? Code(string? value, int maximumLength)
+    {
+        var normalized = TrimLimited(value, maximumLength);
+        return normalized?.ToUpperInvariant();
+    }
+
+    private static string[] NormalizeCodes(
+        IReadOnlyList<string> values,
+        int maximumLength) =>
+        values
+            .Select(value => Code(value, maximumLength))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 }
 
 public sealed class StructuredExtractionItemTechnicalClassification
@@ -865,6 +928,31 @@ public sealed class StructuredExtractionDocumentReference
             Detail = Trim(x.Detail), Quantity = x.Quantity, CreatedAtUtc = at };
     }
     private static string? Trim(string? x) => string.IsNullOrWhiteSpace(x) ? null : x.Trim();
+    private static string? TrimLimited(string? value, int maximumLength)
+    {
+        var normalized = Trim(value);
+        return normalized is null
+            ? null
+            : normalized.Length <= maximumLength
+                ? normalized
+                : normalized[..maximumLength];
+    }
+
+    private static string? Code(string? value, int maximumLength)
+    {
+        var normalized = TrimLimited(value, maximumLength);
+        return normalized?.ToUpperInvariant();
+    }
+
+    private static string[] NormalizeCodes(
+        IReadOnlyList<string> values,
+        int maximumLength) =>
+        values
+            .Select(value => Code(value, maximumLength))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 }
 
 public sealed class StructuredExtractionIssue

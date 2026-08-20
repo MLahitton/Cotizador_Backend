@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.UpdatePreQuoteDraft;
 using Domain.Identity;
@@ -36,6 +37,9 @@ public sealed class UpdatePreQuoteDraftCompleteRequestTests
             currentUser,
             identity,
             repository,
+            Substitute.For<IProductSystemCatalogRepository>(),
+            Substitute.For<IGlassTypeCatalogRepository>(),
+            Substitute.For<IFinishTypeCatalogRepository>(),
             new FixedProvider(At.AddMinutes(1)));
 
         var command = CreateCommand(draft);

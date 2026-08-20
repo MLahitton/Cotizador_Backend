@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Api.Controllers;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.CreatePreQuoteDraft;
@@ -326,7 +327,13 @@ public sealed class PreQuoteDraftsControllerTests
                 current, identity, repository),
             new UpdatePreQuoteDraftService(
                 new UpdatePreQuoteDraftCommandValidator(),
-                current, identity, repository, clock),
+                current,
+                identity,
+                repository,
+                Substitute.For<IProductSystemCatalogRepository>(),
+                Substitute.For<IGlassTypeCatalogRepository>(),
+                Substitute.For<IFinishTypeCatalogRepository>(),
+                clock),
             new ApprovePreQuoteDraftService(
                 new ApprovePreQuoteDraftCommandValidator(),
                 current, identity, repository, clock));

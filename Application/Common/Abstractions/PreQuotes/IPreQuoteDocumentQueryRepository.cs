@@ -123,7 +123,18 @@ public sealed record StructuredItemReadModel(
     IReadOnlyList<StructuredEvidenceReadModel> Evidence,
     StructuredItemGlassReadModel? Glass,
     StructuredItemGlassValuationReadModel? Valuation = null,
-    StructuredItemTechnicalClassificationReadModel? TechnicalClassification = null);
+    StructuredItemTechnicalClassificationReadModel? TechnicalClassification = null,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 
 public sealed record StructuredItemGlassValuationReadModel(
     GlassValuationStatus Status,

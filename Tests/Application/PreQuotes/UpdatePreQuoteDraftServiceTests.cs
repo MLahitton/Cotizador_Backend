@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes;
 using Application.PreQuotes.UpdatePreQuoteDraft;
@@ -44,6 +45,9 @@ public sealed class UpdatePreQuoteDraftServiceTests
             currentUser,
             identity,
             repository,
+            Substitute.For<IProductSystemCatalogRepository>(),
+            Substitute.For<IGlassTypeCatalogRepository>(),
+            Substitute.For<IFinishTypeCatalogRepository>(),
             new FixedProvider(At.AddMinutes(1)));
 
         var command = CreateCommand(draft);
@@ -84,6 +88,58 @@ public sealed class UpdatePreQuoteDraftServiceTests
         Assert.Equal(2, draft.DocumentReferences.Count);
         Assert.False(draft.Requirements.Single(x => x.Origin == PreQuoteDraftOrigin.Ai).IsIncluded);
         await context.Repository.Received(1).SaveChangesAsync(
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_WithValidSelectedTechnicalValues_Succeeds()
+    {
+        var draft = CreateDraft();
+        var context = CreateContext(draft);
+        context.ProductSystems.FindActiveByCodeAsync(
+                "K40", Arg.Any<CancellationToken>())
+            .Returns(ProductSystem("K40", isSelectable: true));
+        context.GlassTypes.GetActiveByCodeWithCurrentPriceRangeAsync(
+                "TEMP_8", Arg.Any<CancellationToken>())
+            .Returns(GlassType("TEMP_8"));
+        context.Finishes.FindActiveByCodeAsync(
+                "BLACK_MATTE", Arg.Any<CancellationToken>())
+            .Returns(new FinishTypeCatalogReadModel(
+                Guid.NewGuid(), "BLACK_MATTE", "Black matte", false, true));
+        var command = CreateCommand(
+            draft,
+            technicalSelection: new("K40", "TEMP_8", "BLACK_MATTE", null, false));
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var selection = draft.Items.Single().TechnicalSelection!;
+        Assert.Equal("K40", selection.SelectedSystemCode);
+        Assert.Equal("TEMP_8", selection.SelectedGlassCode);
+        Assert.Equal("BLACK_MATTE", selection.SelectedFinishCode);
+    }
+
+    [Fact]
+    public async Task Execute_WithNonSelectableSelectedSystem_ReturnsInvalidDraftContent()
+    {
+        var draft = CreateDraft();
+        var context = CreateContext(draft);
+        context.ProductSystems.FindActiveByCodeAsync(
+                "K40", Arg.Any<CancellationToken>())
+            .Returns(ProductSystem("K40", isSelectable: false));
+        var command = CreateCommand(
+            draft,
+            technicalSelection: new("K40", null, null, null, false));
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(PreQuoteDraftFailure.InvalidDraftContent, result.Failure);
+        await context.Repository.DidNotReceive().SaveChangesAsync(
             Arg.Any<CancellationToken>());
     }
 
@@ -390,6 +446,9 @@ public sealed class UpdatePreQuoteDraftServiceTests
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
         var repository = Substitute.For<IPreQuoteDraftRepository>();
+        var productSystems = Substitute.For<IProductSystemCatalogRepository>();
+        var glassTypes = Substitute.For<IGlassTypeCatalogRepository>();
+        var finishes = Substitute.For<IFinishTypeCatalogRepository>();
         currentUser.IsAuthenticated.Returns(true);
         currentUser.UserId.Returns(UserId);
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>())
@@ -404,15 +463,19 @@ public sealed class UpdatePreQuoteDraftServiceTests
             currentUser,
             identity,
             repository,
+            productSystems,
+            glassTypes,
+            finishes,
             new FixedProvider(At.AddMinutes(1)));
-        return new(repository, service);
+        return new(repository, productSystems, glassTypes, finishes, service);
     }
 
     private static UpdatePreQuoteDraftCommand CreateCommand(
         PreQuoteDraft draft,
         bool resolveIssue = false,
         bool addManualRows = false,
-        bool excludeExistingRequirement = false)
+        bool excludeExistingRequirement = false,
+        PreQuoteDraftItemTechnicalSelectionEdit? technicalSelection = null)
     {
         var item = draft.Items.Single();
         var requirement = draft.Requirements.Single();
@@ -423,7 +486,8 @@ public sealed class UpdatePreQuoteDraftServiceTests
                 item.Id, 1, item.Reference, item.Description,
                 item.ElementType, item.RawMeasurements,
                 item.WidthMillimeters, item.HeightMillimeters,
-                item.Quantity, item.IsIncluded)
+                item.Quantity, item.IsIncluded,
+                technicalSelection)
         };
         var requirements = new List<PreQuoteDraftRequirementEdit>
         {
@@ -541,15 +605,80 @@ public sealed class UpdatePreQuoteDraftServiceTests
             100,
             100,
             1,
-            null,
-            valuation);
+            new(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "LAM 4+4",
+                "LAM_4_4",
+                GlassAssignmentScope.Item,
+                false,
+                [],
+                [1],
+                [new(1, 1, EvidenceSourceType.Native, "LAM 4+4")]),
+            valuation,
+            new(
+                Guid.NewGuid(),
+                "K40",
+                "K40",
+                TechnicalClassificationSource.Explicit,
+                0.95m,
+                null,
+                null,
+                null,
+                null,
+                "NATURAL",
+                "NATURAL",
+                TechnicalClassificationSource.Explicit,
+                0.95m,
+                false,
+                []));
     }
 
     private static User CreateUser() => User.CreateFromGoogle(
         "user@example.com", "Test", "User", null, At);
 
+    private static ProductSystemCatalogReadModel ProductSystem(
+        string code,
+        bool isSelectable) => new(
+            Guid.NewGuid(),
+            code,
+            code,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            isSelectable,
+            true,
+            true,
+            false,
+            false,
+            true);
+
+    private static GlassTypeCatalogReadModel GlassType(string code) => new(
+        Guid.NewGuid(),
+        code,
+        code,
+        null,
+        true,
+        new(
+            Guid.NewGuid(),
+            1,
+            90000m,
+            100000m,
+            120000m,
+            "COP",
+            global::Domain.Catalogs.GlassPriceRangeStatus.Active,
+            At,
+            null));
+
     private sealed record Context(
         IPreQuoteDraftRepository Repository,
+        IProductSystemCatalogRepository ProductSystems,
+        IGlassTypeCatalogRepository GlassTypes,
+        IFinishTypeCatalogRepository Finishes,
         UpdatePreQuoteDraftService Service);
 
     private sealed class FixedProvider(DateTimeOffset value) : TimeProvider

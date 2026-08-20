@@ -99,7 +99,16 @@ public sealed class PreQuoteDraftsController(
                     x.DraftItemId, x.Sequence, x.Reference, x.Description,
                     Element(x.ElementType), x.RawMeasurements,
                     x.WidthMillimeters, x.HeightMillimeters, x.Quantity,
-                    x.IsIncluded)).ToArray(),
+                    x.IsIncluded,
+                    x.TechnicalSelection?.Selected is null
+                        ? null
+                        : new PreQuoteDraftItemTechnicalSelectionEdit(
+                            x.TechnicalSelection.Selected.SystemCode,
+                            x.TechnicalSelection.Selected.GlassCode,
+                            x.TechnicalSelection.Selected.FinishCode,
+                            x.TechnicalSelection.Selected.HardwareCode,
+                            x.TechnicalSelection.Selected.ConfirmSelection)))
+                    .ToArray(),
                 request.Requirements.Select(x => new PreQuoteDraftRequirementEdit(
                     x.DraftRequirementId, x.Sequence, Category(x.Category),
                     x.Value, x.IsIncluded)).ToArray(),
@@ -255,6 +264,8 @@ public sealed class PreQuoteDraftsController(
                 x.ValuationStatus,
                 x.ValuationSnapshot),
             MapTechnicalSnapshot(x.TechnicalSnapshot)
+            ,
+            MapTechnicalSelection(x.TechnicalSelection)
         )).ToArray();
 
         var requirementResponses = requirements.Select(x => new PreQuoteDraftRequirementResponse(
@@ -458,6 +469,61 @@ public sealed class PreQuoteDraftsController(
             snapshot.RequiresReview,
             snapshot.ReviewReasons);
     }
+
+    private static PreQuoteDraftItemTechnicalSelectionResponse? MapTechnicalSelection(
+        PreQuoteDraftItemTechnicalSelection? selection)
+    {
+        if (selection is null) return null;
+        return new(
+            Part(selection.RequestedSystemCode, selection.RequestedSystemOriginalText,
+                selection.SuggestedSystemCode, null, selection.SelectedSystemCode, null),
+            Part(selection.RequestedGlassCode, selection.RequestedGlassOriginalText,
+                selection.SuggestedGlassCode, null, selection.SelectedGlassCode, null),
+            Part(selection.RequestedFinishCode, selection.RequestedFinishOriginalText,
+                selection.SuggestedFinishCode, null, selection.SelectedFinishCode, null),
+            Part(selection.RequestedHardwareCode, selection.RequestedHardwareOriginalText,
+                selection.SuggestedHardwareCode, null, selection.SelectedHardwareCode, null),
+            SelectionState(selection.SelectionState),
+            selection.RequiresReview,
+            selection.Confidence,
+            selection.ReviewReasons,
+            SelectionSource(selection.RequestedSource),
+            SelectionSource(selection.SuggestedSource),
+            SelectionSource(selection.SelectedSource));
+    }
+
+    private static PreQuoteDraftTechnicalSelectionPartResponse Part(
+        string? requestedCode,
+        string? requestedOriginalText,
+        string? suggestedCode,
+        string? suggestedOriginalText,
+        string? selectedCode,
+        string? selectedOriginalText) => new(
+        new(requestedCode, requestedOriginalText),
+        new(suggestedCode, suggestedOriginalText),
+        new(selectedCode, selectedOriginalText));
+
+    private static string SelectionState(
+        PreQuoteDraftTechnicalSelectionState value) => value switch
+    {
+        PreQuoteDraftTechnicalSelectionState.Pending => "PENDING",
+        PreQuoteDraftTechnicalSelectionState.Suggested => "SUGGESTED",
+        PreQuoteDraftTechnicalSelectionState.Confirmed => "CONFIRMED",
+        PreQuoteDraftTechnicalSelectionState.Modified => "MODIFIED",
+        _ => throw new ArgumentException()
+    };
+
+    private static string? SelectionSource(
+        PreQuoteDraftTechnicalSelectionSource? value) => value switch
+    {
+        PreQuoteDraftTechnicalSelectionSource.Extracted => "EXTRACTED",
+        PreQuoteDraftTechnicalSelectionSource.Requested => "REQUESTED",
+        PreQuoteDraftTechnicalSelectionSource.Rule => "RULE",
+        PreQuoteDraftTechnicalSelectionSource.AiSuggestion => "AI_SUGGESTION",
+        PreQuoteDraftTechnicalSelectionSource.Manual => "MANUAL",
+        null => null,
+        _ => throw new ArgumentException()
+    };
     private static PreQuoteDraftEconomicSummaryResponse MapEconomicSummary(PreQuoteDraft draft) =>
         new(
             draft.EconomicSummary.IncludedItemCount,

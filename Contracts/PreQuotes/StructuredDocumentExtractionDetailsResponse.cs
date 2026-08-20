@@ -51,7 +51,18 @@ public sealed record StructuredItemResponse(
     IReadOnlyList<StructuredEvidenceResponse> Evidence,
     StructuredExtractionItemGlassResponse? Glass,
     StructuredExtractionItemGlassValuationResponse? Valuation = null,
-    StructuredItemTechnicalClassificationResponse? TechnicalClassification = null);
+    StructuredItemTechnicalClassificationResponse? TechnicalClassification = null,
+    decimal? AreaSquareMeters = null,
+    string? Configuration = null,
+    string? FunctionalType = null,
+    string? Operation = null,
+    int? PanelCount = null,
+    int? MovablePanelCount = null,
+    int? FixedPanelCount = null,
+    string? Modulation = null,
+    string? OpeningDirection = null,
+    IReadOnlyList<string>? SpecialFeatures = null,
+    string? GeometryType = null);
 
 public sealed record StructuredExtractionItemGlassValuationResponse(
     string Status,

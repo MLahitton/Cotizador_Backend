@@ -85,6 +85,80 @@ public sealed class PreQuoteDraftTests
     }
 
     [Fact]
+    public void Create_FromAiInitializesRequestedTechnicalSelection()
+    {
+        var draft = Create();
+
+        var item = draft.Items.Single();
+
+        Assert.NotNull(item.TechnicalSnapshot);
+        Assert.NotNull(item.TechnicalSelection);
+        Assert.Equal("K40", item.TechnicalSelection.RequestedSystemCode);
+        Assert.Equal("K40", item.TechnicalSelection.RequestedSystemOriginalText);
+        Assert.Equal("LAM_4_4", item.TechnicalSelection.RequestedGlassCode);
+        Assert.Equal("LAM 4+4", item.TechnicalSelection.RequestedGlassOriginalText);
+        Assert.Equal("NATURAL", item.TechnicalSelection.RequestedFinishCode);
+        Assert.Equal(PreQuoteDraftTechnicalSelectionState.Pending,
+            item.TechnicalSelection.SelectionState);
+        Assert.Null(item.TechnicalSelection.SuggestedSystemCode);
+        Assert.Null(item.TechnicalSelection.SelectedSystemCode);
+    }
+
+    [Fact]
+    public void Update_ChangesSelectedTechnicalValuesWithoutChangingSnapshot()
+    {
+        var draft = Create();
+        var item = draft.Items.Single();
+
+        draft.Update(
+            1, "Project", "Client", "BOGOTA",
+            [new(item.Id, 1, item.Reference, item.Description,
+                item.ElementType, item.RawMeasurements,
+                item.WidthMillimeters, item.HeightMillimeters,
+                item.Quantity, true,
+                new("K50", "TEMP_8", "BLACK_MATTE", null, false))],
+            ExistingRequirements(draft),
+            ExistingReferences(draft),
+            PendingIssues(draft),
+            PendingConflicts(draft),
+            UserId,
+            At.AddMinutes(1));
+
+        Assert.Equal("K40", item.TechnicalSnapshot!.SystemCode);
+        Assert.Equal("LAM_4_4", item.GlassSnapshot!.NormalizedCodeSnapshot);
+        Assert.Equal("K50", item.TechnicalSelection!.SelectedSystemCode);
+        Assert.Equal("TEMP_8", item.TechnicalSelection.SelectedGlassCode);
+        Assert.Equal("BLACK_MATTE", item.TechnicalSelection.SelectedFinishCode);
+        Assert.Equal(PreQuoteDraftTechnicalSelectionState.Modified,
+            item.TechnicalSelection.SelectionState);
+    }
+
+    [Fact]
+    public void TechnicalSelection_ConfirmSelectionUsesSuggestedValues()
+    {
+        var selection = PreQuoteDraftItemTechnicalSelection.Create(
+            Guid.NewGuid(),
+            new(
+                RequestedSystemCode: null,
+                RequestedSystemOriginalText: null,
+                SuggestedSystemCode: "K70",
+                SuggestedGlassCode: "TEMP_10",
+                SuggestedFinishCode: "BLACK_MATTE",
+                SelectionState: PreQuoteDraftTechnicalSelectionState.Suggested,
+                RequiresReview: false,
+                ReviewReasons: [],
+                SuggestedSource: PreQuoteDraftTechnicalSelectionSource.Rule));
+
+        selection.UpdateSelected(new(null, null, null, null, true));
+
+        Assert.Equal("K70", selection.SelectedSystemCode);
+        Assert.Equal("TEMP_10", selection.SelectedGlassCode);
+        Assert.Equal("BLACK_MATTE", selection.SelectedFinishCode);
+        Assert.Equal(PreQuoteDraftTechnicalSelectionState.Confirmed,
+            selection.SelectionState);
+    }
+
+    [Fact]
     public void Update_RejectsWrongVersion()
     {
         var draft = Create();

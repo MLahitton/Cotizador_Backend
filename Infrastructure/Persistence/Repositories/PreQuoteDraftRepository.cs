@@ -136,7 +136,8 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
                             x.TechnicalClassification.FinishSource,
                             x.TechnicalClassification.FinishConfidence,
                             x.TechnicalClassification.RequiresReview,
-                            x.TechnicalClassification.ReviewReasons)))
+                            x.TechnicalClassification.ReviewReasons),
+                    null))
                 .ToArrayAsync(cancellationToken);
             var requirements = await dbContext.Set<StructuredExtractionRequirement>()
                 .AsNoTracking().Where(x => x.StructuredDocumentExtractionId == extractionId)
@@ -297,6 +298,8 @@ public sealed class PreQuoteDraftRepository(ApplicationDbContext dbContext)
             .ThenInclude(x => x.ValuationSnapshot)
             .Include(x => x.Items)
             .ThenInclude(x => x.TechnicalSnapshot)
+            .Include(x => x.Items)
+            .ThenInclude(x => x.TechnicalSelection)
             .Include(x => x.Requirements)
             .Include(x => x.DocumentReferences)
             .Include(x => x.Issues)

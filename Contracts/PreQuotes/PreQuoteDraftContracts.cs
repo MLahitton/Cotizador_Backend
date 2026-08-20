@@ -28,7 +28,18 @@ public sealed record PreQuoteDraftItemRequest(
     int? WidthMillimeters,
     int? HeightMillimeters,
     int? Quantity,
-    bool IsIncluded);
+    bool IsIncluded,
+    PreQuoteDraftItemTechnicalSelectionRequest? TechnicalSelection = null);
+
+public sealed record PreQuoteDraftSelectedTechnicalValuesRequest(
+    string? SystemCode,
+    string? GlassCode,
+    string? FinishCode,
+    string? HardwareCode,
+    bool ConfirmSelection = false);
+
+public sealed record PreQuoteDraftItemTechnicalSelectionRequest(
+    PreQuoteDraftSelectedTechnicalValuesRequest? Selected);
 
 public sealed record PreQuoteDraftRequirementRequest(
     Guid? DraftRequirementId,
@@ -94,10 +105,33 @@ public sealed record PreQuoteDraftItemResponse(
     bool IsIncluded,
     PreQuoteDraftItemGlassResponse? Glass,
     PreQuoteDraftItemValuationResponse? Valuation,
-    PreQuoteDraftItemTechnicalSnapshotResponse? TechnicalSnapshot = null)
+    PreQuoteDraftItemTechnicalSnapshotResponse? TechnicalSnapshot = null,
+    PreQuoteDraftItemTechnicalSelectionResponse? TechnicalSelection = null)
 {
     public int? SourceSequence => SourceItemSequence;
 }
+
+public sealed record PreQuoteDraftTechnicalSelectionValueResponse(
+    string? Code,
+    string? OriginalText = null);
+
+public sealed record PreQuoteDraftTechnicalSelectionPartResponse(
+    PreQuoteDraftTechnicalSelectionValueResponse Requested,
+    PreQuoteDraftTechnicalSelectionValueResponse Suggested,
+    PreQuoteDraftTechnicalSelectionValueResponse Selected);
+
+public sealed record PreQuoteDraftItemTechnicalSelectionResponse(
+    PreQuoteDraftTechnicalSelectionPartResponse System,
+    PreQuoteDraftTechnicalSelectionPartResponse Glass,
+    PreQuoteDraftTechnicalSelectionPartResponse Finish,
+    PreQuoteDraftTechnicalSelectionPartResponse Hardware,
+    string SelectionState,
+    bool RequiresReview,
+    decimal? Confidence,
+    IReadOnlyList<string> ReviewReasons,
+    string RequestedSource,
+    string? SuggestedSource,
+    string? SelectedSource);
 
 public sealed record PreQuoteDraftItemTechnicalSnapshotResponse(
     Guid SourceStructuredItemTechnicalClassificationId,

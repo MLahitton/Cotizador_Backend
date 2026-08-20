@@ -330,7 +330,18 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                         resolved.TechnicalClassification.FinishSource,
                         resolved.TechnicalClassification.FinishConfidence,
                         resolved.TechnicalClassification.RequiresReview,
-                        resolved.TechnicalClassification.ReviewReasons)))
+                        resolved.TechnicalClassification.ReviewReasons),
+                resolved.Item.AreaSquareMeters,
+                resolved.Item.Configuration,
+                resolved.Item.FunctionalType,
+                resolved.Item.Operation,
+                resolved.Item.PanelCount,
+                resolved.Item.MovablePanelCount,
+                resolved.Item.FixedPanelCount,
+                resolved.Item.Modulation,
+                resolved.Item.OpeningDirection,
+                resolved.Item.SpecialFeatures,
+                resolved.Item.GeometryType))
                 .ToArray(),
             structured.Requirements.Select((x, index) =>
                 new StructuredRequirementInput(
