@@ -22,6 +22,8 @@ public sealed class ApplicationDbContext(
     public DbSet<GlassPriceRangeVersion> GlassPriceRangeVersions =>
         Set<GlassPriceRangeVersion>();
     public DbSet<ProductSystem> ProductSystems => Set<ProductSystem>();
+    public DbSet<ProductSystemConstraint> ProductSystemConstraints =>
+        Set<ProductSystemConstraint>();
     public DbSet<FrameType> FrameTypes => Set<FrameType>();
     public DbSet<FinishType> FinishTypes => Set<FinishType>();
     public DbSet<CatalogAlias> CatalogAliases => Set<CatalogAlias>();

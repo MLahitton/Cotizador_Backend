@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<GetStructuredDocumentExtractionService>();
         services.AddScoped<IHistoricalDocumentEstimatePipeline, HistoricalDocumentEstimatePipeline>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
+        services.AddScoped<ISgProductSystemConstraintEvaluator, SgProductSystemConstraintEvaluator>();
         services.AddScoped<ISgTechnicalSelector, DeterministicSgTechnicalSelector>();
         services.AddScoped<CreatePreQuoteDraftService>();
         services.AddScoped<GetPreQuoteDraftService>();

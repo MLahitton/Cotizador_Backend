@@ -72,7 +72,33 @@ public sealed class ProductSystemCatalogRepository(
                 value.Priceable,
                 value.FuturePriceable,
                 value.RequiresReview,
-                value.IsActive));
+                value.IsActive,
+                value.Constraints
+                    .Where(constraint => constraint.IsActive)
+                    .OrderBy(constraint => constraint.Code)
+                    .Select(constraint =>
+                        new ProductSystemConstraintCatalogReadModel(
+                            constraint.Id,
+                            constraint.ProductSystemId,
+                            constraint.Code,
+                            constraint.ConstraintType,
+                            constraint.Scope,
+                            constraint.EvaluationStage,
+                            constraint.Severity,
+                            constraint.KnowledgeClass,
+                            constraint.MinValue,
+                            constraint.MaxValue,
+                            constraint.TextValue,
+                            constraint.AllowedValues,
+                            constraint.Unit,
+                            constraint.RequiresReviewWhenUnknown,
+                            constraint.IsActive,
+                            constraint.EffectiveFromUtc,
+                            constraint.EffectiveToUtc,
+                            constraint.SourceType,
+                            constraint.SourceReference,
+                            constraint.Notes))
+                    .ToArray()));
 }
 
 public sealed class FrameTypeCatalogRepository(

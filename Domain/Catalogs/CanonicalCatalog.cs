@@ -16,8 +16,78 @@ public enum CatalogAliasMatchPolicy
     TechnicalPhrase
 }
 
+public enum ProductSystemConstraintType
+{
+    MinWidth = 1,
+    MaxWidth,
+    MinHeight,
+    MaxHeight,
+    MinArea,
+    MaxArea,
+    MinPanelCount,
+    MaxPanelCount,
+    MinMovablePanelCount,
+    MaxMovablePanelCount,
+    MinFixedPanelCount,
+    MaxFixedPanelCount,
+    AllowedOperation,
+    AllowedGeometry,
+    ForbiddenGeometry,
+    RequiredFeature,
+    ForbiddenFeature,
+    MinLeafWidth,
+    MaxLeafWidth,
+    MinLeafHeight,
+    MaxLeafHeight,
+    MinPanelWidth,
+    MaxPanelWidth,
+    MinPanelHeight,
+    MaxPanelHeight
+}
+
+public enum ProductSystemConstraintScope
+{
+    System = 1,
+    Opening,
+    Panel,
+    MovablePanel,
+    FixedPanel,
+    Leaf
+}
+
+public enum ConstraintEvaluationStage
+{
+    PreSelection = 1,
+    PostDesign
+}
+
+public enum ProductSystemConstraintSeverity
+{
+    Hard = 1,
+    Review
+}
+
+public enum ProductSystemConstraintKnowledgeClass
+{
+    VerifiedTechnical = 1,
+    Calibration,
+    Preference,
+    Unknown
+}
+
+public enum ProductSystemConstraintSourceType
+{
+    Manufacturer = 1,
+    SgRule,
+    HistoricalCalibration,
+    Manual,
+    Other
+}
+
 public sealed class ProductSystem
 {
+    private readonly List<ProductSystemConstraint> _constraints = [];
+
     private ProductSystem() { }
 
     public Guid Id { get; private set; }
@@ -38,6 +108,7 @@ public sealed class ProductSystem
     public bool IsActive { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
+    public IReadOnlyCollection<ProductSystemConstraint> Constraints => _constraints;
 
     public static ProductSystem Create(
         string code,
@@ -80,6 +151,141 @@ public sealed class ProductSystem
     }
 }
 
+
+public sealed class ProductSystemConstraint
+{
+    private ProductSystemConstraint() { }
+
+    public Guid Id { get; private set; }
+    public Guid ProductSystemId { get; private set; }
+    public ProductSystem ProductSystem { get; private set; } = null!;
+    public string Code { get; private set; } = string.Empty;
+    public ProductSystemConstraintType ConstraintType { get; private set; }
+    public ProductSystemConstraintScope Scope { get; private set; }
+    public ConstraintEvaluationStage EvaluationStage { get; private set; }
+    public ProductSystemConstraintSeverity Severity { get; private set; }
+    public ProductSystemConstraintKnowledgeClass KnowledgeClass { get; private set; }
+    public decimal? MinValue { get; private set; }
+    public decimal? MaxValue { get; private set; }
+    public string? TextValue { get; private set; }
+    public string[] AllowedValues { get; private set; } = [];
+    public string? Unit { get; private set; }
+    public bool RequiresReviewWhenUnknown { get; private set; }
+    public bool IsActive { get; private set; }
+    public DateTimeOffset? EffectiveFromUtc { get; private set; }
+    public DateTimeOffset? EffectiveToUtc { get; private set; }
+    public ProductSystemConstraintSourceType SourceType { get; private set; }
+    public string? SourceReference { get; private set; }
+    public string? Notes { get; private set; }
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+    public DateTimeOffset? UpdatedAtUtc { get; private set; }
+
+    public static ProductSystemConstraint Create(
+        Guid productSystemId,
+        string code,
+        ProductSystemConstraintType constraintType,
+        ProductSystemConstraintScope scope,
+        ConstraintEvaluationStage evaluationStage,
+        ProductSystemConstraintSeverity severity,
+        ProductSystemConstraintKnowledgeClass knowledgeClass,
+        bool requiresReviewWhenUnknown,
+        ProductSystemConstraintSourceType sourceType,
+        DateTimeOffset createdAtUtc,
+        decimal? minValue = null,
+        decimal? maxValue = null,
+        string? textValue = null,
+        IReadOnlyList<string>? allowedValues = null,
+        string? unit = null,
+        DateTimeOffset? effectiveFromUtc = null,
+        DateTimeOffset? effectiveToUtc = null,
+        string? sourceReference = null,
+        string? notes = null,
+        bool isActive = true)
+    {
+        if (productSystemId == Guid.Empty)
+        {
+            throw new ArgumentException("Sistema obligatorio.", nameof(productSystemId));
+        }
+
+        if (!Enum.IsDefined(constraintType)
+            || !Enum.IsDefined(scope)
+            || !Enum.IsDefined(evaluationStage)
+            || !Enum.IsDefined(severity)
+            || !Enum.IsDefined(knowledgeClass)
+            || !Enum.IsDefined(sourceType))
+        {
+            throw new ArgumentException("Restriccion tecnica invalida.");
+        }
+
+        if (severity == ProductSystemConstraintSeverity.Hard
+            && knowledgeClass != ProductSystemConstraintKnowledgeClass.VerifiedTechnical)
+        {
+            throw new ArgumentException("Solo una restriccion tecnica verificada puede ser HARD.");
+        }
+
+        if (minValue is not null && maxValue is not null && minValue > maxValue)
+        {
+            throw new ArgumentException("Rango de restriccion invalido.");
+        }
+
+        CatalogText.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
+        EnsureOptionalUtc(effectiveFromUtc, nameof(effectiveFromUtc));
+        EnsureOptionalUtc(effectiveToUtc, nameof(effectiveToUtc));
+        if (effectiveFromUtc is not null
+            && effectiveToUtc is not null
+            && effectiveFromUtc > effectiveToUtc)
+        {
+            throw new ArgumentException("Vigencia de restriccion invalida.");
+        }
+
+        return new ProductSystemConstraint
+        {
+            Id = Guid.NewGuid(),
+            ProductSystemId = productSystemId,
+            Code = CatalogText.NormalizeCode(code, nameof(code)),
+            ConstraintType = constraintType,
+            Scope = scope,
+            EvaluationStage = evaluationStage,
+            Severity = severity,
+            KnowledgeClass = knowledgeClass,
+            MinValue = minValue,
+            MaxValue = maxValue,
+            TextValue = CatalogText.OptionalText(textValue, 100, nameof(textValue)),
+            AllowedValues = NormalizeAllowedValues(allowedValues ?? []),
+            Unit = CatalogText.OptionalText(unit, 20, nameof(unit)),
+            RequiresReviewWhenUnknown = requiresReviewWhenUnknown,
+            IsActive = isActive,
+            EffectiveFromUtc = effectiveFromUtc,
+            EffectiveToUtc = effectiveToUtc,
+            SourceType = sourceType,
+            SourceReference = CatalogText.OptionalText(sourceReference, 200, nameof(sourceReference)),
+            Notes = CatalogText.OptionalText(notes, 500, nameof(notes)),
+            CreatedAtUtc = createdAtUtc
+        };
+    }
+
+    public bool IsApplicableAt(DateTimeOffset atUtc)
+    {
+        CatalogText.EnsureUtc(atUtc, nameof(atUtc));
+        return IsActive
+            && (EffectiveFromUtc is null || EffectiveFromUtc <= atUtc)
+            && (EffectiveToUtc is null || EffectiveToUtc >= atUtc);
+    }
+
+    private static string[] NormalizeAllowedValues(IReadOnlyList<string> values) =>
+        values
+            .Select(value => CatalogText.NormalizeCode(value, nameof(values)))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    private static void EnsureOptionalUtc(DateTimeOffset? value, string name)
+    {
+        if (value is { } date)
+        {
+            CatalogText.EnsureUtc(date, name);
+        }
+    }
+}
 public sealed class FrameType
 {
     private FrameType() { }

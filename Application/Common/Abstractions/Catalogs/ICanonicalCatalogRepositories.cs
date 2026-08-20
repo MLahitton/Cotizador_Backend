@@ -18,7 +18,55 @@ public sealed record ProductSystemCatalogReadModel(
     bool Priceable,
     bool FuturePriceable,
     bool RequiresReview,
-    bool IsActive);
+    bool IsActive,
+    IReadOnlyList<ProductSystemConstraintCatalogReadModel> Constraints)
+{
+    public ProductSystemCatalogReadModel(
+        Guid id,
+        string code,
+        string name,
+        string? technicalName,
+        string? commercialName,
+        string? functionalType,
+        string? family,
+        string? series,
+        string? commercialLine,
+        string? variant,
+        bool isSelectable,
+        bool activeForRecognition,
+        bool priceable,
+        bool futurePriceable,
+        bool requiresReview,
+        bool isActive)
+        : this(id, code, name, technicalName, commercialName, functionalType,
+            family, series, commercialLine, variant, isSelectable,
+            activeForRecognition, priceable, futurePriceable, requiresReview,
+            isActive, [])
+    {
+    }
+}
+
+public sealed record ProductSystemConstraintCatalogReadModel(
+    Guid Id,
+    Guid ProductSystemId,
+    string Code,
+    ProductSystemConstraintType ConstraintType,
+    ProductSystemConstraintScope Scope,
+    ConstraintEvaluationStage EvaluationStage,
+    ProductSystemConstraintSeverity Severity,
+    ProductSystemConstraintKnowledgeClass KnowledgeClass,
+    decimal? MinValue,
+    decimal? MaxValue,
+    string? TextValue,
+    IReadOnlyList<string> AllowedValues,
+    string? Unit,
+    bool RequiresReviewWhenUnknown,
+    bool IsActive,
+    DateTimeOffset? EffectiveFromUtc,
+    DateTimeOffset? EffectiveToUtc,
+    ProductSystemConstraintSourceType SourceType,
+    string? SourceReference,
+    string? Notes);
 
 public sealed record FrameTypeCatalogReadModel(
     Guid Id,

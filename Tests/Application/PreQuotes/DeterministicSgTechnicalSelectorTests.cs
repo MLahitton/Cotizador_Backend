@@ -1,5 +1,6 @@
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
+using Domain.Catalogs;
 using Xunit;
 
 namespace CotizadorBackend.Tests.Application.PreQuotes;
@@ -257,6 +258,98 @@ public sealed class DeterministicSgTechnicalSelectorTests
     }
 
     [Fact]
+    public async Task PreSelectionHardConstraint_ExcludesOtherwisePreferredCandidate()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(
+                    "K70",
+                    "SLIDING_DOOR",
+                    "VENECIA NAPOLES",
+                    "STANDARD",
+                    "ESSENTIAL",
+                    Constraint(
+                        "MAX_OPENING_HEIGHT",
+                        ProductSystemConstraintType.MaxHeight,
+                        maxValue: 2500m,
+                        severity: ProductSystemConstraintSeverity.Hard,
+                        knowledgeClass: ProductSystemConstraintKnowledgeClass.VerifiedTechnical)),
+                System("SG_SLIDING_ALT", "SLIDING_DOOR", "GENERIC SLIDING", "STANDARD", "CLASSIC")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR", height: 2800),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SG_SLIDING_ALT", result.SuggestedSystemCode);
+        Assert.DoesNotContain("K70", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task PreSelectionUnknownConstraint_AddsReviewWithoutExcludingCandidate()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(
+                    "K70",
+                    "SLIDING_DOOR",
+                    "VENECIA NAPOLES",
+                    "STANDARD",
+                    "ESSENTIAL",
+                    Constraint(
+                        "MAX_OPENING_WIDTH",
+                        ProductSystemConstraintType.MaxWidth,
+                        maxValue: 3000m,
+                        requiresReviewWhenUnknown: true)),
+                System("SG_SLIDING_ALT", "SLIDING_DOOR", "GENERIC SLIDING", "STANDARD", "CLASSIC")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR", width: null),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.True(result.RequiresReview);
+        Assert.Contains("SYSTEM_CONSTRAINT_MAX_OPENING_WIDTH_UNKNOWN",
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task PostDesignLeafConstraint_IsDeferredAndDoesNotPenalizePreSelection()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(
+                    "K70",
+                    "SLIDING_DOOR",
+                    "VENECIA NAPOLES",
+                    "STANDARD",
+                    "ESSENTIAL",
+                    Constraint(
+                        "MAX_LEAF_WIDTH",
+                        ProductSystemConstraintType.MaxLeafWidth,
+                        scope: ProductSystemConstraintScope.Leaf,
+                        evaluationStage: ConstraintEvaluationStage.PostDesign,
+                        maxValue: 1200m,
+                        severity: ProductSystemConstraintSeverity.Hard,
+                        knowledgeClass: ProductSystemConstraintKnowledgeClass.VerifiedTechnical)),
+                System("SG_SLIDING_ALT", "SLIDING_DOOR", "GENERIC SLIDING", "STANDARD", "CLASSIC")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR", width: 5000),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.False(result.RequiresReview);
+    }
+
+    [Fact]
+    public async Task PanelCountAlone_DoesNotInferLeafWidthOrForceDifferentFamily()
+    {
+        var result = await Selector().SelectAsync(
+            Input("SLIDING_DOOR", width: 8000, panelCount: 4),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.NotEqual("K100", result.SuggestedSystemCode);
+    }
+
+    [Fact]
     public async Task ExactTie_DoesNotSilentlyChooseByCode()
     {
         var result = await new DeterministicSgTechnicalSelector(
@@ -366,6 +459,7 @@ public sealed class DeterministicSgTechnicalSelectorTests
         string? operation = null,
         int? height = 1500,
         int? width = 1200,
+        int? panelCount = null,
         string? feature = null,
         string? requestedCommercialLine = null,
         string? requestedSystemRaw = null,
@@ -376,7 +470,7 @@ public sealed class DeterministicSgTechnicalSelectorTests
             width,
             height,
             null,
-            null,
+            panelCount,
             null,
             null,
             null,
@@ -415,7 +509,8 @@ public sealed class DeterministicSgTechnicalSelectorTests
         string? functionalType,
         string? family,
         string? variant,
-        string commercialLine) =>
+        string commercialLine,
+        params ProductSystemConstraintCatalogReadModel[] constraints) =>
         new(
             Guid.NewGuid(),
             code,
@@ -432,7 +527,41 @@ public sealed class DeterministicSgTechnicalSelectorTests
             true,
             true,
             false,
-            true);
+            true,
+            constraints);
+
+    private static ProductSystemConstraintCatalogReadModel Constraint(
+        string code,
+        ProductSystemConstraintType constraintType,
+        ProductSystemConstraintScope scope = ProductSystemConstraintScope.Opening,
+        ConstraintEvaluationStage evaluationStage = ConstraintEvaluationStage.PreSelection,
+        ProductSystemConstraintSeverity severity = ProductSystemConstraintSeverity.Review,
+        ProductSystemConstraintKnowledgeClass knowledgeClass = ProductSystemConstraintKnowledgeClass.Calibration,
+        decimal? minValue = null,
+        decimal? maxValue = null,
+        IReadOnlyList<string>? allowedValues = null,
+        bool requiresReviewWhenUnknown = false) =>
+        new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            code,
+            constraintType,
+            scope,
+            evaluationStage,
+            severity,
+            knowledgeClass,
+            minValue,
+            maxValue,
+            null,
+            allowedValues ?? [],
+            null,
+            requiresReviewWhenUnknown,
+            true,
+            null,
+            null,
+            ProductSystemConstraintSourceType.SgRule,
+            null,
+            null);
 
     private sealed class Catalog(
         IReadOnlyList<ProductSystemCatalogReadModel> systems)

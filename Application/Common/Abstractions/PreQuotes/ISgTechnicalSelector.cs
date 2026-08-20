@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Catalogs;
+using Domain.Catalogs;
 
 namespace Application.Common.Abstractions.PreQuotes;
 
@@ -66,7 +67,8 @@ public static class SgTechnicalSelectionReviewReasons
 }
 
 public sealed class DeterministicSgTechnicalSelector(
-    IProductSystemCatalogRepository productSystems) : ISgTechnicalSelector
+    IProductSystemCatalogRepository productSystems,
+    ISgProductSystemConstraintEvaluator constraintEvaluator) : ISgTechnicalSelector
 {
     private const decimal StrongUniqueConfidence = 0.95m;
     private const decimal StrongWithReviewConfidence = 0.90m;
@@ -83,6 +85,14 @@ public sealed class DeterministicSgTechnicalSelector(
     private const int CatalogRequiresReviewPenalty = 20;
     private const int CloseCandidateScoreDelta = 10;
     private const int MaxAlternatives = 3;
+
+    public DeterministicSgTechnicalSelector(
+        IProductSystemCatalogRepository productSystems)
+        : this(
+            productSystems,
+            new SgProductSystemConstraintEvaluator(TimeProvider.System))
+    {
+    }
 
     public async Task<SgTechnicalSelectionResult> SelectAsync(
         SgTechnicalSelectionInput input,
@@ -174,12 +184,19 @@ public sealed class DeterministicSgTechnicalSelector(
                 .ToArray());
     }
 
-    private static SgTechnicalCandidate BuildCandidate(
+    private SgTechnicalCandidate BuildCandidate(
         ProductSystemCatalogReadModel system,
         SgTechnicalSelectionInput input)
     {
         var candidate = new SgTechnicalCandidate(system);
         ApplyFunctionalCompatibility(candidate, input);
+        if (candidate.CompatibilityState
+            == SgTechnicalCompatibilityState.Incompatible)
+        {
+            return candidate;
+        }
+
+        ApplyPreSelectionConstraints(candidate, input);
         if (candidate.CompatibilityState
             == SgTechnicalCompatibilityState.Incompatible)
         {
@@ -231,6 +248,28 @@ public sealed class DeterministicSgTechnicalSelector(
         candidate.CompatibilityState = SgTechnicalCompatibilityState.Compatible;
         candidate.Score += FunctionalCompatibilityScore;
         candidate.MatchedRuleCodes.Add("FUNCTIONAL_TYPE_COMPATIBILITY");
+    }
+
+    private void ApplyPreSelectionConstraints(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input)
+    {
+        var result = constraintEvaluator.Evaluate(
+            candidate.ProductSystem,
+            input,
+            ConstraintEvaluationStage.PreSelection);
+        if (result.HasHardFailure)
+        {
+            candidate.CompatibilityState =
+                SgTechnicalCompatibilityState.Incompatible;
+            candidate.FailedRuleCodes.AddRange(result.Evaluations
+                .Where(value => value.State
+                    == ProductSystemConstraintEvaluationState.Fail)
+                .Select(value => value.ConstraintCode));
+            return;
+        }
+
+        candidate.ReviewReasons.AddRange(result.ReviewReasons);
     }
 
     private static void ApplySpecialFeatures(

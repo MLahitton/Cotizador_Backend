@@ -33,6 +33,10 @@ public sealed class ProductSystemConfiguration
         builder.Property(value => value.CreatedAtUtc).HasColumnName("created_at_utc").HasColumnType("timestamp with time zone").IsRequired();
         builder.Property(value => value.UpdatedAtUtc).HasColumnName("updated_at_utc").HasColumnType("timestamp with time zone");
         builder.HasIndex(value => value.Code).IsUnique().HasDatabaseName("ux_product_systems_code");
+        builder.HasMany(value => value.Constraints)
+            .WithOne(value => value.ProductSystem)
+            .HasForeignKey(value => value.ProductSystemId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasData(
             Seed(1, "K40", "Sistema K40", true, true, true, false,
@@ -140,6 +144,74 @@ public sealed class ProductSystemConfiguration
         Variant = variant,
         IsSelectable = isSelectable
     };
+}
+
+public sealed class ProductSystemConstraintConfiguration
+    : IEntityTypeConfiguration<ProductSystemConstraint>
+{
+    public void Configure(EntityTypeBuilder<ProductSystemConstraint> builder)
+    {
+        builder.ToTable("product_system_constraints", "core", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_product_system_constraints_values",
+                "\"min_value\" IS NULL OR \"max_value\" IS NULL OR \"min_value\" <= \"max_value\"");
+            table.HasCheckConstraint(
+                "ck_product_system_constraints_hard_verified",
+                "\"severity\" <> 'Hard' OR \"knowledge_class\" = 'VerifiedTechnical'");
+            table.HasCheckConstraint(
+                "ck_product_system_constraints_effective_range",
+                "\"effective_from_utc\" IS NULL OR \"effective_to_utc\" IS NULL OR \"effective_from_utc\" <= \"effective_to_utc\"");
+        });
+        builder.HasKey(value => value.Id);
+        builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
+        builder.Property(value => value.ProductSystemId).HasColumnName("product_system_id").IsRequired();
+        builder.Property(value => value.Code).HasColumnName("code").HasMaxLength(30).IsRequired();
+        builder.Property(value => value.ConstraintType).HasColumnName("constraint_type")
+            .HasConversion<string>().HasMaxLength(40).IsRequired();
+        builder.Property(value => value.Scope).HasColumnName("scope")
+            .HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(value => value.EvaluationStage).HasColumnName("evaluation_stage")
+            .HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(value => value.Severity).HasColumnName("severity")
+            .HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(value => value.KnowledgeClass).HasColumnName("knowledge_class")
+            .HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(value => value.MinValue).HasColumnName("min_value")
+            .HasPrecision(18, 6);
+        builder.Property(value => value.MaxValue).HasColumnName("max_value")
+            .HasPrecision(18, 6);
+        builder.Property(value => value.TextValue).HasColumnName("text_value")
+            .HasMaxLength(100);
+        builder.Property(value => value.AllowedValues).HasColumnName("allowed_values");
+        builder.Property(value => value.Unit).HasColumnName("unit").HasMaxLength(20);
+        builder.Property(value => value.RequiresReviewWhenUnknown)
+            .HasColumnName("requires_review_when_unknown").IsRequired();
+        builder.Property(value => value.IsActive).HasColumnName("is_active").IsRequired();
+        builder.Property(value => value.EffectiveFromUtc).HasColumnName("effective_from_utc")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(value => value.EffectiveToUtc).HasColumnName("effective_to_utc")
+            .HasColumnType("timestamp with time zone");
+        builder.Property(value => value.SourceType).HasColumnName("source_type")
+            .HasConversion<string>().HasMaxLength(30).IsRequired();
+        builder.Property(value => value.SourceReference).HasColumnName("source_reference")
+            .HasMaxLength(200);
+        builder.Property(value => value.Notes).HasColumnName("notes").HasMaxLength(500);
+        builder.Property(value => value.CreatedAtUtc).HasColumnName("created_at_utc")
+            .HasColumnType("timestamp with time zone").IsRequired();
+        builder.Property(value => value.UpdatedAtUtc).HasColumnName("updated_at_utc")
+            .HasColumnType("timestamp with time zone");
+        builder.HasIndex(value => new { value.ProductSystemId, value.Code })
+            .IsUnique()
+            .HasDatabaseName("ux_product_system_constraints_system_code");
+        builder.HasIndex(value => new
+            {
+                value.ProductSystemId,
+                value.IsActive,
+                value.EvaluationStage
+            })
+            .HasDatabaseName("ix_product_system_constraints_system_active_stage");
+    }
 }
 
 public sealed class FrameTypeConfiguration : IEntityTypeConfiguration<FrameType>

@@ -131,6 +131,19 @@ public sealed class CanonicalCatalogSeedTests
             value => value.IsUnique
                 && value.GetDatabaseName()
                     == "ux_catalog_aliases_category_normalized_alias");
+        var constraints = model.FindEntityType(typeof(ProductSystemConstraint))!;
+        Assert.Equal("core", constraints.GetSchema());
+        Assert.Equal("product_system_constraints", constraints.GetTableName());
+        Assert.Empty(constraints.GetSeedData());
+        Assert.Contains(
+            constraints.GetIndexes(),
+            value => value.IsUnique
+                && value.GetDatabaseName()
+                    == "ux_product_system_constraints_system_code");
+        Assert.Contains(
+            constraints.GetIndexes(),
+            value => value.GetDatabaseName()
+                == "ix_product_system_constraints_system_active_stage");
     }
 
     private static IReadOnlyList<IDictionary<string, object?>> SeedData<TEntity>()
