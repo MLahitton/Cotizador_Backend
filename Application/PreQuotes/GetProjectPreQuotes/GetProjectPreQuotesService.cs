@@ -103,7 +103,16 @@ public sealed class GetProjectPreQuotesService(
                 preQuote.ProjectId,
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
-                preQuote.UpdatedAtUtc))
+                preQuote.UpdatedAtUtc,
+                preQuote.HasRequirement,
+                preQuote.LatestRequirementId,
+                preQuote.LatestRequirementStatus?.ToString(),
+                preQuote.HasTechnicalProposal,
+                preQuote.TechnicalProposalId,
+                preQuote.TechnicalProposalItemCount,
+                preQuote.LatestAttemptState?.ToString(),
+                preQuote.LatestAttemptOutcome?.ToString(),
+                preQuote.LatestAttemptErrorCode))
             .ToArray();
 
         return GetProjectPreQuotesResult.Success(

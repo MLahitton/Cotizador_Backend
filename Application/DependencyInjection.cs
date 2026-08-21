@@ -15,6 +15,7 @@ using Application.PreQuotes.CreateRequirement;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessRequirement;
+using Application.PreQuotes.PriceRequirementTechnicalProposal;
 using Application.PreQuotes.ResolveHistoricalTechnicalEvidence;
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
@@ -28,6 +29,7 @@ using Application.PreQuotes.UpdatePreQuoteDraft;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.BuildRequirementTechnicalProposal;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
+using Application.PreQuotes.GetCurrentRequirement;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -60,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<CreateDocumentProcessingAttemptService>();
         services.AddScoped<CreateRequirementService>();
         services.AddScoped<ProcessRequirementService>();
+        services.AddScoped<PriceRequirementTechnicalProposalService>();
         services.AddScoped<GetDocumentProcessingAttemptService>();
         services.AddScoped<
             IClaimedDocumentProcessingService,
@@ -74,7 +77,10 @@ public static class DependencyInjection
         services.AddScoped<ResolveHistoricalTechnicalEvidenceService>();
         services.AddScoped<BuildRequirementTechnicalProposalService>();
         services.AddScoped<GetRequirementTechnicalProposalService>();
+        services.AddScoped<GetCurrentRequirementService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
+        services.AddSingleton<ITechnicalProposalItemToHistoricalPricingMapper,
+            TechnicalProposalItemToHistoricalPricingMapper>();
         services.AddScoped<ISgProductSystemConstraintEvaluator, SgProductSystemConstraintEvaluator>();
         services.AddScoped<ISgTechnicalSelector, DeterministicSgTechnicalSelector>();
         services.AddScoped<IGlassCandidateResolver, GlassCandidateResolver>();

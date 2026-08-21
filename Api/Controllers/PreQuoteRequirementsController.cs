@@ -1,5 +1,6 @@
 using Api.ErrorHandling;
 using Application.PreQuotes.CreateRequirement;
+using Application.PreQuotes.GetCurrentRequirement;
 using Contracts.Common;
 using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
@@ -16,6 +17,54 @@ namespace Api.Controllers;
 public sealed class PreQuoteRequirementsController(
     CreateRequirementService createRequirementService) : ControllerBase
 {
+    [HttpGet("current")]
+    [ProducesResponseType(
+        typeof(CurrentRequirementResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status409Conflict)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCurrent(
+        [FromRoute] Guid preQuoteId,
+        [FromServices] GetCurrentRequirementService getCurrentRequirementService,
+        CancellationToken cancellationToken)
+    {
+        var result = await getCurrentRequirementService.ExecuteAsync(
+            new GetCurrentRequirementCommand(preQuoteId),
+            cancellationToken);
+
+        if (result.IsSuccess && result.Requirement is { } requirement)
+        {
+            return Ok(new CurrentRequirementResponse(
+                requirement.RequirementId,
+                requirement.PreQuoteId,
+                requirement.Status.ToString().ToUpperInvariant(),
+                requirement.CreatedAtUtc,
+                requirement.HasTechnicalProposal,
+                requirement.TechnicalProposalId,
+                requirement.LatestAttemptState?.ToString(),
+                requirement.LatestAttemptOutcome?.ToString(),
+                requirement.LatestAttemptErrorCode));
+        }
+
+        return MapFailure(result.Failure);
+    }
+
     [HttpPost]
     [ProducesResponseType(
         typeof(CreateRequirementResponse),
@@ -225,6 +274,72 @@ public sealed class PreQuoteRequirementsController(
                 RequirementErrorCodes.PersistenceError,
                 "Error de persistencia",
                 "No fue posible registrar el requerimiento.")
+        };
+    }
+
+    private IActionResult MapFailure(GetCurrentRequirementFailure failure)
+    {
+        return failure switch
+        {
+            GetCurrentRequirementFailure.InvalidRequest =>
+                RequirementProblem(
+                    StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Solicitud invalida",
+                    "La precotizacion indicada no es valida."),
+            GetCurrentRequirementFailure.Unauthorized =>
+                RequirementProblem(
+                    StatusCodes.Status401Unauthorized,
+                    PreQuoteErrorCodes.Unauthorized,
+                    "No autorizado",
+                    "No fue posible identificar al usuario autenticado."),
+            GetCurrentRequirementFailure.InactiveUser =>
+                RequirementProblem(
+                    StatusCodes.Status403Forbidden,
+                    PreQuoteErrorCodes.InactiveUser,
+                    "Usuario inactivo",
+                    "El usuario autenticado se encuentra inactivo."),
+            GetCurrentRequirementFailure.PreQuoteNotFound =>
+                RequirementProblem(
+                    StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.PreQuoteNotFound,
+                    "Precotizacion no encontrada",
+                    "No existe la precotizacion indicada."),
+            GetCurrentRequirementFailure.ProjectNotFound =>
+                RequirementProblem(
+                    StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.PreQuoteNotFound,
+                    "Proyecto no encontrado",
+                    "El proyecto asociado a la precotizacion no existe."),
+            GetCurrentRequirementFailure.InactiveProject =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.ProjectInactive,
+                    "Proyecto inactivo",
+                    "No se pueden consultar requerimientos de un proyecto inactivo."),
+            GetCurrentRequirementFailure.ClientNotFound =>
+                RequirementProblem(
+                    StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.PreQuoteNotFound,
+                    "Cliente no encontrado",
+                    "El cliente asociado al proyecto no existe."),
+            GetCurrentRequirementFailure.InactiveClient =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.ClientInactive,
+                    "Cliente inactivo",
+                    "No se pueden consultar requerimientos de un cliente inactivo."),
+            GetCurrentRequirementFailure.CurrentRequirementNotFound =>
+                RequirementProblem(
+                    StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.RequirementNotFound,
+                    "Requerimiento no encontrado",
+                    "Aun no se ha procesado un requerimiento para esta precotizacion."),
+            _ => RequirementProblem(
+                StatusCodes.Status500InternalServerError,
+                RequirementErrorCodes.PersistenceError,
+                "Error de consulta",
+                "No fue posible consultar el requerimiento vigente.")
         };
     }
 

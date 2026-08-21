@@ -37,7 +37,16 @@ public sealed record PreQuoteSearchItem(
     Guid ProjectId,
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    bool HasRequirement,
+    Guid? LatestRequirementId,
+    RequirementStatus? LatestRequirementStatus,
+    bool HasTechnicalProposal,
+    Guid? TechnicalProposalId,
+    int? TechnicalProposalItemCount,
+    DocumentProcessingState? LatestAttemptState,
+    DocumentProcessingOutcome? LatestAttemptOutcome,
+    string? LatestAttemptErrorCode);
 
 public sealed record PreQuoteSearchPage(
     IReadOnlyList<PreQuoteSearchItem> Items,

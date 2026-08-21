@@ -53,27 +53,43 @@ public sealed class HistoricalTechnicalPriceEstimatorTests
     }
 
     [Fact]
-    public async Task EstimateAsync_ExcludesRejectedAndEconomicOutlier()
+    public async Task EstimateAsync_ExcludesEconomicOutlierWithoutUsingAi2RejectedAsEconomicFilter()
     {
         var estimate = await Estimate([
             Evaluated(Candidate("a", 100m, 10m), 0.8m, "HIGH"),
             Evaluated(Candidate("b", 105m, 10m), 0.8m, "HIGH"),
             Evaluated(Candidate("c", 110m, 10m), 0.8m, "HIGH"),
-            Evaluated(Candidate("outlier", 10000m, 10m), 0.8m, "HIGH"),
-            Evaluated(Candidate("rejected", 5000m, 10m), 0.1m, "REJECTED")]);
+            Evaluated(Candidate("rejected", 112m, 10m), 0.1m, "REJECTED"),
+            Evaluated(Candidate("outlier", 10000m, 10m), 0.8m, "HIGH")]);
         Assert.DoesNotContain("outlier", estimate.UsedComparableIds);
-        Assert.DoesNotContain("rejected", estimate.UsedComparableIds);
+        Assert.Contains("rejected", estimate.UsedComparableIds);
     }
 
     [Fact]
-    public async Task EstimateAsync_LowSimilarityIsDownweighted()
+    public async Task EstimateAsync_LowSimilarityDoesNotChangeEconomicWeight()
     {
         var estimate = await Estimate([
             Evaluated(Candidate("high", 100m, 10m), 0.9m, "HIGH"),
             Evaluated(Candidate("low", 1000m, 10m), 0.2m, "LOW")]);
         Assert.Equal(100m, estimate.Expected);
-        Assert.True(estimate.Comparables.Single(value => value.CandidateId == "low").FinalWeight
-            < estimate.Comparables.Single(value => value.CandidateId == "high").FinalWeight);
+        Assert.Equal(
+            estimate.Comparables.Single(value => value.CandidateId == "high").FinalWeight,
+            estimate.Comparables.Single(value => value.CandidateId == "low").FinalWeight);
+    }
+
+    [Fact]
+    public async Task EstimateAsync_Ai2ScoreVariationDoesNotChangeEconomicPrice()
+    {
+        var first = await Estimate([
+            Evaluated(Candidate("a", 100m, 10m), 0.85m, "HIGH"),
+            Evaluated(Candidate("b", 120m, 10m), 0.35m, "LOW")]);
+        var second = await Estimate([
+            Evaluated(Candidate("a", 100m, 10m), 0.35m, "LOW"),
+            Evaluated(Candidate("b", 120m, 10m), 0.85m, "HIGH")]);
+
+        Assert.Equal(first.Minimum, second.Minimum);
+        Assert.Equal(first.Expected, second.Expected);
+        Assert.Equal(first.Maximum, second.Maximum);
     }
 
     [Fact]

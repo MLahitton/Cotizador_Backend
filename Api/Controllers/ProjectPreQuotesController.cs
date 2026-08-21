@@ -96,7 +96,16 @@ public sealed class ProjectPreQuotesController(
                 preQuote.ProjectId,
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
-                preQuote.UpdatedAtUtc))
+                preQuote.UpdatedAtUtc,
+                preQuote.HasRequirement,
+                preQuote.LatestRequirementId,
+                preQuote.LatestRequirementStatus,
+                preQuote.HasTechnicalProposal,
+                preQuote.TechnicalProposalId,
+                preQuote.TechnicalProposalItemCount,
+                preQuote.LatestAttemptState,
+                preQuote.LatestAttemptOutcome,
+                preQuote.LatestAttemptErrorCode))
             .ToArray();
 
         return Ok(new GetProjectPreQuotesResponse(

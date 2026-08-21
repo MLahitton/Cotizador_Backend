@@ -49,6 +49,79 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<CurrentRequirementReadModel?> GetCurrentByPreQuoteIdAsync(
+        Guid preQuoteId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var candidates = await dbContext.Requirements
+                .AsNoTracking()
+                .Where(requirement =>
+                    requirement.PreQuoteId == preQuoteId
+                    && requirement.IsActive)
+                .Select(requirement => new CurrentRequirementProjection(
+                    requirement.Id,
+                    requirement.PreQuoteId,
+                    requirement.Status,
+                    requirement.CreatedAtUtc,
+                    dbContext.RequirementTechnicalProposals
+                        .Any(proposal =>
+                            proposal.RequirementId == requirement.Id),
+                    dbContext.RequirementTechnicalProposals
+                        .Where(proposal =>
+                            proposal.RequirementId == requirement.Id)
+                        .OrderByDescending(proposal =>
+                            proposal.ProcessingAttempt.CompletedAtUtc)
+                        .ThenByDescending(proposal => proposal.CreatedAtUtc)
+                        .ThenByDescending(proposal => proposal.Id)
+                        .Select(proposal => (Guid?)proposal.Id)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt =>
+                            (DocumentProcessingState?)attempt.ProcessingState)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => attempt.Outcome)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => attempt.ErrorCode)
+                        .FirstOrDefault()))
+                .ToListAsync(cancellationToken);
+
+            return candidates
+                .OrderBy(candidate => candidate.Rank)
+                .ThenByDescending(candidate => candidate.CreatedAtUtc)
+                .Select(candidate => new CurrentRequirementReadModel(
+                    candidate.RequirementId,
+                    candidate.PreQuoteId,
+                    candidate.Status,
+                    candidate.CreatedAtUtc,
+                    candidate.HasTechnicalProposal,
+                    candidate.TechnicalProposalId,
+                    candidate.LatestAttemptState,
+                    candidate.LatestAttemptOutcome,
+                    candidate.LatestAttemptErrorCode))
+                .FirstOrDefault();
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
     public async Task<RequirementProcessingAttempt?>
         FindProcessingAttemptByIdAsync(
             Guid processingAttemptId,
@@ -270,5 +343,25 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             attempt.ErrorCode ?? string.Empty,
             attempt.StartedAtUtc!.Value,
             attempt.CompletedAtUtc!.Value);
+    }
+
+    private sealed record CurrentRequirementProjection(
+        Guid RequirementId,
+        Guid PreQuoteId,
+        RequirementStatus Status,
+        DateTimeOffset CreatedAtUtc,
+        bool HasTechnicalProposal,
+        Guid? TechnicalProposalId,
+        DocumentProcessingState? LatestAttemptState,
+        DocumentProcessingOutcome? LatestAttemptOutcome,
+        string? LatestAttemptErrorCode)
+    {
+        public int Rank =>
+            HasTechnicalProposal ? 1 :
+            Status == RequirementStatus.Processing
+                || LatestAttemptState == DocumentProcessingState.Processing ? 2 :
+            Status == RequirementStatus.Pending
+                || LatestAttemptState == DocumentProcessingState.Pending ? 3 :
+            4;
     }
 }

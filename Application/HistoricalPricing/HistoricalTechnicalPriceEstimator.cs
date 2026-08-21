@@ -44,12 +44,6 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
                 continue;
             }
 
-            var similarity = value.Similarity;
-            if (similarity?.SimilarityLevel.Equals("REJECTED", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                continue;
-            }
-
             var historicalUnitArea = ResolveHistoricalUnitArea(candidate);
             if (historicalUnitArea is null or <= 0)
             {
@@ -61,14 +55,9 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
                 candidate.PreliminaryScore / HistoricalCandidateRankingWeights.MaximumScore,
                 0m,
                 1m);
+            var similarity = value.Similarity;
             var ai2Score = similarity?.SimilarityScore;
-            var weight = ai2Score is null
-                ? backendScore * HistoricalTechnicalPricingRules.BackendOnlyWeightFactor
-                : backendScore * Math.Clamp(ai2Score.Value, 0m, 1m);
-            if (similarity?.SimilarityLevel.Equals("LOW", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                weight *= HistoricalTechnicalPricingRules.LowSimilarityWeightFactor;
-            }
+            var weight = backendScore;
             if (candidate.HasAreaMismatch)
             {
                 weight *= HistoricalTechnicalPricingRules.AreaMismatchWeightFactor;
@@ -92,8 +81,7 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
             {
                 systemMismatchIds.Add(candidate.HistoricalItemId);
             }
-            var isStrong = ai2Score >= HistoricalTechnicalPricingRules.StrongAi2Score
-                && backendScore >= HistoricalTechnicalPricingRules.StrongBackendScore
+            var isStrong = backendScore >= HistoricalTechnicalPricingRules.StrongBackendScore
                 && !candidate.HasAreaMismatch
                 && !hasCriticalMismatch;
             comparables.Add(new HistoricalTechnicalPriceComparable(

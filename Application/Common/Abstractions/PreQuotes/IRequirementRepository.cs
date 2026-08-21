@@ -12,6 +12,10 @@ public interface IRequirementRepository
         Guid requirementId,
         CancellationToken cancellationToken);
 
+    Task<CurrentRequirementReadModel?> GetCurrentByPreQuoteIdAsync(
+        Guid preQuoteId,
+        CancellationToken cancellationToken);
+
     Task<RequirementProcessingAttempt?> FindProcessingAttemptByIdAsync(
         Guid processingAttemptId,
         CancellationToken cancellationToken);
@@ -62,6 +66,17 @@ public sealed record RequirementProcessingFailureFinalization(
     string ErrorCode,
     DateTimeOffset StartedAtUtc,
     DateTimeOffset CompletedAtUtc);
+
+public sealed record CurrentRequirementReadModel(
+    Guid RequirementId,
+    Guid PreQuoteId,
+    RequirementStatus Status,
+    DateTimeOffset CreatedAtUtc,
+    bool HasTechnicalProposal,
+    Guid? TechnicalProposalId,
+    DocumentProcessingState? LatestAttemptState,
+    DocumentProcessingOutcome? LatestAttemptOutcome,
+    string? LatestAttemptErrorCode);
 
 public sealed class RequirementQueryException : Exception
 {

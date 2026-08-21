@@ -74,13 +74,13 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
 
             var items = await query
                 .OrderByDescending(
-                    preQuote => preQuote.UpdatedAtUtc)
-                .ThenByDescending(
                     preQuote => preQuote.CreatedAtUtc)
+                .ThenByDescending(
+                    preQuote => preQuote.UpdatedAtUtc)
                 .ThenByDescending(preQuote => preQuote.Id)
                 .Skip((int)skip)
                 .Take(pageSize)
-                .Select(preQuote => new PreQuoteSearchItem(
+                .Select(preQuote => new PreQuotePageProjection(
                     preQuote.Id,
                     preQuote.ProjectId,
                     dbContext.PreQuoteDocuments.Count(document =>
@@ -89,7 +89,100 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                     preQuote.UpdatedAtUtc))
                 .ToListAsync(cancellationToken);
 
-            return new PreQuoteSearchPage(items, totalCount);
+            var preQuoteIds = items
+                .Select(preQuote => preQuote.Id)
+                .ToArray();
+
+            var requirements = await dbContext.Requirements
+                .AsNoTracking()
+                .Where(requirement =>
+                    preQuoteIds.Contains(requirement.PreQuoteId)
+                    && requirement.IsActive)
+                .Select(requirement => new PreQuoteRequirementProjection(
+                    requirement.Id,
+                    requirement.PreQuoteId,
+                    requirement.Status,
+                    requirement.CreatedAtUtc,
+                    dbContext.RequirementTechnicalProposals.Any(proposal =>
+                        proposal.RequirementId == requirement.Id),
+                    dbContext.RequirementTechnicalProposals
+                        .Where(proposal =>
+                            proposal.RequirementId == requirement.Id)
+                        .OrderByDescending(proposal =>
+                            proposal.ProcessingAttempt.CompletedAtUtc)
+                        .ThenByDescending(proposal => proposal.CreatedAtUtc)
+                        .ThenByDescending(proposal => proposal.Id)
+                        .Select(proposal => (Guid?)proposal.Id)
+                        .FirstOrDefault(),
+                    dbContext.RequirementTechnicalProposals
+                        .Where(proposal =>
+                            proposal.RequirementId == requirement.Id)
+                        .OrderByDescending(proposal =>
+                            proposal.ProcessingAttempt.CompletedAtUtc)
+                        .ThenByDescending(proposal => proposal.CreatedAtUtc)
+                        .ThenByDescending(proposal => proposal.Id)
+                        .Select(proposal => (int?)proposal.Items.Count)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt =>
+                            (DocumentProcessingState?)attempt.ProcessingState)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => attempt.Outcome)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => attempt.ErrorCode)
+                        .FirstOrDefault()))
+                .ToListAsync(cancellationToken);
+
+            var currentRequirements = requirements
+                .GroupBy(requirement => requirement.PreQuoteId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderBy(requirement => requirement.Rank)
+                        .ThenByDescending(requirement =>
+                            requirement.CreatedAtUtc)
+                        .First());
+
+            var enrichedItems = items
+                .Select(preQuote =>
+                {
+                    currentRequirements.TryGetValue(
+                        preQuote.Id,
+                        out var requirement);
+
+                    return new PreQuoteSearchItem(
+                        preQuote.Id,
+                        preQuote.ProjectId,
+                        preQuote.DocumentCount,
+                        preQuote.CreatedAtUtc,
+                        preQuote.UpdatedAtUtc,
+                        requirement is not null,
+                        requirement?.RequirementId,
+                        requirement?.Status,
+                        requirement?.HasTechnicalProposal ?? false,
+                        requirement?.TechnicalProposalId,
+                        requirement?.TechnicalProposalItemCount,
+                        requirement?.LatestAttemptState,
+                        requirement?.LatestAttemptOutcome,
+                        requirement?.LatestAttemptErrorCode);
+                })
+                .ToArray();
+
+            return new PreQuoteSearchPage(enrichedItems, totalCount);
         }
         catch (DbException exception)
         {
@@ -118,5 +211,35 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
         {
             throw new PreQuotePersistenceException(exception);
         }
+    }
+
+    private sealed record PreQuotePageProjection(
+        Guid Id,
+        Guid ProjectId,
+        int DocumentCount,
+        DateTimeOffset CreatedAtUtc,
+        DateTimeOffset UpdatedAtUtc);
+
+    private sealed record PreQuoteRequirementProjection(
+        Guid RequirementId,
+        Guid PreQuoteId,
+        RequirementStatus Status,
+        DateTimeOffset CreatedAtUtc,
+        bool HasTechnicalProposal,
+        Guid? TechnicalProposalId,
+        int? TechnicalProposalItemCount,
+        DocumentProcessingState? LatestAttemptState,
+        DocumentProcessingOutcome? LatestAttemptOutcome,
+        string? LatestAttemptErrorCode)
+    {
+        public int Rank =>
+            HasTechnicalProposal
+                ? 1
+                : Status == RequirementStatus.Processing
+                    || LatestAttemptState == DocumentProcessingState.Processing
+                    ? 2
+                    : Status == RequirementStatus.Pending
+                        ? 3
+                        : 4;
     }
 }
