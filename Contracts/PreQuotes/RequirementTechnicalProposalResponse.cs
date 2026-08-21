@@ -32,6 +32,9 @@ public sealed record RequirementTechnicalProposalItemResponse(
     RequirementTechnicalProposalConfidenceResponse Confidence,
     bool RequiresReview,
     IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<string> SystemResolutionReasons,
+    IReadOnlyList<string> GlassResolutionReasons,
+    IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
     RequirementTechnicalProposalHistoricalEvidenceResponse HistoricalEvidence,
@@ -142,7 +145,8 @@ public sealed record RequirementTechnicalProposalTraceResponse(
     string? FinishNormalizedType,
     string? FinishColorRaw,
     string? FinishColorNormalized,
-    IReadOnlyList<string> SpecialFeatures);
+    IReadOnlyList<string> SpecialFeatures,
+    string? GeometryType);
 
 public sealed record RequirementTechnicalProposalEvidenceResponse(
     int? PageNumber,
@@ -151,5 +155,7 @@ public sealed record RequirementTechnicalProposalEvidenceResponse(
     string? SheetName,
     string? CellRange,
     string? SourceId,
+    string? SourceFileName,
+    string? ContextLabel,
     decimal? Confidence,
     string Status);

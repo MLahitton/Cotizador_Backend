@@ -47,6 +47,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal(2500, item.HeightMm);
         Assert.Equal(9.35m, item.AreaM2);
         Assert.False(item.RequiresReview);
+        Assert.Equal(["SYSTEM_RULE"], item.SystemResolutionReasons);
+        Assert.Equal(["GLASS_RULE"], item.GlassResolutionReasons);
+        Assert.Equal(["FINISH_RULE"], item.FinishResolutionReasons);
         Assert.True(item.IsTechnicallyComplete);
         Assert.True(item.IsPriceable);
         Assert.Equal(0.83m, item.Confidence.Overall);
@@ -88,12 +91,15 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal(6m, item.Trace.GlassThicknessMm);
         Assert.Equal("negro pintura al horno", item.Trace.FinishRawDescription);
         Assert.Equal(["POCKET"], item.Trace.SpecialFeatures);
+        Assert.Equal("RECTANGULAR", item.Trace.GeometryType);
 
         var evidence = Assert.Single(item.Evidence);
         Assert.Null(evidence.PageNumber);
         Assert.Equal("Xlsx", evidence.SourceType);
         Assert.Equal("Cotizacion", evidence.SheetName);
         Assert.Equal("A12:H12", evidence.CellRange);
+        Assert.Equal("CUADRO VENTANAS NIVEL 1 (3).pdf", evidence.SourceFileName);
+        Assert.Equal("Nivel 1", evidence.ContextLabel);
     }
 
     [Fact]
@@ -220,6 +226,25 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                     finish.Id,
                     alternativeFinish.Id)
                 : null);
+        requirements.ListFilesByRequirementIdAsync(
+                requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns([
+                RequirementFile.Create(
+                    Guid.NewGuid(),
+                    "CUADRO VENTANAS NIVEL 1 (3).pdf",
+                    "application/pdf",
+                    100,
+                    "requirements/r/source-1/original.pdf",
+                    At),
+                RequirementFile.Create(
+                    Guid.NewGuid(),
+                    "CUADRO VENTANAS NIVEL 2 (3).pdf",
+                    "application/pdf",
+                    100,
+                    "requirements/r/source-2/original.pdf",
+                    At.AddSeconds(1))
+            ]);
         preQuotes.FindByIdAsync(preQuote.Id, Arg.Any<CancellationToken>())
             .Returns(new PreQuoteDetails(
                 preQuote.Id,
@@ -298,7 +323,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             null,
             null,
             ["POCKET"],
-            null,
+            "RECTANGULAR",
             "3831",
             "3831",
             "templado 6 mm",

@@ -1050,6 +1050,16 @@ public sealed class FixedSimilarityEvaluationService(
         HistoricalCandidateQuery query,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(result);
+
+    public Task<IReadOnlyDictionary<string, HistoricalSimilarityEvaluationResult>>
+        EvaluateBatchAsync(
+            IReadOnlyList<HistoricalSimilarityBatchQuery> queries,
+            CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, HistoricalSimilarityEvaluationResult>>(
+            queries.ToDictionary(
+                value => value.RequestId,
+                _ => result,
+                StringComparer.Ordinal));
 }
 
 public sealed class FailingSimilarityClient(string failureCode) : IAi2SimilarityClient
@@ -1058,4 +1068,9 @@ public sealed class FailingSimilarityClient(string failureCode) : IAi2Similarity
         SimilarityEvaluationRequest request,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(Ai2SimilarityClientResult.Failed(failureCode));
+
+    public Task<Ai2SimilarityBatchClientResult> EvaluateBatchAsync(
+        SimilarityBatchEvaluationRequest request,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(Ai2SimilarityBatchClientResult.Failed(failureCode));
 }

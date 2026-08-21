@@ -27,8 +27,9 @@ public sealed class ResolveHistoricalTechnicalEvidenceService
         CancellationToken cancellationToken = default)
     {
         var similarity = await _similarityService.EvaluateAsync(query, cancellationToken);
+        var systems = await _productSystems.ListActiveSelectableAsync(cancellationToken);
         var evidence = similarity.Status == HistoricalSimilarityStatus.Completed
-            ? await BuildEvidenceAsync(similarity.Candidates, cancellationToken)
+            ? BuildEvidence(similarity.Candidates, systems)
             : [];
 
         var selection = await _selector.SelectAsync(
@@ -42,11 +43,59 @@ public sealed class ResolveHistoricalTechnicalEvidenceService
             evidence);
     }
 
-    private async Task<IReadOnlyList<SgHistoricalSystemEvidence>> BuildEvidenceAsync(
-        IReadOnlyList<HistoricalSimilarityCandidateResult> candidates,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Guid, HistoricalTechnicalEvidenceSelectionResult>>
+        ResolveBatchAsync(
+            IReadOnlyList<HistoricalTechnicalEvidenceBatchRequest> requests,
+            CancellationToken cancellationToken = default)
     {
+        if (requests.Count == 0)
+        {
+            return new Dictionary<Guid, HistoricalTechnicalEvidenceSelectionResult>();
+        }
+
         var systems = await _productSystems.ListActiveSelectableAsync(cancellationToken);
+        var similarityRequests = requests.Select(value =>
+            new HistoricalSimilarityBatchQuery(
+                value.ItemId.ToString("N"),
+                value.Query)).ToArray();
+        var similarityResults = await _similarityService.EvaluateBatchAsync(
+            similarityRequests,
+            cancellationToken);
+
+        var results = new Dictionary<Guid, HistoricalTechnicalEvidenceSelectionResult>();
+        foreach (var request in requests)
+        {
+            var requestId = request.ItemId.ToString("N");
+            if (!similarityResults.TryGetValue(requestId, out var similarity))
+            {
+                similarity = new HistoricalSimilarityEvaluationResult(
+                    HistoricalSimilarityStatus.TechnicalFailure,
+                    [],
+                    "AI2_SIMILARITY_MISSING_BATCH_RESULT");
+            }
+
+            var evidence = similarity.Status == HistoricalSimilarityStatus.Completed
+                ? BuildEvidence(similarity.Candidates, systems)
+                : [];
+
+            var selection = await _selector.SelectAsync(
+                request.Input with { HistoricalSystemEvidence = evidence },
+                cancellationToken);
+
+            results[request.ItemId] = new HistoricalTechnicalEvidenceSelectionResult(
+                selection,
+                similarity.Status,
+                similarity.FailureCode,
+                evidence);
+        }
+
+        return results;
+    }
+
+    private static IReadOnlyList<SgHistoricalSystemEvidence> BuildEvidence(
+        IReadOnlyList<HistoricalSimilarityCandidateResult> candidates,
+        IReadOnlyList<ProductSystemCatalogReadModel> systems)
+    {
         if (systems.Count == 0 || candidates.Count == 0)
         {
             return [];
@@ -135,6 +184,11 @@ public sealed class ResolveHistoricalTechnicalEvidenceService
     private static bool IsValidSimilarity(decimal value) =>
         value is >= 0m and <= 1m;
 }
+
+public sealed record HistoricalTechnicalEvidenceBatchRequest(
+    Guid ItemId,
+    SgTechnicalSelectionInput Input,
+    HistoricalCandidateQuery Query);
 
 public sealed record HistoricalTechnicalEvidenceSelectionResult(
     SgTechnicalSelectionResult Selection,

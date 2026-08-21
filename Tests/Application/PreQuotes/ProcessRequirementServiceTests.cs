@@ -165,6 +165,72 @@ public sealed class ProcessRequirementServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithMissingGlassSignal_AppliesAuditableTemp5Default()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext("missing_glass", File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.NotNull(item.SuggestedGlassTypeId);
+        Assert.True(item.RequiresReview);
+        Assert.Contains("HISTORICAL_DEFAULT_GLASS", item.ReviewReasons);
+        Assert.Contains("HISTORICAL_DEFAULT_GLASS", item.GlassResolutionReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithMissingFinishSignal_AppliesPp13DefaultWithoutReview()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext("missing_finish", File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.NotNull(item.SuggestedFinishTypeId);
+        Assert.False(item.RequiresReview);
+        Assert.DoesNotContain("FINISH_NOT_SPECIFIED", item.ReviewReasons);
+        Assert.Contains("HISTORICAL_DEFAULT_FINISH", item.FinishResolutionReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithInvalidEvidenceLocation_DoesNotPersistInvalidEvidence()
+    {
+        var context = CreateContext(
+            "invalid_evidence_location",
+            File("source.pdf", PdfContentType));
+        RequirementExtractedItem? extractedItem = null;
+        context.Requirements.When(repository => repository.AddExtractedItem(
+                Arg.Any<RequirementExtractedItem>()))
+            .Do(call => extractedItem = call.Arg<RequirementExtractedItem>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(DocumentProcessingOutcome.RequiresReview, result.Attempt!.Outcome);
+        Assert.NotNull(extractedItem);
+        Assert.True(extractedItem!.RequiresReview);
+        Assert.Contains("INVALID_EVIDENCE_LOCATION", extractedItem.ReviewReasons);
+        context.Requirements.DidNotReceive().AddExtractedItemEvidence(
+            Arg.Any<RequirementExtractedItemEvidence>());
+    }
+
+    [Fact]
     public async Task Execute_WhenTechnicalProposalCatalogThrows_FinalizesFailureLifecycle()
     {
         var context = CreateContext(
@@ -337,6 +403,21 @@ public sealed class ProcessRequirementServiceTests
                             call.Arg<DocumentProcessingClientRequest>(),
                             DocumentProcessingOutcome.RequiresReview,
                             1))),
+                "missing_glass" => Task.FromResult(
+                    DocumentProcessingClientResult.Success(
+                        CreateResponse(
+                            call.Arg<DocumentProcessingClientRequest>(),
+                            omitGlassSignal: true))),
+                "missing_finish" => Task.FromResult(
+                    DocumentProcessingClientResult.Success(
+                        CreateResponse(
+                            call.Arg<DocumentProcessingClientRequest>(),
+                            omitFinishSignal: true))),
+                "invalid_evidence_location" => Task.FromResult(
+                    DocumentProcessingClientResult.Success(
+                        CreateResponse(
+                            call.Arg<DocumentProcessingClientRequest>(),
+                            invalidEvidenceLocation: true))),
                 _ => Task.FromResult(DocumentProcessingClientResult.Success(
                     CreateResponse(call.Arg<DocumentProcessingClientRequest>())))
             });
@@ -389,7 +470,10 @@ public sealed class ProcessRequirementServiceTests
                     [ProductSystem("K70", "SLIDING_DOOR", "VENECIA NAPOLES")]));
         var glassCatalog = Substitute.For<IGlassTypeCatalogRepository>();
         glassCatalog.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
-            .Returns([Glass("TEMP_6", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC")]);
+            .Returns([
+                Glass("TEMP_6", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC"),
+                Glass("TEMP_5", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC")
+            ]);
         var finishCatalog = Substitute.For<IFinishTypeCatalogRepository>();
         finishCatalog.ListActiveAsync(Arg.Any<CancellationToken>())
             .Returns([Finish("BLACK_MATTE", "ALUCOLOR POLIESTER NEGRO MATE PP13")]);
@@ -400,6 +484,21 @@ public sealed class ProcessRequirementServiceTests
                 HistoricalSimilarityStatus.Completed,
                 [],
                 null));
+        similarity.EvaluateBatchAsync(
+                Arg.Any<IReadOnlyList<HistoricalSimilarityBatchQuery>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var queries = call.Arg<IReadOnlyList<HistoricalSimilarityBatchQuery>>();
+                return Task.FromResult<IReadOnlyDictionary<string, HistoricalSimilarityEvaluationResult>>(
+                    queries.ToDictionary(
+                        value => value.RequestId,
+                        _ => new HistoricalSimilarityEvaluationResult(
+                            HistoricalSimilarityStatus.Completed,
+                            [],
+                            null),
+                        StringComparer.Ordinal));
+            });
         var technicalProposal = new BuildRequirementTechnicalProposalService(
             requirements,
             productSystems,
@@ -458,7 +557,12 @@ public sealed class ProcessRequirementServiceTests
 
     private static GlassTypeCatalogReadModel Glass(
         string code,
-        string name) =>
+        string name)
+    {
+        var thickness = code.EndsWith("_5", StringComparison.Ordinal)
+            ? 5m
+            : 6m;
+        return
         new(
             Guid.NewGuid(),
             code,
@@ -469,8 +573,9 @@ public sealed class ProcessRequirementServiceTests
             Family: "MONOLITHIC",
             Composition: "TEMPERED",
             Treatment: "TEMPERED",
-            OuterThicknessMm: 6m,
+            OuterThicknessMm: thickness,
             IsSelectable: true);
+    }
 
     private static FinishTypeCatalogReadModel Finish(
         string code,
@@ -505,7 +610,10 @@ public sealed class ProcessRequirementServiceTests
     private static DocumentProcessingResponseData CreateResponse(
         DocumentProcessingClientRequest request,
         DocumentProcessingOutcome outcome = DocumentProcessingOutcome.Completed,
-        int itemsRequiringReview = 0)
+        int itemsRequiringReview = 0,
+        bool invalidEvidenceLocation = false,
+        bool omitGlassSignal = false,
+        bool omitFinishSignal = false)
     {
         var status = outcome == DocumentProcessingOutcome.RequiresReview
             ? StructuredExtractionStatus.RequiresReview
@@ -524,19 +632,21 @@ public sealed class ProcessRequirementServiceTests
             [],
             [],
             new StructuredItemGlassData(
-                "templado 6 mm",
-                "templado",
+                omitGlassSignal ? null : "templado 6 mm",
+                omitGlassSignal ? null : "templado",
                 GlassAssignmentScope.Item,
                 false,
                 [],
                 [],
                 [
                     new SourceEvidenceData(
-                        null,
-                        EvidenceSourceType.Xlsx,
+                        invalidEvidenceLocation ? 0 : null,
+                        invalidEvidenceLocation
+                            ? EvidenceSourceType.Native
+                            : EvidenceSourceType.Xlsx,
                         "PV-06 Puerta vidriera",
-                        "Cotizacion",
-                        "A12:H12",
+                        invalidEvidenceLocation ? null : "Cotizacion",
+                        invalidEvidenceLocation ? null : "A12:H12",
                         "source-1",
                         0.95m)
                 ]),
@@ -558,22 +668,22 @@ public sealed class ProcessRequirementServiceTests
             "TWO_PANELS",
             "3831",
             "3831",
-            "templado",
-            "templado",
-            6m,
+            omitGlassSignal ? null : "templado",
+            omitGlassSignal ? null : "templado",
+            omitGlassSignal ? null : 6m,
             null,
             null,
             null,
             null,
-            "monolitico",
+            omitGlassSignal ? null : "monolitico",
             null,
             null,
-            "negro pintura al horno",
-            "PAINTED",
+            omitFinishSignal ? null : "negro pintura al horno",
+            omitFinishSignal ? null : "PAINTED",
             null,
-            "BLACK",
+            omitFinishSignal ? null : "BLACK",
             null,
-            "MATTE",
+            omitFinishSignal ? null : "MATTE",
             null,
             false);
         var structuredExtraction = new StructuredExtractionData(

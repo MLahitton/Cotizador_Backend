@@ -20,10 +20,16 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
         var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
         candidateService.Find(Query).Returns(candidates);
         var client = Substitute.For<IAi2SimilarityClient>();
-        SimilarityEvaluationRequest? captured = null;
-        client.EvaluateAsync(Arg.Do<SimilarityEvaluationRequest>(value => captured = value), Arg.Any<CancellationToken>())
-            .Returns(Ai2SimilarityClientResult.Succeeded(new SimilarityEvaluationResult([
-                Similarity("item-2", 0.95m), Similarity("item-1", 0.90m)])));
+        SimilarityBatchEvaluationRequest? captured = null;
+        client.EvaluateBatchAsync(
+                Arg.Do<SimilarityBatchEvaluationRequest>(value => captured = value),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult([
+                    BatchResult(
+                        "single",
+                        [Similarity("item-2", 0.95m), Similarity("item-1", 0.90m)])
+                ])));
 
         var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
@@ -31,8 +37,10 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
         Assert.Equal(HistoricalSimilarityStatus.Completed, result.Status);
         Assert.Equal(["item-2", "item-1"], result.Candidates.Select(value => value.Candidate.HistoricalItemId));
         Assert.NotNull(captured);
-        Assert.Equal("8025", captured.Element.System);
-        var mapped = Assert.Single(captured.Candidates, value => value.CandidateId == "item-1");
+        var request = Assert.Single(captured.Requests);
+        Assert.Equal("single", request.RequestId);
+        Assert.Equal("8025", request.Element.System);
+        var mapped = Assert.Single(request.Candidates, value => value.CandidateId == "item-1");
         Assert.Equal("quote-1", mapped.QuoteId);
         Assert.Equal("V-01", mapped.Reference);
         Assert.Equal("VENTANA", mapped.Category);
@@ -69,8 +77,13 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
             _ => new[] { Similarity("item-1", 0.9m), Similarity("item-1", 0.8m) }
         };
         var client = Substitute.For<IAi2SimilarityClient>();
-        client.EvaluateAsync(Arg.Any<SimilarityEvaluationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(Ai2SimilarityClientResult.Succeeded(new SimilarityEvaluationResult(returned)));
+        client.EvaluateBatchAsync(
+                Arg.Any<SimilarityBatchEvaluationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult([
+                    BatchResult("single", returned)
+                ])));
 
         var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
@@ -89,8 +102,11 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
         var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
         candidateService.Find(Query).Returns(candidates);
         var client = Substitute.For<IAi2SimilarityClient>();
-        client.EvaluateAsync(Arg.Any<SimilarityEvaluationRequest>(), Arg.Any<CancellationToken>())
-            .Returns(Ai2SimilarityClientResult.Failed("AI2_SIMILARITY_TRANSPORT_ERROR"));
+        client.EvaluateBatchAsync(
+                Arg.Any<SimilarityBatchEvaluationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Failed(
+                "AI2_SIMILARITY_TRANSPORT_ERROR"));
 
         var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
@@ -118,6 +134,225 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
         await client.DidNotReceive().EvaluateAsync(
             Arg.Any<SimilarityEvaluationRequest>(),
             Arg.Any<CancellationToken>());
+        await client.DidNotReceive().EvaluateBatchAsync(
+            Arg.Any<SimilarityBatchEvaluationRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task EvaluateBatchAsync_SendsMultipleQueriesInSingleBatchWithoutPrices()
+    {
+        var candidates = CreateCandidates();
+        var query2 = Query with { System = "3831", Area = 9.35m };
+        var corpus = LoadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Query).Returns(candidates);
+        candidateService.Find(query2).Returns(candidates);
+        var client = Substitute.For<IAi2SimilarityClient>();
+        SimilarityBatchEvaluationRequest? captured = null;
+        client.EvaluateBatchAsync(
+                Arg.Do<SimilarityBatchEvaluationRequest>(value => captured = value),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult([
+                    BatchResult("item-a", [
+                        Similarity("item-1", 0.90m),
+                        Similarity("item-2", 0.80m)
+                    ]),
+                    BatchResult("item-b", [
+                        Similarity("item-2", 0.95m),
+                        Similarity("item-1", 0.85m)
+                    ])
+                ])));
+
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
+            .EvaluateBatchAsync(
+                [
+                    new HistoricalSimilarityBatchQuery("item-a", Query),
+                    new HistoricalSimilarityBatchQuery("item-b", query2)
+                ],
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(["item-a", "item-b"], result.Keys);
+        Assert.Equal(["item-1", "item-2"],
+            result["item-a"].Candidates.Select(value => value.Candidate.HistoricalItemId));
+        Assert.Equal(["item-2", "item-1"],
+            result["item-b"].Candidates.Select(value => value.Candidate.HistoricalItemId));
+        Assert.NotNull(captured);
+        Assert.Equal(2, captured.Requests.Count);
+        Assert.Equal(["item-a", "item-b"], captured.Requests.Select(value => value.RequestId));
+        var json = JsonSerializer.Serialize(captured);
+        Assert.DoesNotContain("price", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("public_total", json, StringComparison.OrdinalIgnoreCase);
+        await client.DidNotReceive().EvaluateAsync(
+            Arg.Any<SimilarityEvaluationRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task EvaluateBatchAsync_WithPerItemFailure_PreservesBackendShortlist()
+    {
+        var candidates = CreateCandidates();
+        var corpus = LoadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Arg.Any<HistoricalCandidateQuery>()).Returns(candidates);
+        var client = Substitute.For<IAi2SimilarityClient>();
+        client.EvaluateBatchAsync(
+                Arg.Any<SimilarityBatchEvaluationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult([
+                    BatchResult("item-a", [
+                        Similarity("item-1", 0.90m),
+                        Similarity("item-2", 0.80m)
+                    ]),
+                    new SimilarityBatchResultItem(
+                        "item-b",
+                        "FAILED",
+                        [],
+                        "AI2_SIMILARITY_ITEM_FAILED")
+                ])));
+
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
+            .EvaluateBatchAsync(
+                [
+                    new HistoricalSimilarityBatchQuery("item-a", Query),
+                    new HistoricalSimilarityBatchQuery("item-b", Query)
+                ],
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(HistoricalSimilarityStatus.Completed, result["item-a"].Status);
+        Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, result["item-b"].Status);
+        Assert.Equal("AI2_SIMILARITY_ITEM_FAILED", result["item-b"].FailureCode);
+        Assert.Equal(["item-1", "item-2"],
+            result["item-b"].Candidates.Select(value => value.Candidate.HistoricalItemId));
+        Assert.All(result["item-b"].Candidates, value => Assert.Null(value.Similarity));
+    }
+
+    [Fact]
+    public async Task EvaluateBatchAsync_WithCandidateLeakage_FailsOnlyAffectedRequest()
+    {
+        var candidates = CreateCandidates();
+        var corpus = LoadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Arg.Any<HistoricalCandidateQuery>()).Returns(candidates);
+        var client = Substitute.For<IAi2SimilarityClient>();
+        client.EvaluateBatchAsync(
+                Arg.Any<SimilarityBatchEvaluationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult([
+                    BatchResult("item-a", [
+                        Similarity("item-1", 0.90m),
+                        Similarity("item-2", 0.80m)
+                    ]),
+                    BatchResult("item-b", [
+                        Similarity("item-1", 0.90m),
+                        Similarity("unknown", 0.80m)
+                    ])
+                ])));
+
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
+            .EvaluateBatchAsync(
+                [
+                    new HistoricalSimilarityBatchQuery("item-a", Query),
+                    new HistoricalSimilarityBatchQuery("item-b", Query)
+                ],
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(HistoricalSimilarityStatus.Completed, result["item-a"].Status);
+        Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, result["item-b"].Status);
+        Assert.Equal("AI2_SIMILARITY_INVALID_CORRELATION", result["item-b"].FailureCode);
+    }
+
+    [Fact]
+    public async Task EvaluateBatchAsync_WithFifteenGroupsAndOneHundredFiftyCandidates_UsesThreeSafeChunks()
+    {
+        var candidates = CreateCandidates(10);
+        var corpus = LoadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Arg.Any<HistoricalCandidateQuery>()).Returns(candidates);
+        var client = new FakeBatchSimilarityClient(request =>
+            Ai2SimilarityBatchClientResult.Succeeded(new SimilarityBatchEvaluationResult(
+                request.Requests.Select(value => BatchResult(
+                    value.RequestId,
+                    value.Candidates.Select(candidate =>
+                        Similarity(candidate.CandidateId, 0.85m)).ToArray())).ToArray())));
+        var service = new EvaluateHistoricalSimilarityService(
+            corpus,
+            candidateService,
+            client);
+
+        var result = await service.EvaluateBatchAsync(
+            Enumerable.Range(1, 15)
+                .Select(index => new HistoricalSimilarityBatchQuery(
+                    $"item-{index}",
+                    Query with { System = index.ToString() }))
+                .ToArray(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(15, result.Count);
+        Assert.All(result.Values, value =>
+            Assert.Equal(HistoricalSimilarityStatus.Completed, value.Status));
+        Assert.Equal(3, client.Requests.Count);
+        Assert.All(client.Requests, request =>
+        {
+            Assert.True(request.Requests.Count <= 5);
+            Assert.True(request.Requests.Sum(value => value.Candidates.Count) <= 50);
+        });
+    }
+
+    [Fact]
+    public async Task EvaluateBatchAsync_WhenMiddleChunkFails_OnlyThatChunkFallsBack()
+    {
+        var candidates = CreateCandidates(10);
+        var corpus = LoadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Arg.Any<HistoricalCandidateQuery>()).Returns(candidates);
+        var callIndex = 0;
+        var client = new FakeBatchSimilarityClient(request =>
+        {
+            callIndex++;
+            if (callIndex == 2)
+            {
+                return Ai2SimilarityBatchClientResult.Failed(
+                    "AI2_SIMILARITY_REMOTE_ERROR");
+            }
+
+            return Ai2SimilarityBatchClientResult.Succeeded(
+                new SimilarityBatchEvaluationResult(
+                    request.Requests.Select(value => BatchResult(
+                        value.RequestId,
+                        value.Candidates.Select(candidate =>
+                            Similarity(candidate.CandidateId, 0.85m)).ToArray()))
+                    .ToArray()));
+        });
+        var service = new EvaluateHistoricalSimilarityService(
+            corpus,
+            candidateService,
+            client);
+
+        var result = await service.EvaluateBatchAsync(
+            Enumerable.Range(1, 15)
+                .Select(index => new HistoricalSimilarityBatchQuery(
+                    $"item-{index}",
+                    Query with { System = index.ToString() }))
+                .ToArray(),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, client.Requests.Count);
+        Assert.Equal(HistoricalSimilarityStatus.Completed, result["item-1"].Status);
+        Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, result["item-6"].Status);
+        Assert.Equal("AI2_SIMILARITY_REMOTE_ERROR", result["item-6"].FailureCode);
+        Assert.Equal(HistoricalSimilarityStatus.Completed, result["item-11"].Status);
+        Assert.All(
+            Enumerable.Range(6, 5).Select(index => result[$"item-{index}"]),
+            value =>
+            {
+                Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, value.Status);
+                Assert.All(value.Candidates, candidate =>
+                    Assert.Null(candidate.Similarity));
+            });
     }
 
     private static HistoricalComparableCandidate[] CreateCandidates() =>
@@ -132,8 +367,39 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
             ["category", "glass"], ["system"], false)
     ];
 
+    private static HistoricalComparableCandidate[] CreateCandidates(int count) =>
+        Enumerable.Range(1, count)
+            .Select(index => new HistoricalComparableCandidate(
+                $"quote-{index}",
+                $"candidate-{index}",
+                $"V-{index:00}",
+                $"Ventana {index}",
+                100m + index,
+                100m + index,
+                "VENTANA",
+                "8025",
+                "TEMPLADO",
+                6m,
+                "MONOLITICO",
+                "CORREDIZA",
+                3090m,
+                1900m,
+                5.87m,
+                1m,
+                "NEGRO",
+                80m,
+                ["category", "glass"],
+                ["system"],
+                false))
+            .ToArray();
+
     private static SimilarityCandidateResult Similarity(string id, decimal score) =>
         new(id, score, "HIGH", ["glass"], ["system"], "Comparacion tecnica.", 0.9m);
+
+    private static SimilarityBatchResultItem BatchResult(
+        string requestId,
+        IReadOnlyList<SimilarityCandidateResult> candidates) =>
+        new(requestId, "COMPLETED", candidates);
 
     private static IHistoricalQuoteCorpus LoadedCorpus()
     {
@@ -159,5 +425,25 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
                 [],
                 []));
         return corpus;
+    }
+
+    private sealed class FakeBatchSimilarityClient(
+        Func<SimilarityBatchEvaluationRequest, Ai2SimilarityBatchClientResult> handler)
+        : IAi2SimilarityClient
+    {
+        public List<SimilarityBatchEvaluationRequest> Requests { get; } = [];
+
+        public Task<Ai2SimilarityClientResult> EvaluateAsync(
+            SimilarityEvaluationRequest request,
+            CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<Ai2SimilarityBatchClientResult> EvaluateBatchAsync(
+            SimilarityBatchEvaluationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(handler(request));
+        }
     }
 }

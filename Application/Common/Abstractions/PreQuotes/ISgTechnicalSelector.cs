@@ -256,7 +256,7 @@ public sealed class DeterministicSgTechnicalSelector(
         SgTechnicalCandidate candidate,
         SgTechnicalSelectionInput input)
     {
-        var expected = Code(input.FunctionalType);
+        var expected = EffectiveFunctionalType(input);
         var actual = Code(candidate.ProductSystem.FunctionalType);
         if (expected is null || actual is null)
         {
@@ -306,7 +306,7 @@ public sealed class DeterministicSgTechnicalSelector(
         SgTechnicalSelectionInput input)
     {
         var features = Features(input);
-        if (Code(input.FunctionalType) == "SLIDING_DOOR"
+        if (EffectiveFunctionalType(input) == "SLIDING_DOOR"
             && features.Contains("POCKET"))
         {
             if (Matches(candidate.ProductSystem.Variant, "POCKET"))
@@ -325,7 +325,7 @@ public sealed class DeterministicSgTechnicalSelector(
             }
         }
 
-        if (Code(input.FunctionalType) == "SHOWER_DIVISION"
+        if (EffectiveFunctionalType(input) == "SHOWER_DIVISION"
             && HasInox(input, features)
             && IsInox(candidate.ProductSystem))
         {
@@ -339,7 +339,7 @@ public sealed class DeterministicSgTechnicalSelector(
         SgTechnicalCandidate candidate,
         SgTechnicalSelectionInput input)
     {
-        var functionalType = Code(input.FunctionalType);
+        var functionalType = EffectiveFunctionalType(input);
         var operation = Code(input.Operation);
         var features = Features(input);
         var prior = PriorFor(candidate.ProductSystem, functionalType,
@@ -562,7 +562,7 @@ public sealed class DeterministicSgTechnicalSelector(
 
     private static bool IsBathroomDivisionWithoutMaterial(
         SgTechnicalSelectionInput input) =>
-        Code(input.FunctionalType) == "SHOWER_DIVISION"
+        EffectiveFunctionalType(input) == "SHOWER_DIVISION"
         && !HasInox(input, Features(input));
 
     private static bool HasSpecialGeometry(SgTechnicalSelectionInput input) =>
@@ -593,6 +593,24 @@ public sealed class DeterministicSgTechnicalSelector(
 
     private static bool Contains(string? value, string expected) =>
         value?.Contains(expected, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static string? EffectiveFunctionalType(
+        SgTechnicalSelectionInput input)
+    {
+        var functionalType = Code(input.FunctionalType);
+        var operation = Code(input.Operation);
+        if (functionalType == "WINDOW")
+        {
+            return operation switch
+            {
+                "FIXED" => "FIXED",
+                "SLIDING" => "SLIDING_WINDOW",
+                _ => functionalType
+            };
+        }
+
+        return functionalType;
+    }
 
     internal static string NormalizeTechnicalText(string? value)
     {
@@ -630,15 +648,26 @@ public sealed class DeterministicSgTechnicalSelector(
         return builder.ToString().Trim();
     }
 
-    private static string? Code(string? value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? null
-            : value.Trim().ToUpperInvariant() switch
-            {
-                "BATHROOM_DIVISION" => "SHOWER_DIVISION",
-                "LOUVER" => "GRILLE",
-                var normalized => normalized
-            };
+    private static string? Code(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = NormalizeTechnicalText(value);
+        return normalized switch
+        {
+            "BATHROOM DIVISION" or "BATHROOM_DIVISION" => "SHOWER_DIVISION",
+            "LOUVER" => "GRILLE",
+            "VENTANA CORREDERA" or "CORREDERA 02 HOJAS" => "SLIDING_WINDOW",
+            "VENTANA FIJA" or "FIJA SIMPLE" => "FIXED",
+            "VENTANA DE ESQUINA" => "WINDOW",
+            "CORREDERA" => "SLIDING",
+            "FIJA" => "FIXED",
+            _ => value.Trim().ToUpperInvariant()
+        };
+    }
 
     private static decimal ClampSimilarity(decimal value) =>
         Math.Max(0m, Math.Min(1m, value));

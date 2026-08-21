@@ -105,6 +105,41 @@ public sealed class DeterministicSgTechnicalSelectorTests
     }
 
     [Fact]
+    public async Task GenericWindowWithFixedOperation_DerivesFixedAndFermoWins()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "FIXED"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K40", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemFixedFermo,
+            result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithSlidingOperation_DerivesSlidingWindowAndMonzaWins()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 1500),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K50", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza,
+            result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithoutOperation_DoesNotInventFunctionalFamily()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: null, geometryType: "CORNER"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Null(result.SuggestedSystemCode);
+        Assert.True(result.RequiresReview);
+    }
+
+    [Fact]
     public async Task SlidingDoor_NapolesWinsAndOtherSlidingDoorSurvives()
     {
         var result = await Selector().SelectAsync(

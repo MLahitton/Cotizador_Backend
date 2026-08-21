@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Diagnostics;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.ResolveHistoricalTechnicalEvidence;
 using Domain.PreQuotes;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Application.PreQuotes.BuildRequirementTechnicalProposal;
 
@@ -13,15 +17,26 @@ public sealed class BuildRequirementTechnicalProposalService(
     IFinishTypeCatalogRepository finishCatalog,
     IGlassCandidateResolver glassResolver,
     IFinishCandidateResolver finishResolver,
-    ResolveHistoricalTechnicalEvidenceService historicalTechnicalEvidence)
+    ResolveHistoricalTechnicalEvidenceService historicalTechnicalEvidence,
+    ILogger<BuildRequirementTechnicalProposalService>? logger = null)
 {
+    private readonly ILogger<BuildRequirementTechnicalProposalService> _logger =
+        logger ?? NullLogger<BuildRequirementTechnicalProposalService>.Instance;
     private const string SystemAlternativeReason = "SYSTEM_ALTERNATIVE";
     private const string SystemNotResolvedReason = "SYSTEM_NOT_RESOLVED";
     private const string GlassNotResolvedReason = "GLASS_NOT_RESOLVED";
     private const string FinishNotResolvedReason = "FINISH_NOT_RESOLVED";
+    private const string HistoricalDefaultGlassReason =
+        "HISTORICAL_DEFAULT_GLASS";
+    private const string HistoricalDefaultFinishReason =
+        "HISTORICAL_DEFAULT_FINISH";
     private const string HistoricalUnavailableReason =
         "HISTORICAL_SIMILARITY_UNAVAILABLE";
     private const string QuantityMissingReason = "QUANTITY_MISSING";
+    private const string DefaultGlassCode = "TEMP_5";
+    private const string DefaultFinishCommercialCode = "PP13";
+    private const decimal DefaultGlassConfidence = 0.60m;
+    private const decimal DefaultFinishConfidence = 0.70m;
 
     public async Task<BuildRequirementTechnicalProposalResult> ExecuteAsync(
         Guid requirementId,
@@ -57,11 +72,20 @@ public sealed class BuildRequirementTechnicalProposalService(
         IReadOnlyList<RequirementExtractedItem> items,
         CancellationToken cancellationToken = default)
     {
+        var catalogs = Stopwatch.StartNew();
         var systems = await productSystemCatalog.ListActiveSelectableAsync(
             cancellationToken);
         var glasses = await glassCatalog.GetActiveWithCurrentPriceRangesAsync(
             cancellationToken);
         var finishes = await finishCatalog.ListActiveAsync(cancellationToken);
+        LogPerf(
+            requirementId,
+            extraction.RequirementProcessingAttemptId,
+            "LOAD_CATALOGS",
+            catalogs,
+            ("systemCount", systems.Count),
+            ("glassCount", glasses.Count),
+            ("finishCount", finishes.Count));
         var createdAtUtc = DateTimeOffset.UtcNow;
 
         var proposal = RequirementTechnicalProposal.Create(
@@ -71,48 +95,83 @@ public sealed class BuildRequirementTechnicalProposalService(
             false,
             createdAtUtc);
 
-        foreach (var item in items.OrderBy(value => value.Sequence))
+        var orderedItems = items.OrderBy(value => value.Sequence).ToArray();
+        var historicalRequests = orderedItems.Select(item =>
+            new HistoricalTechnicalEvidenceBatchRequest(
+                item.Id,
+                MapSystemInput(item),
+                MapHistoricalQuery(item))).ToArray();
+        var historicalByItemId = await historicalTechnicalEvidence.ResolveBatchAsync(
+            historicalRequests,
+            cancellationToken);
+
+        foreach (var item in orderedItems)
         {
-            proposal.AddItem(await BuildItemAsync(
+            var itemStopwatch = Stopwatch.StartNew();
+            proposal.AddItem(BuildItem(
                 proposal.Id,
                 item,
+                historicalByItemId[item.Id],
                 systems,
                 glasses,
                 finishes,
-                createdAtUtc,
-                cancellationToken));
+                createdAtUtc));
+            LogPerf(
+                requirementId,
+                extraction.RequirementProcessingAttemptId,
+                "BUILD_FUNCTIONAL_INTERPRETATION",
+                itemStopwatch,
+                ("itemSequence", item.Sequence),
+                ("reference", item.Reference));
         }
 
         return proposal;
     }
 
-    private async Task<RequirementTechnicalProposalItem> BuildItemAsync(
+    private RequirementTechnicalProposalItem BuildItem(
         Guid proposalId,
         RequirementExtractedItem item,
+        HistoricalTechnicalEvidenceSelectionResult historical,
         IReadOnlyList<ProductSystemCatalogReadModel> systems,
         IReadOnlyList<GlassTypeCatalogReadModel> glasses,
         IReadOnlyList<FinishTypeCatalogReadModel> finishes,
-        DateTimeOffset createdAtUtc,
-        CancellationToken cancellationToken)
+        DateTimeOffset createdAtUtc)
     {
         var glass = glassResolver.Resolve(item, glasses);
         var finish = finishResolver.Resolve(item, finishes);
-        var historical = await historicalTechnicalEvidence.ResolveAsync(
-            MapSystemInput(item),
-            MapHistoricalQuery(item),
-            cancellationToken);
 
         var systemSelection = historical.Selection;
-        var suggestedSystemId = systems.FirstOrDefault(system =>
-            system.Code == systemSelection.SuggestedSystemCode)?.Id;
-        var suggestedGlassId = glass.Suggested?.GlassTypeId;
-        var suggestedFinishId = finish.Suggested?.FinishTypeId;
+        var suggestedSystem = systems.FirstOrDefault(system =>
+            system.Code == systemSelection.SuggestedSystemCode);
+        var suggestedSystemId = suggestedSystem?.Id;
+        var defaultGlass = glass.Suggested is null
+            ? FindDefaultGlass(glasses)
+            : null;
+        var defaultFinish = finish.Suggested is null
+            && !SystemSkipsFinishDefault(suggestedSystem)
+                ? FindDefaultFinish(finishes)
+                : null;
+        var suggestedGlassId = glass.Suggested?.GlassTypeId
+            ?? defaultGlass?.GlassTypeId;
+        var suggestedFinishId = finish.Suggested?.FinishTypeId
+            ?? defaultFinish?.Id;
 
         var reviewReasons = new HashSet<string>(StringComparer.Ordinal);
         Add(reviewReasons, item.ReviewReasons);
         Add(reviewReasons, systemSelection.ReviewReasons);
-        Add(reviewReasons, glass.ReviewReasons);
-        Add(reviewReasons, finish.ReviewReasons);
+        if (defaultGlass is null)
+        {
+            Add(reviewReasons, glass.ReviewReasons);
+        }
+        else
+        {
+            reviewReasons.Add(HistoricalDefaultGlassReason);
+        }
+
+        if (defaultFinish is null)
+        {
+            Add(reviewReasons, finish.ReviewReasons);
+        }
 
         if (suggestedSystemId is null)
         {
@@ -142,8 +201,12 @@ public sealed class BuildRequirementTechnicalProposalService(
         var systemConfidence = suggestedSystemId is null
             ? 0m
             : systemSelection.Confidence;
-        var glassConfidence = suggestedGlassId is null ? 0m : glass.Confidence;
-        var finishConfidence = suggestedFinishId is null ? 0m : finish.Confidence;
+        var glassConfidence = suggestedGlassId is null
+            ? 0m
+            : defaultGlass is null ? glass.Confidence : DefaultGlassConfidence;
+        var finishConfidence = suggestedFinishId is null
+            ? 0m
+            : defaultFinish is null ? finish.Confidence : DefaultFinishConfidence;
         var overallConfidence = Math.Min(
             systemConfidence,
             Math.Min(glassConfidence, finishConfidence));
@@ -152,8 +215,8 @@ public sealed class BuildRequirementTechnicalProposalService(
             && suggestedFinishId is not null;
         var requiresReview = item.RequiresReview
             || systemSelection.RequiresReview
-            || glass.RequiresReview
-            || finish.RequiresReview
+            || (defaultGlass is null ? glass.RequiresReview : true)
+            || (defaultFinish is null && finish.RequiresReview)
             || reviewReasons.Count > 0;
 
         var proposalItem = RequirementTechnicalProposalItem.Create(
@@ -171,8 +234,12 @@ public sealed class BuildRequirementTechnicalProposalService(
             technicallyComplete && item.Quantity is not null,
             reviewReasons.Order(StringComparer.Ordinal),
             SystemResolutionReasons(systemSelection),
-            glass.ResolutionReasons,
-            finish.ResolutionReasons,
+            defaultGlass is null
+                ? glass.ResolutionReasons
+                : [HistoricalDefaultGlassReason],
+            defaultFinish is null
+                ? finish.ResolutionReasons
+                : [HistoricalDefaultFinishReason],
             systemSelection.HistoricalSupportCount,
             systemSelection.HistoricalBestSimilarity,
             systemSelection.HistoricalAverageSimilarity,
@@ -186,6 +253,58 @@ public sealed class BuildRequirementTechnicalProposalService(
 
         return proposalItem;
     }
+
+    private static GlassTypeCatalogReadModel? FindDefaultGlass(
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses) =>
+        glasses.FirstOrDefault(value =>
+            value.IsActive
+            && value.IsSelectable
+            && value.Code.Equals(
+                DefaultGlassCode,
+                StringComparison.OrdinalIgnoreCase));
+
+    private static FinishTypeCatalogReadModel? FindDefaultFinish(
+        IReadOnlyList<FinishTypeCatalogReadModel> finishes) =>
+        finishes.FirstOrDefault(value =>
+            value.IsActive
+            && value.IsSelectable
+            && (value.CommercialCode?.Equals(
+                    DefaultFinishCommercialCode,
+                    StringComparison.OrdinalIgnoreCase) == true
+                || value.Code.Equals(
+                    DefaultFinishCommercialCode,
+                    StringComparison.OrdinalIgnoreCase)
+                || value.Code.Contains(
+                    DefaultFinishCommercialCode,
+                    StringComparison.OrdinalIgnoreCase)
+                || value.Name.Contains(
+                    DefaultFinishCommercialCode,
+                    StringComparison.OrdinalIgnoreCase)));
+
+    private static bool SystemSkipsFinishDefault(
+        ProductSystemCatalogReadModel? system)
+    {
+        if (system is null)
+        {
+            return false;
+        }
+
+        return Contains(system.Code, "INOX")
+            || Contains(system.Name, "INOX")
+            || Contains(system.TechnicalName, "INOX")
+            || Contains(system.CommercialName, "INOX")
+            || Contains(system.Family, "INOX")
+            || Contains(system.Variant, "INOX")
+            || IsNotApplicable(system.Code)
+            || IsNotApplicable(system.Name);
+    }
+
+    private static bool Contains(string? value, string expected) =>
+        value?.Contains(expected, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsNotApplicable(string? value) =>
+        value?.Trim().Equals("N.A.", StringComparison.OrdinalIgnoreCase) == true
+        || value?.Trim().Equals("NA", StringComparison.OrdinalIgnoreCase) == true;
 
     private static SgTechnicalSelectionInput MapSystemInput(
         RequirementExtractedItem item) =>
@@ -342,6 +461,30 @@ public sealed class BuildRequirementTechnicalProposalService(
                 target.Add(value.Trim());
             }
         }
+    }
+
+    private void LogPerf(
+        Guid requirementId,
+        Guid attemptId,
+        string stage,
+        Stopwatch stopwatch,
+        params (string Name, object? Value)[] values)
+    {
+        stopwatch.Stop();
+        var context = NewPipePerformanceContext.Current;
+        var detail = string.Join(
+            " ",
+            values.Select(value => $"{value.Name}={value.Value}"));
+        _logger.LogInformation(
+            "[NEWPIPE-PERF] RequirementId={RequirementId} AttemptId={AttemptId} Stage={Stage} ElapsedMs={ElapsedMs} SimilarityCallCount={SimilarityCallCount} SimilarityCandidateCountTotal={SimilarityCandidateCountTotal} CorpusReloadCount={CorpusReloadCount} {Detail}",
+            requirementId,
+            attemptId,
+            stage,
+            stopwatch.ElapsedMilliseconds,
+            context?.SimilarityCallCount ?? 0,
+            context?.SimilarityCandidateCountTotal ?? 0,
+            context?.CorpusReloadCount ?? 0,
+            detail);
     }
 }
 

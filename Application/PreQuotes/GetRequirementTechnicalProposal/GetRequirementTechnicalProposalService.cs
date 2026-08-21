@@ -80,6 +80,7 @@ public sealed class GetRequirementTechnicalProposalService(
         IReadOnlyList<ProductSystemCatalogReadModel> systems;
         IReadOnlyList<GlassTypeCatalogReadModel> glasses;
         IReadOnlyList<FinishTypeCatalogReadModel> finishes;
+        IReadOnlyList<RequirementFile> files;
         try
         {
             proposal = await requirementRepository.GetCurrentTechnicalProposalAsync(
@@ -95,6 +96,9 @@ public sealed class GetRequirementTechnicalProposalService(
             glasses = await glassCatalog.GetActiveWithCurrentPriceRangesAsync(
                 cancellationToken);
             finishes = await finishCatalog.ListActiveAsync(cancellationToken);
+            files = await requirementRepository.ListFilesByRequirementIdAsync(
+                command.RequirementId,
+                cancellationToken);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -103,7 +107,7 @@ public sealed class GetRequirementTechnicalProposalService(
         }
 
         return GetRequirementTechnicalProposalResult.Success(
-            MapProposal(proposal, systems, glasses, finishes));
+            MapProposal(proposal, systems, glasses, finishes, files));
     }
 
     private async Task<AccessValidationResult> ValidateAccessAsync(
@@ -202,15 +206,22 @@ public sealed class GetRequirementTechnicalProposalService(
         RequirementTechnicalProposal proposal,
         IReadOnlyList<ProductSystemCatalogReadModel> systems,
         IReadOnlyList<GlassTypeCatalogReadModel> glasses,
-        IReadOnlyList<FinishTypeCatalogReadModel> finishes)
+        IReadOnlyList<FinishTypeCatalogReadModel> finishes,
+        IReadOnlyList<RequirementFile> files)
     {
         var systemById = systems.ToDictionary(system => system.Id);
         var glassById = glasses.ToDictionary(glass => glass.GlassTypeId);
         var finishById = finishes.ToDictionary(finish => finish.Id);
+        var sourcesById = SourceMetadataById(files);
         var items = proposal.Items
             .OrderBy(item => item.ExtractedItem.Sequence)
             .ThenBy(item => item.Id)
-            .Select(item => MapItem(item, systemById, glassById, finishById))
+            .Select(item => MapItem(
+                item,
+                systemById,
+                glassById,
+                finishById,
+                sourcesById))
             .ToArray();
 
         return new RequirementTechnicalProposalReadModel(
@@ -231,7 +242,8 @@ public sealed class GetRequirementTechnicalProposalService(
         RequirementTechnicalProposalItem item,
         IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems,
         IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses,
-        IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes)
+        IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes,
+        IReadOnlyDictionary<string, SourceMetadata> sourcesById)
     {
         var extracted = item.ExtractedItem;
         return new RequirementTechnicalProposalItemReadModel(
@@ -278,6 +290,9 @@ public sealed class GetRequirementTechnicalProposalService(
                 item.FinishConfidence),
             item.RequiresReview,
             item.ReviewReasons,
+            item.SystemResolutionReasons,
+            item.GlassResolutionReasons,
+            item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
             new RequirementTechnicalProposalHistoricalEvidenceReadModel(
@@ -303,13 +318,14 @@ public sealed class GetRequirementTechnicalProposalService(
                 extracted.FinishNormalizedType,
                 extracted.FinishColorRaw,
                 extracted.FinishColorNormalized,
-                extracted.SpecialFeatures),
+                extracted.SpecialFeatures,
+                extracted.GeometryType),
             extracted.Evidence
                 .OrderBy(evidence => evidence.PageNumber ?? int.MaxValue)
                 .ThenBy(evidence => evidence.SheetName)
                 .ThenBy(evidence => evidence.CellRange)
                 .ThenBy(evidence => evidence.Id)
-                .Select(MapEvidence)
+                .Select(evidence => MapEvidence(evidence, sourcesById))
                 .ToArray());
     }
 
@@ -408,7 +424,13 @@ public sealed class GetRequirementTechnicalProposalService(
             example.TechnicalExplanation);
 
     private static RequirementTechnicalProposalEvidenceReadModel MapEvidence(
-        RequirementExtractedItemEvidence evidence) =>
+        RequirementExtractedItemEvidence evidence,
+        IReadOnlyDictionary<string, SourceMetadata> sourcesById)
+    {
+        var metadata = evidence.SourceId is null
+            ? null
+            : sourcesById.GetValueOrDefault(evidence.SourceId);
+        return
         new(
             evidence.PageNumber,
             evidence.SourceType.ToString(),
@@ -416,8 +438,51 @@ public sealed class GetRequirementTechnicalProposalService(
             evidence.SheetName,
             evidence.CellRange,
             evidence.SourceId,
+            metadata?.FileName,
+            metadata?.ContextLabel,
             evidence.Confidence,
             evidence.Status.ToString());
+    }
+
+    private static IReadOnlyDictionary<string, SourceMetadata> SourceMetadataById(
+        IReadOnlyList<RequirementFile> files) =>
+        files
+            .OrderBy(file => file.CreatedAtUtc)
+            .ThenBy(file => file.Id)
+            .Select((file, index) => new
+            {
+                SourceId = $"source-{index + 1}",
+                Metadata = new SourceMetadata(
+                    file.OriginalFileName,
+                    ContextLabel(file.OriginalFileName))
+            })
+            .ToDictionary(
+                value => value.SourceId,
+                value => value.Metadata,
+                StringComparer.Ordinal);
+
+    private static string? ContextLabel(string fileName)
+    {
+        if (fileName.Contains(
+                "NIVEL 1",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Nivel 1";
+        }
+
+        if (fileName.Contains(
+                "NIVEL 2",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Nivel 2";
+        }
+
+        return null;
+    }
+
+    private sealed record SourceMetadata(
+        string FileName,
+        string? ContextLabel);
 
     private sealed record AccessValidationResult(
         GetRequirementTechnicalProposalFailure Failure);
@@ -470,6 +535,9 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     RequirementTechnicalProposalConfidenceReadModel Confidence,
     bool RequiresReview,
     IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<string> SystemResolutionReasons,
+    IReadOnlyList<string> GlassResolutionReasons,
+    IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
     RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
@@ -580,7 +648,8 @@ public sealed record RequirementTechnicalProposalTraceReadModel(
     string? FinishNormalizedType,
     string? FinishColorRaw,
     string? FinishColorNormalized,
-    IReadOnlyList<string> SpecialFeatures);
+    IReadOnlyList<string> SpecialFeatures,
+    string? GeometryType);
 
 public sealed record RequirementTechnicalProposalEvidenceReadModel(
     int? PageNumber,
@@ -589,5 +658,7 @@ public sealed record RequirementTechnicalProposalEvidenceReadModel(
     string? SheetName,
     string? CellRange,
     string? SourceId,
+    string? SourceFileName,
+    string? ContextLabel,
     decimal? Confidence,
     string Status);

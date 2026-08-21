@@ -739,6 +739,8 @@ public sealed class RequirementExtractedItemEvidence
                 nameof(confidence));
         }
 
+        ValidateLocation(sourceType, pageNumber, sheetName, cellRange);
+
         return new RequirementExtractedItemEvidence
         {
             Id = Guid.NewGuid(),
@@ -753,6 +755,49 @@ public sealed class RequirementExtractedItemEvidence
             Status = status,
             CreatedAtUtc = createdAtUtc
         };
+    }
+
+    private static void ValidateLocation(
+        EvidenceSourceType sourceType,
+        int? pageNumber,
+        string? sheetName,
+        string? cellRange)
+    {
+        var normalizedSheetName = RequirementExtractedItem.NormalizeOptional(
+            sheetName,
+            100);
+        var normalizedCellRange = RequirementExtractedItem.NormalizeOptional(
+            cellRange,
+            50);
+
+        switch (sourceType)
+        {
+            case EvidenceSourceType.Native:
+            case EvidenceSourceType.Ocr:
+                if (pageNumber is null or <= 0
+                    || normalizedSheetName is not null
+                    || normalizedCellRange is not null)
+                {
+                    throw new ArgumentException(
+                        "La evidencia PDF debe tener pagina positiva y no debe tener hoja/celda.");
+                }
+                break;
+
+            case EvidenceSourceType.Xlsx:
+                if (pageNumber is not null
+                    || normalizedSheetName is null
+                    || normalizedCellRange is null)
+                {
+                    throw new ArgumentException(
+                        "La evidencia XLSX debe tener hoja y rango de celda, sin pagina.");
+                }
+                break;
+
+            default:
+                throw new ArgumentException(
+                    "El tipo de evidencia no es soportado.",
+                    nameof(sourceType));
+        }
     }
 }
 

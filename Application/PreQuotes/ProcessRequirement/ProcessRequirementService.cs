@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
+using Application.Common.Diagnostics;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
@@ -32,11 +34,16 @@ public sealed class ProcessRequirementService(
     private const string AiInvalidResponseErrorCode = "AI_INVALID_RESPONSE";
     private const string AiServiceErrorCode = "AI2_SERVICE_ERROR";
     private const string PersistenceErrorCode = "REQUIREMENT_PERSISTENCE_ERROR";
+    private const string InvalidEvidenceLocationReason =
+        "INVALID_EVIDENCE_LOCATION";
 
     public async Task<ProcessRequirementResult> ExecuteAsync(
         ProcessRequirementCommand command,
         CancellationToken cancellationToken)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var stages = new List<NewPipePerfStage>();
+
         var validationResult = await validator.ValidateAsync(
             command,
             cancellationToken);
@@ -84,9 +91,17 @@ public sealed class ProcessRequirementService(
         Requirement? requirement;
         try
         {
+            var loadRequirement = Stopwatch.StartNew();
             requirement = await requirementRepository.FindByIdAsync(
                 command.RequirementId,
                 cancellationToken);
+            RecordPerfStage(
+                stages,
+                command.RequirementId,
+                null,
+                "LOAD_REQUIREMENT",
+                loadRequirement,
+                ("found", requirement is not null));
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -192,9 +207,17 @@ public sealed class ProcessRequirementService(
         IReadOnlyList<RequirementFile> files;
         try
         {
+            var loadFiles = Stopwatch.StartNew();
             files = await requirementRepository.ListFilesByRequirementIdAsync(
                 requirement.Id,
                 cancellationToken);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                null,
+                "LOAD_FILES",
+                loadFiles,
+                ("fileCount", files.Count));
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -216,9 +239,13 @@ public sealed class ProcessRequirementService(
             userId,
             Guid.NewGuid(),
             createdAtUtc);
+        using var perfContext = NewPipePerformanceContext.Begin(
+            requirement.Id,
+            attempt.Id);
 
         try
         {
+            var persistAttempt = Stopwatch.StartNew();
             requirementRepository.AddProcessingAttempt(attempt);
             await requirementRepository.SaveChangesAsync(cancellationToken);
 
@@ -227,6 +254,12 @@ public sealed class ProcessRequirementService(
             requirement.StartProcessing(startedAtUtc);
             preQuote.RegisterActivity(startedAtUtc);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "FINALIZE_ATTEMPT_START",
+                persistAttempt);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -239,11 +272,21 @@ public sealed class ProcessRequirementService(
         var streams = new List<Stream>(files.Count);
         try
         {
-            foreach (var file in files)
+            foreach (var file in files.Select((value, index) => (value, index)))
             {
+                var openFile = Stopwatch.StartNew();
                 streams.Add(await fileStorage.OpenReadAsync(
-                    file.StorageKey,
+                    file.value.StorageKey,
                     cancellationToken));
+                RecordPerfStage(
+                    stages,
+                    requirement.Id,
+                    attempt.Id,
+                    "LOAD_FILES",
+                    openFile,
+                    ("fileIndex", file.index),
+                    ("fileName", file.value.OriginalFileName),
+                    ("sizeBytes", file.value.SizeBytes));
             }
 
             var request = CreateAi2Request(
@@ -252,9 +295,18 @@ public sealed class ProcessRequirementService(
                 attempt,
                 files,
                 streams);
+            var ai2Extraction = Stopwatch.StartNew();
             var aiResult = await ai2Client.ProcessAsync(
                 request,
                 cancellationToken);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "CALL_AI2_EXTRACTION",
+                ai2Extraction,
+                ("fileCount", files.Count),
+                ("success", aiResult.IsSuccess));
 
             if (!aiResult.IsSuccess || aiResult.Response is null)
             {
@@ -283,6 +335,9 @@ public sealed class ProcessRequirementService(
                 preQuote,
                 attempt,
                 aiResult.Response,
+                stages,
+                totalStopwatch,
+                files.Count,
                 cancellationToken);
         }
         catch (Exception exception) when (
@@ -319,8 +374,12 @@ public sealed class ProcessRequirementService(
         PreQuote preQuote,
         RequirementProcessingAttempt attempt,
         DocumentProcessingResponseData response,
+        List<NewPipePerfStage> stages,
+        Stopwatch totalStopwatch,
+        int fileCount,
         CancellationToken cancellationToken)
     {
+        var consolidate = Stopwatch.StartNew();
         var structuredExtraction = response.StructuredExtraction!;
         var completedAtUtc = timeProvider.GetUtcNow();
         var summary = new ProcessedRequirementSummary(
@@ -343,22 +402,39 @@ public sealed class ProcessRequirementService(
             summary.DurationMs,
             completedAtUtc);
         var extractedItems = CreateExtractedItems(
+            requirement.Id,
             result.Id,
             structuredExtraction.Items,
             completedAtUtc);
+        RecordPerfStage(
+            stages,
+            requirement.Id,
+            attempt.Id,
+            "CONSOLIDATE_EXTRACTION",
+            consolidate,
+            ("extractedItemCount", extractedItems.Count));
 
         try
         {
+            var buildProposal = Stopwatch.StartNew();
             var proposal = await technicalProposalService.BuildAsync(
                 requirement.Id,
                 result,
                 extractedItems.Select(item => item.Item).ToArray(),
                 cancellationToken);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "BUILD_TECHNICAL_PROPOSAL",
+                buildProposal,
+                ("technicalProposalItemCount", proposal.Items.Count));
             var outcome = response.Outcome == DocumentProcessingOutcome.RequiresReview
                 || proposal.Status == RequirementTechnicalProposalStatus.RequiresReview
                 ? DocumentProcessingOutcome.RequiresReview
                 : DocumentProcessingOutcome.Completed;
 
+            var persistExtraction = Stopwatch.StartNew();
             requirementRepository.AddExtractionResult(result);
             foreach (var item in extractedItems)
             {
@@ -368,11 +444,34 @@ public sealed class ProcessRequirementService(
                     requirementRepository.AddExtractedItemEvidence(evidence);
                 }
             }
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "PERSIST_EXTRACTION",
+                persistExtraction,
+                ("extractedItemCount", extractedItems.Count));
+            var persistProposal = Stopwatch.StartNew();
             requirementRepository.AddTechnicalProposal(proposal);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "PERSIST_TECHNICAL_PROPOSAL",
+                persistProposal,
+                ("technicalProposalItemCount", proposal.Items.Count));
+            var finalizeAttempt = Stopwatch.StartNew();
             attempt.Complete(outcome, completedAtUtc);
             requirement.MarkProcessed(completedAtUtc);
             preQuote.RegisterActivity(completedAtUtc);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            RecordPerfStage(
+                stages,
+                requirement.Id,
+                attempt.Id,
+                "FINALIZE_ATTEMPT",
+                finalizeAttempt,
+                ("outcome", outcome));
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -392,17 +491,56 @@ public sealed class ProcessRequirementService(
                 cancellationToken);
         }
 
+        totalStopwatch.Stop();
+        LogPerfSummary(
+            requirement.Id,
+            attempt.Id,
+            stages,
+            summary,
+            extractedItems.Count,
+            fileCount,
+            totalStopwatch.ElapsedMilliseconds);
+
         return ProcessRequirementResult.Success(
             CreateAttemptResult(requirement.Id, attempt, null, summary));
     }
 
-    private static IReadOnlyList<ExtractedItemWithEvidence> CreateExtractedItems(
+    private IReadOnlyList<ExtractedItemWithEvidence> CreateExtractedItems(
+        Guid requirementId,
         Guid extractionResultId,
         IReadOnlyList<StructuredItemData> items,
         DateTimeOffset createdAtUtc)
     {
         return items.Select(item =>
         {
+            var rawEvidenceSources = item.Glass is null
+                ? item.Evidence
+                : item.Evidence.Concat(item.Glass.Evidence);
+            var evidenceSources = rawEvidenceSources
+                .GroupBy(value => new
+                {
+                    value.PageNumber,
+                    value.SourceType,
+                    value.Text,
+                    value.SheetName,
+                    value.CellRange,
+                    value.SourceId
+                })
+                .Select(group => group.First())
+                .ToArray();
+            var validEvidenceSources = evidenceSources
+                .Where(value => IsValidEvidenceLocation(value))
+                .ToArray();
+            var invalidEvidenceSources = evidenceSources
+                .Where(value => !IsValidEvidenceLocation(value))
+                .ToArray();
+            var reviewReasons = item.ReviewReasons.Select(reason =>
+                reason.ToString()).ToList();
+            if (invalidEvidenceSources.Length > 0)
+            {
+                reviewReasons.Add(InvalidEvidenceLocationReason);
+            }
+
             var extracted = RequirementExtractedItem.Create(
                 extractionResultId,
                 item.Ai2ElementId,
@@ -416,8 +554,8 @@ public sealed class ProcessRequirementService(
                 item.AreaSquareMeters,
                 item.Confidence,
                 MapExtractionStatus(item.ExtractionStatus),
-                item.RequiresReview,
-                item.ReviewReasons.Select(reason => reason.ToString()),
+                item.RequiresReview || invalidEvidenceSources.Length > 0,
+                reviewReasons,
                 item.FunctionalType,
                 item.Operation,
                 item.PanelCount,
@@ -451,21 +589,17 @@ public sealed class ProcessRequirementService(
                 item.FinishExplicitCode,
                 item.FinishRequiresReview,
                 createdAtUtc);
-            var evidenceSources = item.Glass is null
-                ? item.Evidence
-                : item.Evidence.Concat(item.Glass.Evidence)
-                    .GroupBy(value => new
-                    {
-                        value.PageNumber,
-                        value.SourceType,
-                        value.Text,
-                        value.SheetName,
-                        value.CellRange,
-                        value.SourceId
-                    })
-                    .Select(group => group.First())
-                    .ToArray();
-            var evidence = evidenceSources.Select(value =>
+            foreach (var invalidEvidence in invalidEvidenceSources)
+            {
+                LogInvalidEvidence(
+                    requirementId,
+                    extracted.Id,
+                    item.Reference,
+                    item.Sequence,
+                    invalidEvidence);
+            }
+
+            var persistableEvidence = validEvidenceSources.Select(value =>
                 RequirementExtractedItemEvidence.Create(
                     extracted.Id,
                     value.PageNumber,
@@ -478,8 +612,47 @@ public sealed class ProcessRequirementService(
                     MapExtractionStatus(value.Status),
                     createdAtUtc)).ToArray();
 
-            return new ExtractedItemWithEvidence(extracted, evidence);
+            return new ExtractedItemWithEvidence(extracted, persistableEvidence);
         }).ToArray();
+    }
+
+    private static bool IsValidEvidenceLocation(SourceEvidenceData evidence)
+    {
+        var hasSheet = !string.IsNullOrWhiteSpace(evidence.SheetName);
+        var hasCellRange = !string.IsNullOrWhiteSpace(evidence.CellRange);
+
+        return evidence.SourceType switch
+        {
+            EvidenceSourceType.Native or EvidenceSourceType.Ocr =>
+                evidence.PageNumber is > 0
+                && !hasSheet
+                && !hasCellRange,
+            EvidenceSourceType.Xlsx =>
+                evidence.PageNumber is null
+                && hasSheet
+                && hasCellRange,
+            _ => false
+        };
+    }
+
+    private void LogInvalidEvidence(
+        Guid requirementId,
+        Guid extractedItemId,
+        string? reference,
+        int itemSequence,
+        SourceEvidenceData evidence)
+    {
+        logger.LogWarning(
+            "[NEWPIPE-EVIDENCE-INVALID] RequirementId={RequirementId} ExtractedItemId={ExtractedItemId} Reference={Reference} ItemSequence={ItemSequence} SourceType={SourceType} SourceId={SourceId} PageNumber={PageNumber} SheetName={SheetName} CellRange={CellRange}",
+            requirementId,
+            extractedItemId,
+            reference,
+            itemSequence,
+            evidence.SourceType,
+            evidence.SourceId,
+            evidence.PageNumber,
+            evidence.SheetName,
+            evidence.CellRange);
     }
 
     private async Task<ProcessRequirementResult> FailAttemptAsync(
@@ -669,6 +842,63 @@ public sealed class ProcessRequirementService(
     private sealed record AiFailure(
         ProcessRequirementFailure Failure,
         string ErrorCode);
+
+    private sealed record NewPipePerfStage(string Stage, long ElapsedMs);
+
+    private void RecordPerfStage(
+        ICollection<NewPipePerfStage> stages,
+        Guid requirementId,
+        Guid? attemptId,
+        string stage,
+        Stopwatch stopwatch,
+        params (string Name, object? Value)[] values)
+    {
+        stopwatch.Stop();
+        stages.Add(new NewPipePerfStage(stage, stopwatch.ElapsedMilliseconds));
+        var detail = string.Join(
+            " ",
+            values.Select(value => $"{value.Name}={value.Value}"));
+        logger.LogInformation(
+            "[NEWPIPE-PERF] RequirementId={RequirementId} AttemptId={AttemptId} Stage={Stage} ElapsedMs={ElapsedMs} {Detail}",
+            requirementId,
+            attemptId,
+            stage,
+            stopwatch.ElapsedMilliseconds,
+            detail);
+    }
+
+    private void LogPerfSummary(
+        Guid requirementId,
+        Guid attemptId,
+        IReadOnlyCollection<NewPipePerfStage> stages,
+        ProcessedRequirementSummary summary,
+        int technicalProposalItemCount,
+        int fileCount,
+        long totalElapsedMs)
+    {
+        var context = NewPipePerformanceContext.Current;
+        var stageSummary = string.Join(
+            " | ",
+            stages
+                .GroupBy(stage => stage.Stage, StringComparer.Ordinal)
+                .Select(group =>
+                    $"{group.Key}={group.Sum(stage => stage.ElapsedMs)}ms"));
+        logger.LogInformation(
+            "[NEWPIPE-PERF-SUMMARY] RequirementId={RequirementId} AttemptId={AttemptId} TotalElapsedMs={TotalElapsedMs} FileCount={FileCount} ExtractedItemCount={ExtractedItemCount} TechnicalProposalItemCount={TechnicalProposalItemCount} HistoricalCandidateCountTotal={HistoricalCandidateCountTotal} SimilarityCallCount={SimilarityCallCount} SimilarityCandidateCountTotal={SimilarityCandidateCountTotal} CorpusReloadCount={CorpusReloadCount} CorpusReloadElapsedMs={CorpusReloadElapsedMs} HistoricalShortlistElapsedMs={HistoricalShortlistElapsedMs} Stages={Stages}",
+            requirementId,
+            attemptId,
+            totalElapsedMs,
+            fileCount,
+            summary.ItemCount,
+            technicalProposalItemCount,
+            context?.SimilarityCandidateCountTotal ?? 0,
+            context?.SimilarityCallCount ?? 0,
+            context?.SimilarityCandidateCountTotal ?? 0,
+            context?.CorpusReloadCount ?? 0,
+            context?.CorpusReloadElapsedMs ?? 0,
+            context?.HistoricalShortlistElapsedMs ?? 0,
+            stageSummary);
+    }
 
     private sealed record ExtractedItemWithEvidence(
         RequirementExtractedItem Item,

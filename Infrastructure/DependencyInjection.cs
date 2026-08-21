@@ -39,6 +39,14 @@ public static class DependencyInjection
             HistoricalPricingOptions.FromConfiguration(configuration);
         var ai2SimilarityOptions =
             Ai2SimilarityOptions.FromConfiguration(configuration);
+        var historicalSimilarityBatchOptions =
+            new HistoricalSimilarityBatchOptions(
+                ReadPositiveInt(
+                    configuration["CotizadorAi2:SimilarityMaxItemGroupsPerBatch"],
+                    HistoricalSimilarityBatchOptions.Default.MaxItemGroupsPerBatch),
+                ReadPositiveInt(
+                    configuration["CotizadorAi2:SimilarityMaxCandidatesPerBatch"],
+                    HistoricalSimilarityBatchOptions.Default.MaxCandidatesPerBatch));
 
         var connectionString = configuration.GetConnectionString(
             "DefaultConnection");
@@ -64,6 +72,7 @@ public static class DependencyInjection
         services.AddSingleton<LegacyDocumentProcessingResponseAdapter>();
         services.AddSingleton(historicalPricingOptions);
         services.AddSingleton(ai2SimilarityOptions);
+        services.AddSingleton(historicalSimilarityBatchOptions);
         services.AddSingleton<HistoricalWorkbookReader>();
         services.AddSingleton<IHistoricalQuoteCorpus, HistoricalQuoteCorpus>();
         services.AddSingleton<IHistoricalComparableCandidateService,
@@ -86,7 +95,10 @@ public static class DependencyInjection
         services.AddTransient<
             Application.Common.Abstractions.HistoricalPricing.IPriceRequirementExtractionService,
             Application.HistoricalPricing.PriceRequirementExtractionService>();
-        services.AddHttpClient<Ai2SimilarityClient>();
+        services.AddHttpClient<Ai2SimilarityClient>(httpClient =>
+        {
+            httpClient.Timeout = TimeSpan.FromSeconds(100);
+        });
         services.AddTransient<IAi2SimilarityClient>(serviceProvider =>
             serviceProvider.GetRequiredService<Ai2SimilarityClient>());
         services.AddSingleton<
@@ -157,4 +169,9 @@ public static class DependencyInjection
 
         return services;
     }
+
+    private static int ReadPositiveInt(string? value, int fallback) =>
+        int.TryParse(value, out var parsed) && parsed > 0
+            ? parsed
+            : fallback;
 }

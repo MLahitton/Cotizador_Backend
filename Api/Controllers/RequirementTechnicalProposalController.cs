@@ -194,6 +194,9 @@ public sealed class RequirementTechnicalProposalController(
                 item.Confidence.Finish),
             item.RequiresReview,
             item.ReviewReasons,
+            item.SystemResolutionReasons,
+            item.GlassResolutionReasons,
+            item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
             new RequirementTechnicalProposalHistoricalEvidenceResponse(
@@ -223,7 +226,8 @@ public sealed class RequirementTechnicalProposalController(
                 item.Trace.FinishNormalizedType,
                 item.Trace.FinishColorRaw,
                 item.Trace.FinishColorNormalized,
-                item.Trace.SpecialFeatures),
+                item.Trace.SpecialFeatures,
+                item.Trace.GeometryType),
             item.Evidence.Select(evidence => new
                 RequirementTechnicalProposalEvidenceResponse(
                     evidence.PageNumber,
@@ -232,6 +236,8 @@ public sealed class RequirementTechnicalProposalController(
                     evidence.SheetName,
                     evidence.CellRange,
                     evidence.SourceId,
+                    evidence.SourceFileName,
+                    evidence.ContextLabel,
                     evidence.Confidence,
                     evidence.Status)).ToArray());
 
