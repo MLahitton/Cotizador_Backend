@@ -9,6 +9,8 @@ public enum GlassPriceRangeStatus
 
 public sealed class GlassType
 {
+    public const int NameMaximumLength = 200;
+
     private readonly List<GlassPriceRangeVersion> _priceRangeVersions = [];
 
     private GlassType() { }
@@ -17,6 +19,21 @@ public sealed class GlassType
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
+    public string? Family { get; private set; }
+    public string? Composition { get; private set; }
+    public string? Treatment { get; private set; }
+    public decimal? OuterThicknessMm { get; private set; }
+    public decimal? InnerThicknessMm { get; private set; }
+    public decimal? PvbThicknessMm { get; private set; }
+    public string? PvbType { get; private set; }
+    public string? PvbColor { get; private set; }
+    public decimal? ChamberThicknessMm { get; private set; }
+    public string? ProductLine { get; private set; }
+    public string? ProductToken { get; private set; }
+    public string? Pattern { get; private set; }
+    public string? Color { get; private set; }
+    public bool IsSelectable { get; private set; }
+    public bool RequiresReview { get; private set; }
     public bool IsActive { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset? UpdatedAtUtc { get; private set; }
@@ -27,15 +44,53 @@ public sealed class GlassType
         string code,
         string name,
         string? description,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        string? family = null,
+        string? composition = null,
+        string? treatment = null,
+        decimal? outerThicknessMm = null,
+        decimal? innerThicknessMm = null,
+        decimal? pvbThicknessMm = null,
+        string? pvbType = null,
+        string? pvbColor = null,
+        decimal? chamberThicknessMm = null,
+        string? productLine = null,
+        string? productToken = null,
+        string? pattern = null,
+        string? color = null,
+        bool isSelectable = true,
+        bool requiresReview = false)
     {
         EnsureUtc(createdAtUtc, nameof(createdAtUtc));
         return new GlassType
         {
             Id = Guid.NewGuid(),
             Code = NormalizeCode(code),
-            Name = RequiredText(name, 100, nameof(name)),
+            Name = RequiredText(name, NameMaximumLength, nameof(name)),
             Description = OptionalText(description, 500, nameof(description)),
+            Family = OptionalText(family, 40, nameof(family)),
+            Composition = OptionalText(composition, 40, nameof(composition)),
+            Treatment = OptionalText(treatment, 40, nameof(treatment)),
+            OuterThicknessMm = PositiveDecimal(
+                outerThicknessMm,
+                nameof(outerThicknessMm)),
+            InnerThicknessMm = PositiveDecimal(
+                innerThicknessMm,
+                nameof(innerThicknessMm)),
+            PvbThicknessMm = PositiveDecimal(
+                pvbThicknessMm,
+                nameof(pvbThicknessMm)),
+            PvbType = OptionalText(pvbType, 40, nameof(pvbType)),
+            PvbColor = OptionalText(pvbColor, 40, nameof(pvbColor)),
+            ChamberThicknessMm = PositiveDecimal(
+                chamberThicknessMm,
+                nameof(chamberThicknessMm)),
+            ProductLine = OptionalText(productLine, 80, nameof(productLine)),
+            ProductToken = OptionalText(productToken, 40, nameof(productToken)),
+            Pattern = OptionalText(pattern, 80, nameof(pattern)),
+            Color = OptionalText(color, 40, nameof(color)),
+            IsSelectable = isSelectable,
+            RequiresReview = requiresReview,
             IsActive = true,
             CreatedAtUtc = createdAtUtc
         };
@@ -99,6 +154,21 @@ public sealed class GlassType
         }
 
         return normalized;
+    }
+
+    private static decimal? PositiveDecimal(decimal? value, string name)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value <= 0)
+        {
+            throw new ArgumentException("Valor numerico invalido.", name);
+        }
+
+        return value;
     }
 }
 

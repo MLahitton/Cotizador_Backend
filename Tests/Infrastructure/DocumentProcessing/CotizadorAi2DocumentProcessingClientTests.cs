@@ -106,6 +106,8 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
         Assert.IsType<InvalidDataException>(logger.Exception);
         Assert.Contains("response_adaptation", logger.Message);
         Assert.Contains("Cotizador_AI2 devolvio JSON invalido", logger.Message);
+        Assert.Contains("PayloadLengthChars=1", logger.Message);
+        Assert.Contains("TopLevelKeys=INVALID_JSON", logger.Message);
     }
 
     [Fact]
@@ -133,6 +135,32 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
             DocumentProcessingOutcome.RequiresReview,
             result.Response?.Outcome);
         Assert.Equal(4, result.Response?.StructuredExtraction?.Items.Count);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithCurrentAi2ResponseShape_ReturnsSuccess()
+    {
+        var handler = new CaptureHandler(
+            Ai2RequirementExtractionPayloads.RealCurrentAi2Shape);
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("http://localhost/")
+        };
+        var client = CreateClient(httpClient);
+
+        var result = await client.ProcessAsync(
+            CreateRequest(
+            [
+                new DocumentProcessingFile(
+                    Guid.NewGuid(), "casa.pdf", Pdf, 10,
+                    new MemoryStream([1, 2, 3]))
+            ]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(DocumentProcessingOutcome.RequiresReview, result.Response?.Outcome);
+        Assert.Equal(1, result.Response?.StructuredExtraction?.Items.Count);
         Assert.Equal(1, handler.CallCount);
     }
 

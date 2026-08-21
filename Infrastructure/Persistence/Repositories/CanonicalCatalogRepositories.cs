@@ -42,8 +42,7 @@ public sealed class ProductSystemCatalogRepository(
     {
         try
         {
-            return await Query()
-                .Where(value => value.IsSelectable)
+            return await Query(activeSelectableOnly: true)
                 .ToArrayAsync(cancellationToken);
         }
         catch (DbException exception)
@@ -52,9 +51,18 @@ public sealed class ProductSystemCatalogRepository(
         }
     }
 
-    private IQueryable<ProductSystemCatalogReadModel> Query() =>
-        dbContext.ProductSystems.AsNoTracking()
-            .Where(value => value.IsActive)
+    private IQueryable<ProductSystemCatalogReadModel> Query(
+        bool activeSelectableOnly = false)
+    {
+        var query = dbContext.ProductSystems.AsNoTracking()
+            .Where(value => value.IsActive);
+
+        if (activeSelectableOnly)
+        {
+            query = query.Where(value => value.IsSelectable);
+        }
+
+        return query
             .OrderBy(value => value.Code)
             .Select(value => new ProductSystemCatalogReadModel(
                 value.Id,
@@ -99,6 +107,7 @@ public sealed class ProductSystemCatalogRepository(
                             constraint.SourceReference,
                             constraint.Notes))
                     .ToArray()));
+    }
 }
 
 public sealed class FrameTypeCatalogRepository(
@@ -184,6 +193,13 @@ public sealed class FinishTypeCatalogRepository(
                 value.Id,
                 value.Code,
                 value.Name,
+                value.NormalizedType,
+                value.Color,
+                value.Texture,
+                value.Process,
+                value.CommercialCode,
+                value.Material,
+                value.IsSelectable,
                 value.RequiresReview,
                 value.IsActive));
 }

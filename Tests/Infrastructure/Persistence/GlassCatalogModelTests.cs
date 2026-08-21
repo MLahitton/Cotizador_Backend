@@ -47,6 +47,26 @@ public sealed class GlassCatalogModelTests
             value => value.IsUnique
                 && value.GetDatabaseName() == "ux_glass_types_code");
         Assert.Contains(
+            glass.GetIndexes(),
+            value => value.IsUnique
+                && value.GetDatabaseName() == "ux_glass_types_name");
+        Assert.Equal(
+            "numeric(8,3)",
+            glass.FindProperty(nameof(GlassType.OuterThicknessMm))!
+                .GetColumnType());
+        Assert.Equal(
+            "numeric(8,3)",
+            glass.FindProperty(nameof(GlassType.InnerThicknessMm))!
+                .GetColumnType());
+        Assert.Equal(
+            "numeric(8,3)",
+            glass.FindProperty(nameof(GlassType.PvbThicknessMm))!
+                .GetColumnType());
+        Assert.Equal(
+            "numeric(8,3)",
+            glass.FindProperty(nameof(GlassType.ChamberThicknessMm))!
+                .GetColumnType());
+        Assert.Contains(
             range.GetIndexes(),
             value => value.IsUnique
                 && value.GetDatabaseName()
@@ -60,7 +80,7 @@ public sealed class GlassCatalogModelTests
         Assert.Equal(
             DeleteBehavior.Restrict,
             Assert.Single(range.GetForeignKeys()).DeleteBehavior);
-        Assert.Equal(9, glass.GetSeedData().Count());
+        Assert.Equal(28, glass.GetSeedData().Count());
         Assert.Equal(8, range.GetSeedData().Count());
         Assert.Equal(6, range.GetSeedData().Count(value =>
             value["ValidToUtc"] is null));

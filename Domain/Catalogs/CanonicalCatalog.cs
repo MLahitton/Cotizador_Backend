@@ -321,6 +321,13 @@ public sealed class FinishType
     public Guid Id { get; private set; }
     public string Code { get; private set; } = string.Empty;
     public string Name { get; private set; } = string.Empty;
+    public string? NormalizedType { get; private set; }
+    public string? Color { get; private set; }
+    public string? Texture { get; private set; }
+    public string? Process { get; private set; }
+    public string? CommercialCode { get; private set; }
+    public string? Material { get; private set; }
+    public bool IsSelectable { get; private set; }
     public bool RequiresReview { get; private set; }
     public bool IsActive { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
@@ -330,7 +337,14 @@ public sealed class FinishType
         string code,
         string name,
         bool requiresReview,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        string? normalizedType = null,
+        string? color = null,
+        string? texture = null,
+        string? process = null,
+        string? commercialCode = null,
+        string? material = null,
+        bool isSelectable = true)
     {
         CatalogText.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
         return new FinishType
@@ -338,6 +352,13 @@ public sealed class FinishType
             Id = Guid.NewGuid(),
             Code = CatalogText.NormalizeCode(code, nameof(code)),
             Name = CatalogText.RequiredText(name, 100, nameof(name)),
+            NormalizedType = CatalogText.OptionalText(normalizedType, 60, nameof(normalizedType)),
+            Color = CatalogText.OptionalText(color, 60, nameof(color)),
+            Texture = CatalogText.OptionalText(texture, 60, nameof(texture)),
+            Process = CatalogText.OptionalText(process, 60, nameof(process)),
+            CommercialCode = CatalogText.OptionalText(commercialCode, 40, nameof(commercialCode)),
+            Material = CatalogText.OptionalText(material, 60, nameof(material)),
+            IsSelectable = isSelectable,
             RequiresReview = requiresReview,
             IsActive = true,
             CreatedAtUtc = createdAtUtc

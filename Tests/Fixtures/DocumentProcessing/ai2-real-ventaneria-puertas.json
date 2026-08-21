@@ -1,0 +1,5426 @@
+{
+  "requirement": {
+    "project_id": "string",
+    "requirement_id": "string",
+    "project_name": null,
+    "client_name": null,
+    "location": null,
+    "project_type": null,
+    "description": null,
+    "dates": [],
+    "general_technical_notes": [],
+    "evidence_ids": [
+      "evidence-1",
+      "evidence-2",
+      "evidence-3",
+      "evidence-4",
+      "evidence-5",
+      "evidence-6",
+      "evidence-7",
+      "evidence-8",
+      "evidence-9",
+      "evidence-10",
+      "evidence-11",
+      "evidence-12",
+      "evidence-13",
+      "evidence-14",
+      "evidence-15",
+      "evidence-16",
+      "evidence-17",
+      "evidence-18"
+    ],
+    "confidence": null
+  },
+  "sources": [
+    {
+      "id": "source-1",
+      "file_name": "001_VENTANERIA - PUERTAS (1).pdf",
+      "media_type": "application/pdf",
+      "source_type": "document",
+      "page_count": 7,
+      "sheet_names": [],
+      "description": null,
+      "processing_status": "processed"
+    }
+  ],
+  "elements": [
+    {
+      "id": "elem_v01_p1",
+      "reference": {
+        "value": "V-01",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V01",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "PROJECTING",
+        "raw": "proyectante",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "description": "Aluminio negro pintura al horno - Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto - Cuerpo fijo inferior + Proyectantes",
+      "occurrences": [
+        {
+          "id": "elem_v01_p1-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Cuarto util, W.C servicio, Hab. servicio, W.C social",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1800,
+          "unit": "mm",
+          "raw_value": 1800,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 600,
+          "unit": "mm",
+          "raw_value": 600,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 1.08,
+          "unit": "m2",
+          "raw_value": 1.08,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 4,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Cuerpo fijo inferior + Proyectantes",
+        "operation": {
+          "normalized": "PROJECTING",
+          "raw": "proyectante",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        },
+        "arrangement": null,
+        "modulation": null,
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [
+          "LOWER_FIXED_PANEL",
+          "ASSOCIATED_FIXED_PANEL"
+        ],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Perfil 5cm ancho",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "marcos",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-1"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-1"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-1"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-1"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": "Sistema 3831"
+    },
+    {
+      "id": "elem_v04_p1",
+      "reference": {
+        "value": "V-04",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V04",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_WINDOW",
+        "raw": "ventana corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "description": "Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto - Corredizas",
+      "occurrences": [
+        {
+          "id": "elem_v04_p1-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Zona de ropa, Pasillo",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1800,
+          "unit": "mm",
+          "raw_value": 1800,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1250,
+          "unit": "mm",
+          "raw_value": 1250,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 2.25,
+          "unit": "m2",
+          "raw_value": 2.25,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Corredizas 2 naves (X X ABRE ABRE)",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        },
+        "arrangement": "XX",
+        "modulation": "XX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Perfil 5cm ancho",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "marcos",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-2"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-2"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": null,
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-2"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-2"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": "Sistema 3831"
+    },
+    {
+      "id": "elem_v05_p1",
+      "reference": {
+        "value": "V-05",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V05",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "FIXED",
+        "raw": "fijo",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "description": "Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto - Cuerpo fijo",
+      "occurrences": [
+        {
+          "id": "elem_v05_p1-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Zona de ropa, cocina",
+            "status": "ambiguous",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "confidence": 0.85,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2300,
+          "unit": "mm",
+          "raw_value": 2300,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1100,
+          "unit": "mm",
+          "raw_value": 1100,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 2.53,
+          "unit": "m2",
+          "raw_value": 2.53,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Cuerpo fijo",
+        "operation": {
+          "normalized": "FIXED",
+          "raw": "fijo",
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 0,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        },
+        "arrangement": null,
+        "modulation": null,
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Perfil 5cm ancho",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "marcos",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-3",
+              "evidence-4"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-3",
+            "evidence-4"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": null,
+        "status": "unknown",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-3",
+          "evidence-4"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-3",
+        "evidence-4"
+      ],
+      "missing_fields": [],
+      "confidence": 0.85,
+      "notes": "Sistema 3831. Etiqueta V-07 aparece en plano de planta correspondiente a este bloque V-05."
+    },
+    {
+      "id": "elem_pv06_p1",
+      "reference": {
+        "value": "PV-06",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 06)",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "description": "Sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv06_p1-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Deck pequeño",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 3740,
+          "unit": "mm",
+          "raw_value": 3740,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 9.35,
+          "unit": "m2",
+          "raw_value": 9.35,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "3 naves corredizas (X X X, ABRE ABRE ABRE)",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        },
+        "arrangement": "XXX",
+        "modulation": "XXX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Perfil 5cm ancho",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "marcos",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-5"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-5"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-5"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-5"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": "Sistema 3831"
+    },
+    {
+      "id": "elem_v08_p2",
+      "reference": {
+        "value": "V-08",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V08",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "FIXED",
+        "raw": "fijo",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "description": "Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_v08_p2-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Sala",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1900,
+          "unit": "mm",
+          "raw_value": 1900,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 3800,
+          "unit": "mm",
+          "raw_value": 3800,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 7.22,
+          "unit": "m2",
+          "raw_value": 7.22,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 4,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "3 naves fijas (O O O)",
+        "operation": {
+          "normalized": "FIXED",
+          "raw": "fijo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        },
+        "arrangement": "OOO",
+        "modulation": "OOO",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-6"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-6"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-6"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-6"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": "Sistema Monumental"
+    },
+    {
+      "id": "elem_pv09_p2",
+      "reference": {
+        "value": "PV-09",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 09)",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "description": "Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv09_p2-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Habitacion 2, Habitacion 3",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 2180,
+          "unit": "mm",
+          "raw_value": 2180,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 5.45,
+          "unit": "m2",
+          "raw_value": 5.45,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "2 naves: 1 móvil y 1 fija (X ABRE, O)",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        },
+        "arrangement": "XO",
+        "modulation": "XO",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [
+          "ASSOCIATED_FIXED_PANEL"
+        ],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-7"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-7"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-7"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-7"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": "Sistema Monumental"
+    },
+    {
+      "id": "elem_v10_p2",
+      "reference": {
+        "value": "V-10",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V10",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "FIXED",
+        "raw": "fijo",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "description": "Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo",
+      "occurrences": [
+        {
+          "id": "elem_v10_p2-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "W.C HABITACION 2, W.C HABITACION 3, W.C segundo nivel",
+            "status": "ambiguous",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "confidence": 0.85,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1800,
+          "unit": "mm",
+          "raw_value": 1800,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1500,
+          "unit": "mm",
+          "raw_value": 1500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 2.7,
+          "unit": "m2",
+          "raw_value": 2.7,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 3,
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Texto indica 'Cuerpo fijo' pero el dibujo de alzado indica 'ABRE ABRE' con 2 naves de 750 mm",
+        "operation": {
+          "normalized": "FIXED",
+          "raw": "fijo",
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 2,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        },
+        "arrangement": "XX",
+        "modulation": "XX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [
+          "ASSOCIATED_FIXED_PANEL"
+        ],
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Perfil 5cm ancho",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "marcos",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-8",
+              "evidence-9"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-8",
+            "evidence-9"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-8",
+          "evidence-9"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-8",
+        "evidence-9"
+      ],
+      "missing_fields": [],
+      "confidence": 0.85,
+      "notes": "Sistema 3831. Contradiccion entre texto (Cuerpo fijo) y grafico (ABRE ABRE)."
+    },
+    {
+      "id": "elem_v14_p2",
+      "reference": {
+        "value": "V-14",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V14",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_WINDOW",
+        "raw": "ventana corrediza",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "description": "Ventana corrediza en sistema 8025 en aluminio negro pintura al horno + Vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_v14_p2-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Pasillo",
+            "status": "ambiguous",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.85,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "confidence": 0.85,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1900,
+          "unit": "mm",
+          "raw_value": 1900,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 3090,
+          "unit": "mm",
+          "raw_value": 3090,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 5.87,
+          "unit": "m2",
+          "raw_value": 5.87,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Texto describe ventana corrediza sistema 8025; el dibujo muestra 3 paneles etiquetados 'O O O'",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 3,
+          "status": "ambiguous",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": null,
+          "status": "unknown",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": null,
+          "status": "unknown",
+          "confidence": 0.85,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        },
+        "arrangement": "OOO",
+        "modulation": "OOO",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-10",
+              "evidence-11"
+            ],
+            "notes": null
+          },
+          "composition": "monolitico",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-10",
+            "evidence-11"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "negro pintura al horno",
+        "status": "ambiguous",
+        "confidence": 0.85,
+        "evidence_ids": [
+          "evidence-10",
+          "evidence-11"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-10",
+        "evidence-11"
+      ],
+      "missing_fields": [],
+      "confidence": 0.85,
+      "notes": "Sistema 8025. Contradiccion entre descripcion de texto (corrediza) y grafico (etiquetas O O O)."
+    },
+    {
+      "id": "elem_pv15_p3",
+      "reference": {
+        "value": "PV-15",
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 15)",
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "description": "Puerta vidriera en sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv15_p3-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Deck principal",
+            "status": "explicit",
+            "confidence": 0.98,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.98,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.98,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.98,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "confidence": 0.98,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 5320,
+          "unit": "mm",
+          "raw_value": 5320,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 1.33,
+          "unit": "m2",
+          "raw_value": 1.33,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 0.8,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": "Error tipográfico en fuente: indica 1.33 m2 para 2.50m x 5.32m (el valor real es 13.3 m2)"
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 0.98,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 4,
+          "status": "explicit",
+          "confidence": 0.98,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 4,
+          "status": "explicit",
+          "confidence": 0.98,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 0.98,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        },
+        "arrangement": "XXXX",
+        "modulation": "XXXX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": "3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema 3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-12"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-12"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "explicit",
+        "confidence": 0.98,
+        "evidence_ids": [
+          "evidence-12"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-12"
+      ],
+      "missing_fields": [],
+      "confidence": 0.98,
+      "notes": "El texto especifica M2: 1.33 m, lo cual es discrepante con las dimensiones de 2.50m x 5.32m (13.3 m2)."
+    },
+    {
+      "id": "elem_pv18_p3",
+      "reference": {
+        "value": "PV-18",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 18)",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "description": "Puerta vidriera en Sistema Monumental en aluminio negro pintura al horno con vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv18_p3-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Habitacion principal",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 3450,
+          "unit": "mm",
+          "raw_value": 3450,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 8.62,
+          "unit": "m2",
+          "raw_value": 8.62,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 3,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        },
+        "arrangement": "XXX",
+        "modulation": "XXX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema Monumental",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "raw_description": "Sistema Monumental",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-13"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-13"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-13"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-13"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": null
+    },
+    {
+      "id": "elem_pv17_p4",
+      "reference": {
+        "value": "PV-17",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 17)",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "description": "Puerta vidriera en Sistema Monumental en aluminio negro pintura al horno con vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv17_p4-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Habitacion principal",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1870,
+          "unit": "mm",
+          "raw_value": 1870,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 4.67,
+          "unit": "m2",
+          "raw_value": 4.67,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 2,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        },
+        "arrangement": "OX",
+        "modulation": "OX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema Monumental",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "raw_description": "Sistema Monumental",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-14"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-14"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-14"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-14"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": null
+    },
+    {
+      "id": "elem_v22_p4",
+      "reference": {
+        "value": "V-22",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V22",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "FIXED",
+        "raw": "ventanal",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "description": "Ventanal sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_v22_p4-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Util escaleras",
+            "status": "ambiguous",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "confidence": 0.9,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 2000,
+          "unit": "mm",
+          "raw_value": 2000,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 5,
+          "unit": "m2",
+          "raw_value": 5,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema 3831 en aluminio negro pinttura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        },
+        "arrangement": "OX",
+        "modulation": "OX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [
+          "ASSOCIATED_FIXED_PANEL"
+        ],
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": "3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema 3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-15"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-15"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-15"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-15"
+      ],
+      "missing_fields": [],
+      "confidence": 0.9,
+      "notes": "El texto descriptivo dice 'Cuerpo fijo', pero el esquema del alzado indica un panel fijo (O) y un panel móvil (X ABRE)."
+    },
+    {
+      "id": "elem_v23_p4",
+      "reference": {
+        "value": "V-23",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V23",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "FIXED",
+        "raw": "fijo",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "description": "Ventanal sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, vidrio templado 6mm - cuerpo fijo",
+      "occurrences": [
+        {
+          "id": "elem_v23_p4-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Util escaleras",
+            "status": "ambiguous",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 0.9,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "confidence": 0.9,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1900,
+          "unit": "mm",
+          "raw_value": 1900,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1200,
+          "unit": "mm",
+          "raw_value": 1200,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": "En acotación de dibujo figura 780mm, pero la tabla de información indica ANCHO: 1200"
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 2.28,
+          "unit": "m2",
+          "raw_value": 2.28,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema 3831 en aluminio negro pinttura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo",
+        "operation": {
+          "normalized": "FIXED",
+          "raw": "fijo",
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 0,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "ambiguous",
+          "confidence": 0.9,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        },
+        "arrangement": null,
+        "modulation": null,
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [
+          "ASSOCIATED_FIXED_PANEL"
+        ],
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": "3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema 3831",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "raw_description": "Perfil 5cm ancho con pisavidrio recto",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-16"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-16"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "ambiguous",
+        "confidence": 0.9,
+        "evidence_ids": [
+          "evidence-16"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-16"
+      ],
+      "missing_fields": [],
+      "confidence": 0.9,
+      "notes": "Existe discrepancia en el ancho: el dibujo tiene la cuota 780 mm mientras la tabla indica ANCHO 1200 mm (y M2: 2.28m² corresponde a 1.9m x 1.2m)."
+    },
+    {
+      "id": "elem_pv24_p4",
+      "reference": {
+        "value": "PV-24",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "PUERTA VIDRIERA - (PV 24)",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Puerta Vidriera",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_DOOR",
+        "raw": "puerta corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "description": "Puerta vidriera en Sistema Monumental en aluminio negro pintura al horno con vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_pv24_p4-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Sala TV",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "RECTANGULAR",
+        "raw_type": "rectangular",
+        "description": null,
+        "segments": [],
+        "status": "unknown",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 2500,
+          "unit": "mm",
+          "raw_value": 2500,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 2400,
+          "unit": "mm",
+          "raw_value": 2400,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 6,
+          "unit": "m2",
+          "raw_value": 6,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 1,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        },
+        "arrangement": "XO",
+        "modulation": "XO",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema Monumental",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "raw_description": "Sistema Monumental",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-17"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-17"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-17"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-17"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": null
+    },
+    {
+      "id": "elem_v25_p5",
+      "reference": {
+        "value": "V-25",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "name": {
+        "value": "VENTANAL TIPO - V25",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "category": {
+        "normalized": null,
+        "raw": "Ventanal",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "functional_type": {
+        "normalized": "SLIDING_WINDOW",
+        "raw": "ventana corrediza",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "description": "Ventana escuadra en sistema 8025 en aluminio negro pintura al horno con vidrio templado 6mm",
+      "occurrences": [
+        {
+          "id": "elem_v25_p5-occurrence-1",
+          "source_id": null,
+          "location": {
+            "value": "Oficina segundo nivel",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "level": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "typology": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "quantity": {
+            "value": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "measurements": [],
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "confidence": 1,
+          "notes": null
+        }
+      ],
+      "variants": [],
+      "components": [],
+      "geometry": {
+        "normalized_type": "CORNER",
+        "raw_type": "esquina",
+        "description": "escuadra / L",
+        "segments": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "measurements": [
+        {
+          "type": "height",
+          "raw_label": "ALTO",
+          "value": 1600,
+          "unit": "mm",
+          "raw_value": 1600,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        {
+          "type": "width",
+          "raw_label": "ANCHO",
+          "value": 1200,
+          "unit": "mm",
+          "raw_value": 1200,
+          "raw_unit": "mm",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        {
+          "type": "area",
+          "raw_label": "M2",
+          "value": 1.92,
+          "unit": "m2",
+          "raw_value": 1.92,
+          "raw_unit": "m2",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        }
+      ],
+      "quantity": {
+        "value": 1,
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "configuration": {
+        "normalized_type": null,
+        "raw_description": "Ventana escuadra en sistema 8025 en aluminio negro pintura al horno + Vidrio templado 6mm",
+        "operation": {
+          "normalized": "SLIDING",
+          "raw": "corredizo",
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        "panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        "movable_panel_count": {
+          "value": 2,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        "fixed_panel_count": {
+          "value": 0,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        },
+        "arrangement": "XX",
+        "modulation": "XX",
+        "opening_direction": null,
+        "tracks": null,
+        "leaves": null,
+        "grid": null,
+        "special_features": [],
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "glass": [
+        {
+          "type": {
+            "normalized": null,
+            "raw": "templado",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "thickness": {
+            "type": "thickness",
+            "raw_label": "6mm",
+            "value": 6,
+            "unit": "mm",
+            "raw_value": 6,
+            "raw_unit": "mm",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "color": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "treatment": {
+            "normalized": null,
+            "raw": null,
+            "status": "unknown",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "composition": "Vidrio templado 6mm",
+          "coating": null,
+          "transparency": null,
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        }
+      ],
+      "materials": [
+        {
+          "normalized_type": null,
+          "raw_description": "Aluminio negro pintura al horno",
+          "grade": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        }
+      ],
+      "profiles": [
+        {
+          "code": {
+            "value": "8025",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "name": {
+            "value": "Sistema 8025",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "raw_description": "Sistema 8025",
+          "role": {
+            "normalized": null,
+            "raw": "frame",
+            "status": "explicit",
+            "confidence": 1,
+            "evidence_ids": [
+              "evidence-18"
+            ],
+            "notes": null
+          },
+          "material": null,
+          "dimensions": [],
+          "status": "explicit",
+          "confidence": 1,
+          "evidence_ids": [
+            "evidence-18"
+          ],
+          "notes": null
+        }
+      ],
+      "finish": {
+        "normalized_type": null,
+        "color": null,
+        "texture": null,
+        "code": null,
+        "raw_description": "pintura al horno negro",
+        "status": "explicit",
+        "confidence": 1,
+        "evidence_ids": [
+          "evidence-18"
+        ],
+        "notes": null
+      },
+      "accessories": [],
+      "technical_notes": [],
+      "evidence_ids": [
+        "evidence-18"
+      ],
+      "missing_fields": [],
+      "confidence": 1,
+      "notes": null
+    }
+  ],
+  "evidence": [
+    {
+      "id": "evidence-1",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 1,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "CANTIDAD : 4 UNIDADES VENTANAL TIPO - V01 Aluminio negro pintura al horno - Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto - Cuerpo fijo inferior + Proyectantes INFORMACIÓN ALTO:1800 ANCHO:600 M2: 1.08m C/ 1 UBICACIÓN : - Cuarto util -W.C sevicio - Hab. servicio - W.C social",
+      "visual_description": "Plano y alzado de ventana V-01 de 600x1800 mm con divisiones",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-2",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 1,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V04 CANTIDAD : 2 UNIDADES Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto(Perfil 5cm ancho) con pisavidrio recto -Corredizas INFORMACIÓN ALTO:1800 ANCHO:1250 M2: 2.25 m C/1 UBICACIÓN : - Zona de ropa -Pasillo",
+      "visual_description": "Alzado V-04 con 2 naves corredizas marcadas 'X ABRE', anchos 625 mm cada una",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-3",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 1,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V05 CANTIDAD : 2 UNIDADES Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto (Perfil 5cm ancho) con pisavidrio recto - Cuerpo fijo INFORMACIÓN ALTO:2300 ANCHO:1100 M2: 2.53 m C/1 UBICACIÓN : - Zona de ropa -cocina",
+      "visual_description": "Plano con etiqueta V-07 en planta pero encabezado indicando VENTANAL TIPO - V05",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-4",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": null,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "Existe una discrepancia visual en el plano de planta que muestra la etiqueta V-07 mientras el encabezado del modulo especifica VENTANAL TIPO - V05",
+      "visual_description": null,
+      "status": "ambiguous",
+      "confidence": 0.85,
+      "notes": null
+    },
+    {
+      "id": "evidence-5",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 1,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 06) CANTIDAD :1 UNIDAD Sistema 3831 en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm INFORMACIÓN ALTO:2500 ANCHO:3740 M2: 9.35 m UBICACIÓN : - Deck pequeño",
+      "visual_description": "Alzado PV-06 con 3 naves de 1250 mm cada una marcadas 'X ABRE'",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-6",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 2,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V08 CANTIDAD : 4 UNIDADES Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm INFORMACIÓN ALTO:1900 ANCHO:3800 M2: 7.22 m C/ 1 UBICACIÓN : - Sala",
+      "visual_description": "Alzado V-08 mostrando 3 paneles fijos de 1260 mm marcados 'O O O'",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-7",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 2,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 09) CANTIDAD : 2 UNIDADES Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm INFORMACIÓN ALTO:2500 ANCHO 2180 M2: 5.45 m C/1 UBICACIÓN : - Habitacion 2 -Habitacion 3",
+      "visual_description": "Alzado PV-09 con 2 naves de 1090 mm: una marcada 'X ABRE' y otra 'O'",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-8",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 2,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V10 CANTIDAD : 3 UNIDADES Sistema 3831 + Vidrio templado 6mm (Perfil 5cm ancho) con pisavidrio recto en aluminio negro pintura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo INFORMACIÓN ALTO:1800 ANCHO:1500 M2: 2.7 m C/1 UBICACIÓN : -W.C HABITACION 2 -W.C HABITACION 3 -W.C segundo nivel",
+      "visual_description": "Alzado V-10 con dos naves de 750 mm etiquetadas 'ABRE ABRE' y flechas de apertura",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-9",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": null,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "Discrepancia entre la descripcion en texto ('Cuerpo fijo') y la ilustracion del alzado ('ABRE ABRE' con flechas corredizas)",
+      "visual_description": null,
+      "status": "ambiguous",
+      "confidence": 0.85,
+      "notes": null
+    },
+    {
+      "id": "evidence-10",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 2,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V14 CANTIDAD : 1 UNIDADES Ventana corrediza en sistema 8025 en aluminio negro pintura al horno + Vidrio templado 6mm INFORMACIÓN ALTO:1900 ANCHO:3090 M2: 5.87 m C/ 1 UBICACIÓN : -Pasillo",
+      "visual_description": "Alzado V-14 con 3 naves de 1030 mm marcadas 'O O O'",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-11",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": null,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "El texto indica 'Ventana corrediza' pero los paneles en el alzado estan etiquetados con 'O O O' (símbolo habitual de fijo)",
+      "visual_description": null,
+      "status": "ambiguous",
+      "confidence": 0.85,
+      "notes": null
+    },
+    {
+      "id": "evidence-12",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 3,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 15) | CANTIDAD 1 UNIDAD | Sistema 3831 en aluminio negro pinttura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm | INFORMACIÓN ALTO:2500 ANCHO:5320 M2: 1.33 m | UBICACIÓN : - Deck principal",
+      "visual_description": "Alzado muestra 4 paneles móviles marcados X ABRE de 1330mm cada uno",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-13",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 3,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 18) | CANTIDAD 1 UNIDAD | Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm | INFORMACIÓN ALTO:2500 ANCHO: 3450 M2: 8.62 m | UBICACIÓN : -Habitacion principal",
+      "visual_description": "Plano con etiqueta PV-018. Alzado muestra 3 paneles móviles marcados X ABRE de 1150mm cada uno",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-14",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 4,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 17) | CANTIDAD : 2 UNIDAD | Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm | INFORMACIÓN ALTO:2500 ANCHO: 1870 M2: 4.67 m | UBICACIÓN : -Habitacion principal",
+      "visual_description": "Alzado muestra panel fijo O (930mm) y panel móvil X ABRE (930mm)",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-15",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 4,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V22 | CANTIDAD : 1 UNIDAD | Sistema 3831 en aluminio negro pinttura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo | INFORMACIÓN ALTO:2500 ANCHO:2000 M2: 5 m | UBICACIÓN : - Util escaleras",
+      "visual_description": "Alzado muestra un panel fijo 'O' (1000mm) y un panel móvil 'X ABRE' (1000mm)",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-16",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 4,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V23 | CANTIDAD : 1 UNIDAD | Sistema 3831 en aluminio negro pinttura al horno (Perfil 5cm ancho) con pisavidrio recto, Vidrio templado 6mm - Cuerpo fijo | INFORMACIÓN ALTO:1900 ANCHO:1200 M2: 2.28 m | UBICACIÓN : - Util escaleras",
+      "visual_description": "Alzado/planta muestra panel 'O' acotado con 780mm, mientras el bloque de texto indica ANCHO 1200mm",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-17",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 4,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "PUERTA VIDRIERA - (PV 24) | CANTIDAD 1 UNIDAD | Sistema Monumental en aluminio negro pintura al horno + Vidrio temmplado 6mm | INFORMACIÓN ALTO:2500 ANCHO: 2400 M2: 6 m | UBICACIÓN : -Sala TV",
+      "visual_description": "Alzado muestra panel móvil X ABRE (1200mm) a la izquierda y panel fijo O (1200mm) a la derecha",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    },
+    {
+      "id": "evidence-18",
+      "source_id": "source-1",
+      "type": "text",
+      "page_number": 5,
+      "sheet_name": null,
+      "cell_range": null,
+      "region": null,
+      "extracted_text": "VENTANAL TIPO - V25 | CANTIDAD : 1 UNIDAD | Ventana escuadra en sistema 8025 en aluminio negro pintura al horno + Vidrio templado 6mm | INFORMACIÓN ALTO:1600 ANCHO:1200 M2: 1.92 m | UBICACIÓN : - Oficina segundo nivel",
+      "visual_description": "Planta muestra configuración en esquina (escuadra). Alzado muestra dos naves móviles 'X ABRE' (600mm cada una)",
+      "status": "explicit",
+      "confidence": null,
+      "notes": null
+    }
+  ],
+  "relationships": [],
+  "conflicts": [],
+  "warnings": [
+    {
+      "id": "warning-measurement_area_mismatch-1",
+      "code": "MEASUREMENT_AREA_MISMATCH",
+      "severity": "warning",
+      "message": "Reported area 1.33 m2 differs from derived area 13.30 m2 using width 5320 mm and height 2500 mm.",
+      "source_ids": [
+        "source-1"
+      ],
+      "element_ids": [
+        "elem_pv15_p3"
+      ],
+      "evidence_ids": [
+        "evidence-12"
+      ],
+      "recoverable": true
+    }
+  ],
+  "extraction_metadata": {
+    "schema_version": "1.0",
+    "model_provider": "google",
+    "model": "gemini-3.6-flash",
+    "started_at": null,
+    "completed_at": null,
+    "processing_time_ms": null,
+    "source_count": 1,
+    "element_count": 15,
+    "partial": false,
+    "status": "completed",
+    "token_usage": {
+      "input_tokens": 22624,
+      "output_tokens": 24439,
+      "total_tokens": 59439
+    },
+    "pipeline_version": "ai2-v1"
+  }
+}

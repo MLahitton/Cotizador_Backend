@@ -35,8 +35,6 @@ public static class DependencyInjection
             CotizadorAi2Options.FromConfiguration(configuration);
         var documentProcessingOptions =
             DocumentProcessingOptions.FromConfiguration(configuration);
-        var documentProcessingWorkerOptions =
-            DocumentProcessingWorkerOptions.FromConfiguration(configuration);
         var historicalPricingOptions =
             HistoricalPricingOptions.FromConfiguration(configuration);
         var ai2SimilarityOptions =
@@ -64,7 +62,6 @@ public static class DependencyInjection
         services.AddSingleton(documentProcessingOptions);
         services.AddSingleton<Ai2RequirementExtractionAdapter>();
         services.AddSingleton<LegacyDocumentProcessingResponseAdapter>();
-        services.AddSingleton(documentProcessingWorkerOptions);
         services.AddSingleton(historicalPricingOptions);
         services.AddSingleton(ai2SimilarityOptions);
         services.AddSingleton<HistoricalWorkbookReader>();
@@ -147,6 +144,7 @@ public static class DependencyInjection
         services.AddScoped<
             IDocumentProcessingRepository,
             DocumentProcessingRepository>();
+        services.AddScoped<IRequirementRepository, RequirementRepository>();
         services.AddScoped<IPreQuoteRepository, PreQuoteRepository>();
         services.AddScoped<
             IPreQuoteDocumentQueryRepository,
@@ -156,11 +154,6 @@ public static class DependencyInjection
             PreQuoteStoredDocumentRepository>();
         services.AddScoped<IPreQuoteDraftRepository, PreQuoteDraftRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
-
-        if (documentProcessingWorkerOptions.Enabled)
-        {
-            services.AddHostedService<DocumentProcessingWorker>();
-        }
 
         return services;
     }

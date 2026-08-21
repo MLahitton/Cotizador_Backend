@@ -5,13 +5,16 @@ namespace Application.HistoricalPricing;
 public sealed class EvaluateHistoricalSimilarityService : IHistoricalSimilarityEvaluationService
 {
     private const string InvalidCorrelation = "AI2_SIMILARITY_INVALID_CORRELATION";
+    private readonly IHistoricalQuoteCorpus _corpus;
     private readonly IHistoricalComparableCandidateService _candidateService;
     private readonly IAi2SimilarityClient _similarityClient;
 
     public EvaluateHistoricalSimilarityService(
+        IHistoricalQuoteCorpus corpus,
         IHistoricalComparableCandidateService candidateService,
         IAi2SimilarityClient similarityClient)
     {
+        _corpus = corpus;
         _candidateService = candidateService;
         _similarityClient = similarityClient;
     }
@@ -20,6 +23,11 @@ public sealed class EvaluateHistoricalSimilarityService : IHistoricalSimilarityE
         HistoricalCandidateQuery query,
         CancellationToken cancellationToken = default)
     {
+        if (!_corpus.Current.IsAvailable)
+        {
+            await _corpus.ReloadAsync(cancellationToken);
+        }
+
         var shortlist = _candidateService.Find(query);
         if (shortlist.Count == 0)
         {

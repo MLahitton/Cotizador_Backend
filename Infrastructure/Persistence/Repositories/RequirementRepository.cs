@@ -1,0 +1,274 @@
+using System.Data.Common;
+using Application.Common.Abstractions.PreQuotes;
+using Domain.PreQuotes;
+using Microsoft.EntityFrameworkCore;
+
+namespace Infrastructure.Persistence.Repositories;
+
+public sealed class RequirementRepository(ApplicationDbContext dbContext)
+    : IRequirementRepository
+{
+    public async Task<Requirement?> FindByIdAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Requirements
+                .Include(requirement => requirement.Files)
+                .Include(requirement => requirement.ProcessingAttempts)
+                    .ThenInclude(attempt => attempt.ExtractionResult)
+                        .ThenInclude(result => result!.Items)
+                .SingleOrDefaultAsync(
+                    requirement => requirement.Id == requirementId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<RequirementFile>>
+        ListFilesByRequirementIdAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementFiles
+                .AsNoTracking()
+                .Where(file => file.RequirementId == requirementId)
+                .OrderBy(file => file.CreatedAtUtc)
+                .ThenBy(file => file.Id)
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementProcessingAttempt?>
+        FindProcessingAttemptByIdAsync(
+            Guid processingAttemptId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementProcessingAttempts
+                .Include(attempt => attempt.ExtractionResult)
+                    .ThenInclude(result => result!.Items)
+                .SingleOrDefaultAsync(
+                    attempt => attempt.Id == processingAttemptId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementProcessingFailureFinalization?>
+        FinalizeProcessingFailureAsync(
+            Guid requirementId,
+            Guid processingAttemptId,
+            string errorCode,
+            DateTimeOffset completedAtUtc,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            dbContext.ChangeTracker.Clear();
+            var requirement = await dbContext.Requirements
+                .SingleOrDefaultAsync(
+                    value => value.Id == requirementId,
+                    cancellationToken);
+            var attempt = await dbContext.RequirementProcessingAttempts
+                .SingleOrDefaultAsync(
+                    value => value.Id == processingAttemptId
+                        && value.RequirementId == requirementId,
+                    cancellationToken);
+
+            if (requirement is null || attempt is null)
+            {
+                return null;
+            }
+
+            var preQuote = await dbContext.PreQuotes
+                .SingleOrDefaultAsync(
+                    value => value.Id == requirement.PreQuoteId,
+                    cancellationToken);
+
+            if (attempt.ProcessingState == DocumentProcessingState.Processing)
+            {
+                attempt.Fail(errorCode, completedAtUtc);
+            }
+
+            if (requirement.Status == RequirementStatus.Processing)
+            {
+                requirement.MarkFailed(completedAtUtc);
+            }
+
+            preQuote?.RegisterActivity(completedAtUtc);
+            await SaveChangesAsync(cancellationToken);
+
+            return CreateFailureFinalization(requirement.Id, attempt);
+        }
+        catch (RequirementPersistenceException)
+        {
+            throw;
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public void Add(Requirement requirement)
+    {
+        dbContext.Requirements.Add(requirement);
+    }
+
+    public void AddFile(RequirementFile file)
+    {
+        dbContext.RequirementFiles.Add(file);
+    }
+
+    public void AddProcessingAttempt(RequirementProcessingAttempt attempt)
+    {
+        dbContext.RequirementProcessingAttempts.Add(attempt);
+    }
+
+    public void AddExtractionResult(RequirementExtractionResult result)
+    {
+        dbContext.RequirementExtractionResults.Add(result);
+    }
+
+    public void AddExtractedItem(RequirementExtractedItem item)
+    {
+        dbContext.RequirementExtractedItems.Add(item);
+    }
+
+    public void AddExtractedItemEvidence(RequirementExtractedItemEvidence evidence)
+    {
+        dbContext.RequirementExtractedItemEvidence.Add(evidence);
+    }
+
+    public void AddTechnicalProposal(RequirementTechnicalProposal proposal)
+    {
+        dbContext.RequirementTechnicalProposals.Add(proposal);
+    }
+
+    public async Task<RequirementExtractionResult?>
+        GetLatestSuccessfulExtractionAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementExtractionResults
+                .AsNoTracking()
+                .Include(result => result.Items)
+                    .ThenInclude(item => item.Evidence)
+                .Where(result =>
+                    result.ProcessingAttempt.RequirementId == requirementId
+                    && result.ProcessingAttempt.ProcessingState
+                        == DocumentProcessingState.Finished
+                    && (result.ProcessingAttempt.Outcome
+                        == DocumentProcessingOutcome.Completed
+                        || result.ProcessingAttempt.Outcome
+                        == DocumentProcessingOutcome.RequiresReview))
+                .OrderByDescending(result => result.ProcessingAttempt.CompletedAtUtc)
+                .ThenByDescending(result => result.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<RequirementExtractedItem>>
+        GetExtractedItemsAsync(
+            Guid extractionResultId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementExtractedItems
+                .AsNoTracking()
+                .Include(item => item.Evidence)
+                .Where(item => item.RequirementExtractionResultId
+                    == extractionResultId)
+                .OrderBy(item => item.Sequence)
+                .ThenBy(item => item.Id)
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementTechnicalProposal?>
+        GetCurrentTechnicalProposalAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementTechnicalProposals
+                .AsNoTracking()
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.ExtractedItem)
+                        .ThenInclude(item => item.Evidence)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.SystemAlternatives)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.GlassAlternatives)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.FinishAlternatives)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.HistoricalExamples)
+                .Where(proposal => proposal.RequirementId == requirementId)
+                .OrderByDescending(proposal =>
+                    proposal.ProcessingAttempt.CompletedAtUtc)
+                .ThenByDescending(proposal => proposal.CreatedAtUtc)
+                .ThenByDescending(proposal => proposal.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+        {
+            throw new RequirementPersistenceException(exception);
+        }
+    }
+
+    private static RequirementProcessingFailureFinalization
+        CreateFailureFinalization(
+            Guid requirementId,
+            RequirementProcessingAttempt attempt)
+    {
+        return new RequirementProcessingFailureFinalization(
+            requirementId,
+            attempt.Id,
+            attempt.CorrelationId,
+            attempt.ProcessingState,
+            attempt.Outcome ?? DocumentProcessingOutcome.Failed,
+            attempt.ErrorCode ?? string.Empty,
+            attempt.StartedAtUtc!.Value,
+            attempt.CompletedAtUtc!.Value);
+    }
+}

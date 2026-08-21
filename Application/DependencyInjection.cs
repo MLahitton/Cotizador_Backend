@@ -11,10 +11,11 @@ using Application.Clients.UpdateClient;
 using Application.Catalogs.GetGlassTypesCatalog;
 using Application.Catalogs.GetCanonicalCatalog;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
-using Application.PreQuotes.ClaimDocumentProcessingAttempt;
+using Application.PreQuotes.CreateRequirement;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
-using Application.PreQuotes.RecoverClaimedDocumentProcessingAttempt;
+using Application.PreQuotes.ProcessRequirement;
+using Application.PreQuotes.ResolveHistoricalTechnicalEvidence;
 using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
@@ -25,6 +26,8 @@ using Application.PreQuotes.CreatePreQuoteDraft;
 using Application.PreQuotes.GetPreQuoteDraft;
 using Application.PreQuotes.UpdatePreQuoteDraft;
 using Application.PreQuotes.ApprovePreQuoteDraft;
+using Application.PreQuotes.BuildRequirementTechnicalProposal;
+using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -55,16 +58,12 @@ public static class DependencyInjection
         services.AddScoped<GetGlassTypesCatalogService>();
         services.AddScoped<GetCanonicalCatalogService>();
         services.AddScoped<CreateDocumentProcessingAttemptService>();
+        services.AddScoped<CreateRequirementService>();
+        services.AddScoped<ProcessRequirementService>();
         services.AddScoped<GetDocumentProcessingAttemptService>();
-        services.AddScoped<
-            IDocumentProcessingClaimService,
-            ClaimNextDocumentProcessingAttemptService>();
         services.AddScoped<
             IClaimedDocumentProcessingService,
             ProcessClaimedDocumentProcessingAttemptService>();
-        services.AddScoped<
-            IClaimedDocumentProcessingRecoveryService,
-            RecoverClaimedDocumentProcessingAttemptService>();
         services.AddScoped<CreatePreQuoteService>();
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();
@@ -72,9 +71,14 @@ public static class DependencyInjection
         services.AddScoped<GetPreQuoteDocumentsService>();
         services.AddScoped<GetStructuredDocumentExtractionService>();
         services.AddScoped<IHistoricalDocumentEstimatePipeline, HistoricalDocumentEstimatePipeline>();
+        services.AddScoped<ResolveHistoricalTechnicalEvidenceService>();
+        services.AddScoped<BuildRequirementTechnicalProposalService>();
+        services.AddScoped<GetRequirementTechnicalProposalService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
         services.AddScoped<ISgProductSystemConstraintEvaluator, SgProductSystemConstraintEvaluator>();
         services.AddScoped<ISgTechnicalSelector, DeterministicSgTechnicalSelector>();
+        services.AddScoped<IGlassCandidateResolver, GlassCandidateResolver>();
+        services.AddScoped<IFinishCandidateResolver, FinishCandidateResolver>();
         services.AddScoped<CreatePreQuoteDraftService>();
         services.AddScoped<GetPreQuoteDraftService>();
         services.AddScoped<UpdatePreQuoteDraftService>();

@@ -16,6 +16,7 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
     public async Task EvaluateAsync_MapsCompleteTechnicalRequestWithoutPricesAndPreservesAiOrder()
     {
         var candidates = CreateCandidates();
+        var corpus = LoadedCorpus();
         var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
         candidateService.Find(Query).Returns(candidates);
         var client = Substitute.For<IAi2SimilarityClient>();
@@ -24,7 +25,7 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
             .Returns(Ai2SimilarityClientResult.Succeeded(new SimilarityEvaluationResult([
                 Similarity("item-2", 0.95m), Similarity("item-1", 0.90m)])));
 
-        var result = await new EvaluateHistoricalSimilarityService(candidateService, client)
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
 
         Assert.Equal(HistoricalSimilarityStatus.Completed, result.Status);
@@ -58,6 +59,7 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
     public async Task EvaluateAsync_WithInvalidCorrelation_PreservesBackendShortlist(string scenario)
     {
         var candidates = CreateCandidates();
+        var corpus = LoadedCorpus();
         var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
         candidateService.Find(Query).Returns(candidates);
         var returned = scenario switch
@@ -70,7 +72,7 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
         client.EvaluateAsync(Arg.Any<SimilarityEvaluationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Ai2SimilarityClientResult.Succeeded(new SimilarityEvaluationResult(returned)));
 
-        var result = await new EvaluateHistoricalSimilarityService(candidateService, client)
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
 
         Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, result.Status);
@@ -83,19 +85,39 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
     public async Task EvaluateAsync_WhenAi2Fails_PreservesBackendShortlistWithoutInventingSimilarity()
     {
         var candidates = CreateCandidates();
+        var corpus = LoadedCorpus();
         var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
         candidateService.Find(Query).Returns(candidates);
         var client = Substitute.For<IAi2SimilarityClient>();
         client.EvaluateAsync(Arg.Any<SimilarityEvaluationRequest>(), Arg.Any<CancellationToken>())
             .Returns(Ai2SimilarityClientResult.Failed("AI2_SIMILARITY_TRANSPORT_ERROR"));
 
-        var result = await new EvaluateHistoricalSimilarityService(candidateService, client)
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
             .EvaluateAsync(Query, TestContext.Current.CancellationToken);
 
         Assert.Equal(HistoricalSimilarityStatus.TechnicalFailure, result.Status);
         Assert.Equal("AI2_SIMILARITY_TRANSPORT_ERROR", result.FailureCode);
         Assert.Equal(2, result.Candidates.Count);
         Assert.All(result.Candidates, value => Assert.Null(value.Similarity));
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_WhenCorpusIsNotLoaded_ReloadsBeforeFindingCandidates()
+    {
+        var corpus = UnloadedCorpus();
+        var candidateService = Substitute.For<IHistoricalComparableCandidateService>();
+        candidateService.Find(Query).Returns([]);
+        var client = Substitute.For<IAi2SimilarityClient>();
+
+        var result = await new EvaluateHistoricalSimilarityService(corpus, candidateService, client)
+            .EvaluateAsync(Query, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HistoricalSimilarityStatus.Completed, result.Status);
+        await corpus.Received(1).ReloadAsync(TestContext.Current.CancellationToken);
+        candidateService.Received(1).Find(Query);
+        await client.DidNotReceive().EvaluateAsync(
+            Arg.Any<SimilarityEvaluationRequest>(),
+            Arg.Any<CancellationToken>());
     }
 
     private static HistoricalComparableCandidate[] CreateCandidates() =>
@@ -111,5 +133,31 @@ public sealed class EvaluateHistoricalSimilarityServiceTests
     ];
 
     private static SimilarityCandidateResult Similarity(string id, decimal score) =>
-        new(id, score, "HIGH", ["glass"], ["system"], "Comparación técnica.", 0.9m);
+        new(id, score, "HIGH", ["glass"], ["system"], "Comparacion tecnica.", 0.9m);
+
+    private static IHistoricalQuoteCorpus LoadedCorpus()
+    {
+        var corpus = Substitute.For<IHistoricalQuoteCorpus>();
+        corpus.Current.Returns(new HistoricalCorpusSnapshot(
+            true,
+            "test-corpus",
+            DateTimeOffset.UtcNow,
+            [],
+            []));
+        return corpus;
+    }
+
+    private static IHistoricalQuoteCorpus UnloadedCorpus()
+    {
+        var corpus = Substitute.For<IHistoricalQuoteCorpus>();
+        corpus.Current.Returns(HistoricalCorpusSnapshot.Unavailable("test-corpus"));
+        corpus.ReloadAsync(Arg.Any<CancellationToken>())
+            .Returns(new HistoricalCorpusSnapshot(
+                true,
+                "test-corpus",
+                DateTimeOffset.UtcNow,
+                [],
+                []));
+        return corpus;
+    }
 }

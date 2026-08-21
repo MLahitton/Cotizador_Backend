@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using Application.Common.Abstractions.DocumentProcessing;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +38,7 @@ public sealed class CotizadorAi2DocumentProcessingClient(
             .CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
         var stage = "request_validation";
+        string? payload = null;
 
         try
         {
@@ -49,7 +51,7 @@ public sealed class CotizadorAi2DocumentProcessingClient(
                 timeoutSource.Token);
 
             stage = "response_body";
-            var payload = await ReadBodyAsync(
+            payload = await ReadBodyAsync(
                 response.Content,
                 options.MaximumResponseBytes,
                 timeoutSource.Token);
@@ -57,6 +59,12 @@ public sealed class CotizadorAi2DocumentProcessingClient(
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 stage = "response_adaptation";
+                var payloadDiagnostics = InspectPayload(payload);
+                LogAi2Response(
+                    response,
+                    request,
+                    payload,
+                    payloadDiagnostics);
                 return DocumentProcessingClientResult.Success(
                     adapter.Adapt(payload, request));
             }
@@ -105,18 +113,132 @@ public sealed class CotizadorAi2DocumentProcessingClient(
         }
         catch (InvalidDataException exception)
         {
+            var payloadDiagnostics = InspectPayload(payload);
             logger.LogWarning(
                 exception,
-                "AI2 response processing failed. Stage={Stage} CorrelationId={CorrelationId} DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage}",
+                "AI2 response processing failed. Stage={Stage} CorrelationId={CorrelationId} DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} ExceptionType={ExceptionType} ExceptionMessage={ExceptionMessage} PayloadLengthChars={PayloadLengthChars} TopLevelKeys={TopLevelKeys} ElementsCount={ElementsCount} ExtractionModel={ExtractionModel} ExtractionElementCount={ExtractionElementCount} ExtractionStatus={ExtractionStatus}",
                 stage,
                 request.CorrelationId,
                 request.DocumentId,
                 request.ProcessingAttemptId,
                 exception.GetType().Name,
-                exception.Message);
+                exception.Message,
+                payload?.Length ?? 0,
+                payloadDiagnostics.TopLevelKeys,
+                payloadDiagnostics.ElementsCount,
+                payloadDiagnostics.ExtractionModel,
+                payloadDiagnostics.ExtractionElementCount,
+                payloadDiagnostics.ExtractionStatus);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
         }
+    }
+
+    private void LogAi2Response(
+        HttpResponseMessage response,
+        DocumentProcessingClientRequest request,
+        string payload,
+        Ai2PayloadDiagnostics payloadDiagnostics)
+    {
+        logger.LogInformation(
+            "Cotizador_AI2 response received. HttpStatusCode={HttpStatusCode} PayloadLengthChars={PayloadLengthChars} ContentType={ContentType} CorrelationId={CorrelationId} DocumentId={DocumentId} ProcessingAttemptId={ProcessingAttemptId} ProjectId={ProjectId} RequirementId={RequirementId} FileNames={FileNames} FileCount={FileCount} TopLevelKeys={TopLevelKeys} ElementsCount={ElementsCount} ExtractionModel={ExtractionModel} ExtractionElementCount={ExtractionElementCount} ExtractionStatus={ExtractionStatus}",
+            (int)response.StatusCode,
+            payload.Length,
+            response.Content.Headers.ContentType?.ToString(),
+            request.CorrelationId,
+            request.DocumentId,
+            request.ProcessingAttemptId,
+            request.ProjectId,
+            request.RequirementId,
+            string.Join(",", request.Files.Select(file => file.FileName)),
+            request.Files.Count,
+            payloadDiagnostics.TopLevelKeys,
+            payloadDiagnostics.ElementsCount,
+            payloadDiagnostics.ExtractionModel,
+            payloadDiagnostics.ExtractionElementCount,
+            payloadDiagnostics.ExtractionStatus);
+    }
+
+    private static Ai2PayloadDiagnostics InspectPayload(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return Ai2PayloadDiagnostics.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return new Ai2PayloadDiagnostics(
+                    root.ValueKind.ToString(),
+                    null,
+                    null,
+                    null,
+                    null);
+            }
+
+            var topLevelKeys = string.Join(
+                ",",
+                root.EnumerateObject().Select(property => property.Name));
+            int? elementsCount = root.TryGetProperty("elements", out var elements)
+                && elements.ValueKind == JsonValueKind.Array
+                    ? elements.GetArrayLength()
+                    : null;
+            string? model = null;
+            int? elementCount = null;
+            string? status = null;
+            if (root.TryGetProperty("extraction_metadata", out var metadata)
+                && metadata.ValueKind == JsonValueKind.Object)
+            {
+                model = metadata.TryGetProperty("model", out var modelValue)
+                    && modelValue.ValueKind == JsonValueKind.String
+                        ? modelValue.GetString()
+                        : null;
+                elementCount = metadata.TryGetProperty("element_count", out var elementCountValue)
+                    && elementCountValue.ValueKind == JsonValueKind.Number
+                    && elementCountValue.TryGetInt32(out var count)
+                        ? count
+                        : null;
+                status = metadata.TryGetProperty("status", out var statusValue)
+                    && statusValue.ValueKind == JsonValueKind.String
+                        ? statusValue.GetString()
+                        : null;
+            }
+
+            return new Ai2PayloadDiagnostics(
+                topLevelKeys,
+                elementsCount,
+                model,
+                elementCount,
+                status);
+        }
+        catch (JsonException)
+        {
+            return new Ai2PayloadDiagnostics(
+                "INVALID_JSON",
+                null,
+                null,
+                null,
+                null);
+        }
+    }
+
+    private sealed record Ai2PayloadDiagnostics(
+        string TopLevelKeys,
+        int? ElementsCount,
+        string? ExtractionModel,
+        int? ExtractionElementCount,
+        string? ExtractionStatus)
+    {
+        public static readonly Ai2PayloadDiagnostics Empty = new(
+            string.Empty,
+            null,
+            null,
+            null,
+            null);
     }
 
     private static void ValidateRequest(DocumentProcessingClientRequest request)

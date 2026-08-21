@@ -19,7 +19,22 @@ public sealed record GlassTypeCatalogReadModel(
     string Name,
     string? Description,
     bool IsActive,
-    GlassPriceRangeCatalogReadModel? CurrentPriceRange);
+    GlassPriceRangeCatalogReadModel? CurrentPriceRange,
+    string? Family = null,
+    string? Composition = null,
+    string? Treatment = null,
+    decimal? OuterThicknessMm = null,
+    decimal? InnerThicknessMm = null,
+    decimal? PvbThicknessMm = null,
+    string? PvbType = null,
+    string? PvbColor = null,
+    decimal? ChamberThicknessMm = null,
+    string? ProductLine = null,
+    string? ProductToken = null,
+    string? Pattern = null,
+    string? Color = null,
+    bool IsSelectable = true,
+    bool RequiresReview = false);
 
 public interface IGlassTypeCatalogRepository
 {

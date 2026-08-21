@@ -58,4 +58,82 @@ internal static class Ai2RequirementExtractionPayloads
           "extraction_metadata":{"schema_version":"1.0","model_provider":"gemini","model":"configured-model","started_at":null,"completed_at":null,"processing_time_ms":null,"source_count":1,"element_count":4,"partial":false,"status":"completed","token_usage":null,"pipeline_version":"ai2-v1"}
         }
         """;
+
+    public const string RealCurrentAi2Shape =
+        """
+        {
+          "requirement": {
+            "project_name": {"value":"Casa Prueba","status":"explicit","confidence":0.98,"evidence_ids":["ev-project"]},
+            "client_name": {"value":"Cliente Prueba","status":"explicit","confidence":0.94,"evidence_ids":["ev-project"]},
+            "location": {"value":"Bucaramanga","status":"inferred","confidence":0.76,"evidence_ids":["ev-project"]}
+          },
+          "sources": [
+            {"id":"source-pdf","file_name":"casa.pdf","media_type":"application/pdf","page_count":3}
+          ],
+          "elements": [
+            {
+              "id":"element-pv06",
+              "reference":{"value":"PV-06","raw":"PV-06","status":"explicit","confidence":0.99,"evidence_ids":["ev-item"]},
+              "name":{"value":"Puerta vidriera corrediza","raw":"Puerta vidriera corrediza","status":"explicit","confidence":0.96,"evidence_ids":["ev-item"]},
+              "category":{"normalized":"PUERTA VIDRIERA","raw":"Puerta vidriera","status":"explicit","confidence":0.92,"evidence_ids":["ev-item"]},
+              "measurements":[
+                {"type":"width","value":3740,"unit":"mm","status":"explicit","confidence":0.99,"evidence_ids":["ev-item"]},
+                {"type":"height","value":2500,"unit":"mm","status":"explicit","confidence":0.99,"evidence_ids":["ev-item"]},
+                {"type":"area","value":9.35,"unit":"m2","status":"explicit","confidence":0.80,"evidence_ids":["ev-area"]}
+              ],
+              "quantity":{"value":1,"status":"explicit","confidence":0.99,"evidence_ids":["ev-item"]},
+              "functional_type":{"normalized":"SLIDING_DOOR","raw":"Puerta corrediza","status":"inferred","confidence":0.86,"evidence_ids":["ev-item"]},
+              "configuration":{
+                "raw_description":"Corrediza 4 paneles",
+                "operation":{"normalized":"SLIDING","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                "panel_count":{"value":4,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                "movable_panel_count":{"value":2,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                "fixed_panel_count":{"value":2,"status":"explicit","confidence":0.88,"evidence_ids":["ev-item"]},
+                "special_features":["POCKET", "LOWER_FIXED_PANEL"],
+                "status":"explicit",
+                "evidence_ids":["ev-item"]
+              },
+              "geometry":{"normalized_type":"RECTANGULAR","raw":"rectangular","status":"explicit","confidence":0.95,"evidence_ids":["ev-item"]},
+              "glass":[{
+                "type":{"normalized":"TEMP_6","raw":"Templado","status":"explicit","confidence":0.94,"evidence_ids":["ev-glass"]},
+                "thickness":{"value":6,"unit":"mm","status":"explicit","confidence":0.94,"evidence_ids":["ev-glass"]},
+                "treatment":{"normalized":"CLEAR","raw":"claro","status":"inferred","confidence":0.70,"evidence_ids":["ev-glass"]},
+                "status":"explicit",
+                "confidence":0.94,
+                "evidence_ids":["ev-glass"]
+              }],
+              "profiles":[{"code":{"value":"3831","status":"explicit","confidence":0.93,"evidence_ids":["ev-system"]},"status":"explicit","confidence":0.93,"evidence_ids":["ev-system"]}],
+              "finish":{"normalized_type":"BLACK_MATTE","raw_description":"Negro pintura al horno","status":"explicit","confidence":0.91,"evidence_ids":["ev-finish"]},
+              "evidence_ids":["ev-item", "ev-ambiguous"],
+              "missing_fields":[],
+              "confidence":0.91
+            }
+          ],
+          "evidence": [
+            {"id":"ev-project","source_id":"source-pdf","page_number":1,"extracted_text":"Casa Prueba","status":"explicit","confidence":0.98},
+            {"id":"ev-item","source_id":"source-pdf","page_number":2,"extracted_text":"PV-06 Puerta vidriera corrediza 3740 x 2500","status":"explicit","confidence":0.96},
+            {"id":"ev-area","source_id":"source-pdf","page_number":2,"extracted_text":"Area reportada 9.35 m2","status":"explicit","confidence":0.80},
+            {"id":"ev-glass","source_id":"source-pdf","page_number":2,"extracted_text":"Vidrio templado 6 mm claro","status":"explicit","confidence":0.94},
+            {"id":"ev-system","source_id":"source-pdf","page_number":2,"extracted_text":"Sistema 3831","status":"explicit","confidence":0.93},
+            {"id":"ev-finish","source_id":"source-pdf","page_number":2,"extracted_text":"Negro pintura al horno","status":"explicit","confidence":0.91},
+            {"id":"ev-ambiguous","source_id":"source-pdf","page_number":null,"extracted_text":"Nota ambigua sin pagina","status":"ambiguous","confidence":0.40}
+          ],
+          "relationships":[],
+          "conflicts":[],
+          "warnings":[
+            {"code":"MEASUREMENT_AREA_MISMATCH","message":"Area reportada difiere del calculo.","element_id":"element-pv06","evidence_ids":["ev-area"]}
+          ],
+          "extraction_metadata":{
+            "schema_version":"1.0",
+            "model_provider":"gemini",
+            "model":"configured-model",
+            "processing_time_ms":null,
+            "source_count":1,
+            "element_count":1,
+            "partial":false,
+            "status":"completed",
+            "pipeline_version":"ai2-v1"
+          }
+        }
+        """;
 }

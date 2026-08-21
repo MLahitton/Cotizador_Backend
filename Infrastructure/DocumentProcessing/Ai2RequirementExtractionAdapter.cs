@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Application.Common.Abstractions.DocumentProcessing;
 using Domain.PreQuotes;
 
@@ -446,6 +447,21 @@ public sealed class Ai2RequirementExtractionAdapter
         var status = ItemStatus(element);
         var configuration = Object(element, "configuration");
         var geometry = Object(element, "geometry");
+        var glassSource = FirstObject(element, "glass");
+        var glassType = glassSource is { } glassValue
+            ? Object(glassValue, "type")
+            : null;
+        var glassThickness = glassSource is { } glassThicknessValue
+            ? Object(glassThicknessValue, "thickness")
+            : null;
+        var glassColor = glassSource is { } glassColorValue
+            ? Object(glassColorValue, "color")
+            : null;
+        var glassTreatment = glassSource is { } glassTreatmentValue
+            ? Object(glassTreatmentValue, "treatment")
+            : null;
+        var finish = Object(element, "finish");
+        var profile = PreferredProfile(element);
         var missingFields = StringArray(element, "missing_fields");
         var reviewReasons = new List<StructuredIssueCode>();
         if (width is null || height is null)
@@ -485,6 +501,24 @@ public sealed class Ai2RequirementExtractionAdapter
             .Distinct()
             .Order()
             .ToArray();
+        var requestedSystemRaw = profile is { } requestedSystem
+            ? FirstNonEmpty(
+                TraceableString(requestedSystem, "code"),
+                TraceableString(requestedSystem, "name"),
+                String(requestedSystem, "raw_description"))
+            : null;
+        requestedSystemRaw = FirstNonEmpty(
+            RequestedSystemFromEvidence(itemEvidence),
+            requestedSystemRaw);
+        var requestedProfileRaw = profile is { } requestedProfile
+            ? FirstNonEmpty(
+                TraceableString(requestedProfile, "code"),
+                TraceableString(requestedProfile, "name"),
+                String(requestedProfile, "raw_description"))
+            : null;
+        requestedProfileRaw = FirstNonEmpty(
+            RequestedSystemFromEvidence(itemEvidence),
+            requestedProfileRaw);
 
         return new StructuredItemData(
             sequence,
@@ -534,6 +568,63 @@ public sealed class Ai2RequirementExtractionAdapter
                     FlexibleString(geometryValue, "normalized_type"),
                     FlexibleString(geometryValue, "type"),
                     FlexibleString(geometryValue, "raw_type"))
+                : null,
+            String(element, "id"),
+            configuration is { } arrangementConfiguration
+                ? FlexibleString(arrangementConfiguration, "arrangement")
+                : null,
+            requestedSystemRaw,
+            requestedProfileRaw,
+            glassType is { } rawGlassType ? Raw(rawGlassType) : null,
+            glassType is { } normalizedGlassType
+                ? FirstNonEmpty(
+                    Normalized(normalizedGlassType),
+                    IsUsable(Status(normalizedGlassType), status)
+                        ? Raw(normalizedGlassType)
+                        : null)
+                : null,
+            glassThickness is { } thickness ? Decimal(thickness, "value") : null,
+            glassColor is { } rawGlassColor ? Raw(rawGlassColor) : null,
+            glassColor is { } normalizedGlassColor ? Normalized(normalizedGlassColor) : null,
+            glassTreatment is { } rawGlassTreatment ? Raw(rawGlassTreatment) : null,
+            glassTreatment is { } normalizedGlassTreatment ? Normalized(normalizedGlassTreatment) : null,
+            glassSource is { } compositionGlass
+                ? FirstNonEmpty(
+                    String(compositionGlass, "composition"),
+                    Object(compositionGlass, "composition") is { } composition
+                        ? FirstNonEmpty(Normalized(composition), Raw(composition))
+                        : null)
+                : null,
+            glassSource is { } coatingGlass
+                ? FlexibleString(coatingGlass, "coating")
+                : null,
+            glassSource is { } transparencyGlass
+                ? FlexibleString(transparencyGlass, "transparency")
+                : null,
+            finish is { } finishRaw
+                ? String(finishRaw, "raw_description")
+                : null,
+            finish is { } finishType
+                ? String(finishType, "normalized_type")
+                : null,
+            finish is { } finishColorRaw
+                ? FlexibleRawString(finishColorRaw, "color")
+                : null,
+            finish is { } finishColorNormalized
+                ? FlexibleNormalizedString(finishColorNormalized, "color")
+                : null,
+            finish is { } finishTextureRaw
+                ? FlexibleRawString(finishTextureRaw, "texture")
+                : null,
+            finish is { } finishTextureNormalized
+                ? FlexibleNormalizedString(finishTextureNormalized, "texture")
+                : null,
+            finish is { } explicitFinish
+                ? TraceableString(explicitFinish, "code")
+                : null,
+            finish is { } reviewFinish
+                ? Status(reviewFinish) is CanonicalExtractionValueStatus.Ambiguous
+                    or CanonicalExtractionValueStatus.Unknown
                 : null);
     }
 
@@ -594,10 +685,7 @@ public sealed class Ai2RequirementExtractionAdapter
         MapTechnicalClassification(JsonElement element)
     {
         var profiles = Array(element, "profiles");
-        JsonElement? profile = profiles.GetArrayLength() > 0
-            && profiles[0].ValueKind == JsonValueKind.Object
-                ? profiles[0]
-                : null;
+        JsonElement? profile = PreferredProfile(element);
         var finish = Object(element, "finish");
         if (profile is null && finish is null)
         {
@@ -1093,6 +1181,27 @@ public sealed class Ai2RequirementExtractionAdapter
         FirstNonEmpty(
             NormalizedOrRawString(parent, name),
             String(parent, name));
+    private static string? FlexibleRawString(JsonElement parent, string name) =>
+        Object(parent, name) is { } value ? Raw(value) : String(parent, name);
+    private static string? FlexibleNormalizedString(JsonElement parent, string name) =>
+        Object(parent, name) is { } value ? Normalized(value) : String(parent, name);
+    private static string? RequestedSystemFromEvidence(
+        IReadOnlyList<SourceEvidenceData> evidence)
+    {
+        foreach (var value in evidence)
+        {
+            var match = Regex.Match(
+                value.Text,
+                @"\bSistema\s+([A-Za-z0-9][A-Za-z0-9._-]{1,30})\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (match.Success)
+            {
+                return match.Groups[1].Value.Trim();
+            }
+        }
+
+        return null;
+    }
     private static int? FlexibleInt(JsonElement parent, string name) =>
         TraceableInt(parent, name) ?? Int(parent, name);
     private static IReadOnlyList<string> FlexibleStringArray(
@@ -1138,6 +1247,36 @@ public sealed class Ai2RequirementExtractionAdapter
 
     private static JsonElement? Object(JsonElement value, string name) =>
         TryObject(value, name, out var result) ? result : null;
+
+    private static JsonElement? FirstObject(JsonElement value, string name)
+    {
+        var values = Array(value, name);
+        return values.GetArrayLength() > 0
+            && values[0].ValueKind == JsonValueKind.Object
+                ? values[0]
+                : null;
+    }
+
+    private static JsonElement? PreferredProfile(JsonElement element)
+    {
+        var profiles = Array(element, "profiles");
+        JsonElement? fallback = null;
+        foreach (var profile in profiles.EnumerateArray())
+        {
+            if (profile.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            fallback ??= profile;
+            if (!string.IsNullOrWhiteSpace(TraceableString(profile, "code")))
+            {
+                return profile;
+            }
+        }
+
+        return fallback;
+    }
 
     private static bool TryArray(
         JsonElement value,

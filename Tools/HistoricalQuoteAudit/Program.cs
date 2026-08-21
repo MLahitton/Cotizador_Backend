@@ -76,6 +76,7 @@ if (args.Contains("--similarity-smoke", StringComparer.Ordinal))
         httpClient,
         new Ai2SimilarityOptions(endpoint));
     var similarityService = new EvaluateHistoricalSimilarityService(
+        corpus,
         candidateService,
         ai2Client);
     var query = new HistoricalCandidateQuery(
@@ -131,6 +132,7 @@ if (args.Contains("--price-smoke", StringComparer.Ordinal))
     var candidateService = new HistoricalComparableCandidateService(corpus, options);
     using var httpClient = new HttpClient();
     var similarityService = new EvaluateHistoricalSimilarityService(
+        corpus,
         candidateService,
         new Ai2SimilarityClient(httpClient, new Ai2SimilarityOptions(endpoint)));
     var estimator = new HistoricalTechnicalPriceEstimator(similarityService);
@@ -170,6 +172,7 @@ if (args.Contains("--price-eval-sg943-item03", StringComparer.Ordinal))
     using var httpClient = new HttpClient();
     var estimator = new HistoricalTechnicalPriceEstimator(
         new EvaluateHistoricalSimilarityService(
+            corpus,
             candidateService,
             new Ai2SimilarityClient(httpClient, new Ai2SimilarityOptions(endpoint))));
     var baseQuery = new HistoricalCandidateQuery(

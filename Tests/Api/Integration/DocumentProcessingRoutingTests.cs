@@ -15,7 +15,6 @@ using Domain.Identity;
 using Domain.PreQuotes;
 using FluentValidation;
 using FluentValidation.Results;
-using Infrastructure.DocumentProcessing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -92,17 +91,10 @@ public sealed class DocumentProcessingRoutingTests
         Assert.Equal(body.ProcessingAttemptId, getBody.ProcessingAttemptId);
         Assert.Equal(body.DocumentId, getBody.DocumentId);
         Assert.Equal("PENDING", getBody.ProcessingState);
-        Assert.Equal(
-            "false",
-            host.Application.Configuration[
-                "DocumentProcessingWorker:Enabled"]);
         Assert.DoesNotContain(
             host.Application.Services.GetServices<IHostedService>(),
-            service => service is DocumentProcessingWorker);
-        await host.Repository.DidNotReceive()
-            .ClaimNextPendingDocumentProcessingAttemptAsync(
-                Arg.Any<DateTimeOffset>(),
-                Arg.Any<CancellationToken>());
+            service => service.GetType().Namespace
+                == "Infrastructure.DocumentProcessing");
     }
 
     [Fact]
@@ -163,13 +155,6 @@ public sealed class DocumentProcessingRoutingTests
                     EnvironmentName = "Testing"
                 });
             builder.WebHost.UseUrls("http://127.0.0.1:0");
-            builder.Configuration.AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["DocumentProcessingWorker:Enabled"] = "false",
-                    ["DocumentProcessingWorker:PollInterval"] = "00:00:01"
-                });
-
             var validator = Substitute.For<
                 IValidator<CreateDocumentProcessingAttemptCommand>>();
             var currentUser = Substitute.For<ICurrentUser>();

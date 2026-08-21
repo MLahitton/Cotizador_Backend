@@ -1,6 +1,8 @@
 using Application.Common.Abstractions.DocumentProcessing;
+using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 using Infrastructure.DocumentProcessing;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -136,6 +138,127 @@ public sealed class Ai2RequirementExtractionAdapterTests
         Assert.Equal(0, result.ProcessingMetadata.DurationMs);
     }
 
+    [Fact]
+    public void Adapt_WithCurrentAi2Shape_AcceptsTraceableTechnicalObjects()
+    {
+        var file = new DocumentProcessingFile(
+            Guid.NewGuid(), "casa.pdf", "application/pdf",
+            10, new MemoryStream(new byte[10]));
+        var request = new DocumentProcessingClientRequest(
+            file.DocumentId, Guid.NewGuid(), Guid.NewGuid(), [file]);
+
+        var result = new Ai2RequirementExtractionAdapter().Adapt(
+            Ai2RequirementExtractionPayloads.RealCurrentAi2Shape,
+            request);
+
+        Assert.Equal(DocumentProcessingOutcome.RequiresReview, result.Outcome);
+        Assert.Equal(0, result.ProcessingMetadata.DurationMs);
+        Assert.Contains(result.Warnings, warning =>
+            warning.Code == "MEASUREMENT_AREA_MISMATCH");
+        var item = Assert.Single(result.StructuredExtraction!.Items);
+        Assert.Equal("PV-06", item.Reference);
+        Assert.Equal("SLIDING_DOOR", item.FunctionalType);
+        Assert.Equal("SLIDING", item.Operation);
+        Assert.Equal(4, item.PanelCount);
+        Assert.Equal(2, item.MovablePanelCount);
+        Assert.Equal(2, item.FixedPanelCount);
+        Assert.Equal("RECTANGULAR", item.GeometryType);
+        Assert.Equal(["POCKET", "LOWER_FIXED_PANEL"], item.SpecialFeatures);
+        Assert.Equal("TEMP_6", item.Glass?.NormalizedCode);
+        Assert.Equal("Templado 6 mm", item.Glass?.RawSpecification);
+        Assert.Equal("3831", item.TechnicalClassification?.SystemCode);
+        Assert.Equal("BLACK_MATTE", item.TechnicalClassification?.FinishCode);
+        Assert.DoesNotContain(item.Evidence, evidence =>
+            evidence.PageNumber is null
+            && evidence.SheetName is null
+            && evidence.CellRange is null);
+    }
+
+    [Fact]
+    public void Adapt_WithRealCapturedAi2Payload_IsAcceptedByAdapter()
+    {
+        var payload = ReadFixture(
+            "DocumentProcessing",
+            "ai2-real-ventaneria-puertas.json");
+        AssertRealAi2RequirementExtractionFixture(payload);
+
+        var result = new Ai2RequirementExtractionAdapter().Adapt(
+            payload,
+            CreatePdfRequest());
+
+        Assert.Equal(DocumentProcessingProvider.Ai2, result.Provider);
+        Assert.Equal(15, result.StructuredExtraction?.Items.Count);
+        var items = result.StructuredExtraction!.Items;
+        Assert.Equal(
+            [
+                "V-01",
+                "V-04",
+                "V-05",
+                "PV-06",
+                "V-08",
+                "PV-09",
+                "V-10",
+                "V-14",
+                "PV-15",
+                "PV-18",
+                "PV-17",
+                "V-22",
+                "V-23",
+                "PV-24",
+                "V-25"
+            ],
+            items.Select(item => item.Reference).ToArray());
+
+        var v01 = Assert.Single(items, item => item.Reference == "V-01");
+        Assert.Equal(4, v01.Quantity);
+        Assert.Equal(600, v01.WidthMillimeters);
+        Assert.Equal(1800, v01.HeightMillimeters);
+        Assert.Equal("PROJECTING", v01.FunctionalType);
+        Assert.Equal("PROJECTING", v01.Operation);
+        Assert.Equal(2, v01.PanelCount);
+        Assert.Equal(1, v01.MovablePanelCount);
+        Assert.Equal(1, v01.FixedPanelCount);
+        Assert.Contains("LOWER_FIXED_PANEL", v01.SpecialFeatures!);
+        Assert.Contains("ASSOCIATED_FIXED_PANEL", v01.SpecialFeatures!);
+        Assert.Equal("templado", v01.GlassTypeNormalized);
+        Assert.Equal(6m, v01.GlassThicknessMm);
+        Assert.Equal("3831", v01.RequestedProfileRaw);
+        Assert.Equal("negro pintura al horno", v01.FinishRawDescription);
+        var glassResolution = new GlassCandidateResolver().Resolve(
+            new GlassCandidateResolutionInput(
+                v01.Glass?.RawSpecification,
+                v01.GlassTypeRaw,
+                v01.GlassTypeNormalized,
+                v01.GlassThicknessMm,
+                v01.GlassColorRaw,
+                v01.GlassColorNormalized,
+                v01.GlassTreatmentRaw,
+                v01.GlassTreatmentNormalized,
+                v01.GlassComposition,
+                v01.GlassCoating,
+                v01.GlassTransparency),
+            CotizadorBackend.Tests.Application.PreQuotes
+                .GlassCandidateResolverTests.Catalog());
+        Assert.Equal("TEMP_6", glassResolution.Suggested?.Code);
+        Assert.Equal(
+            "COMPOSICION MONOLITICO TEMPLADO 6 MM INC",
+            glassResolution.Suggested?.DisplayName);
+
+        var pv15 = Assert.Single(items, item => item.Reference == "PV-15");
+        Assert.Equal(1.33m, pv15.AreaSquareMeters);
+        Assert.Equal(5320, pv15.WidthMillimeters);
+        Assert.Equal(2500, pv15.HeightMillimeters);
+        Assert.True(pv15.RequiresReview);
+        Assert.Contains(
+            StructuredIssueCode.MissingOrInvalidMeasurements,
+            pv15.ReviewReasons);
+
+        var v25 = Assert.Single(items, item => item.Reference == "V-25");
+        Assert.Equal("CORNER", v25.GeometryType);
+        Assert.Equal("SLIDING_WINDOW", v25.FunctionalType);
+        Assert.Equal("8025", v25.RequestedProfileRaw);
+    }
+
     [Theory]
     [InlineData("requirement")]
     [InlineData("elements")]
@@ -205,5 +328,68 @@ public sealed class Ai2RequirementExtractionAdapterTests
             10, new MemoryStream(new byte[10]));
         return new DocumentProcessingClientRequest(
             file.DocumentId, Guid.NewGuid(), Guid.NewGuid(), [file]);
+    }
+
+    private static string ReadFixture(params string[] paths)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(
+                [directory.FullName, "Tests", "Fixtures", .. paths]);
+            if (File.Exists(candidate))
+            {
+                return File.ReadAllText(candidate);
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException(
+            "No se encontro el fixture requerido.",
+            Path.Combine(["Tests", "Fixtures", .. paths]));
+    }
+
+    private static void AssertRealAi2RequirementExtractionFixture(string payload)
+    {
+        using var document = JsonDocument.Parse(payload);
+        var root = document.RootElement;
+        Assert.True(
+            root.TryGetProperty("requirement", out var requirement)
+            && requirement.ValueKind == JsonValueKind.Object,
+            "Fixture invalido: falta $.requirement. No corresponde al body bruto real de /requirements/extract.");
+        Assert.True(
+            root.TryGetProperty("elements", out var elements)
+            && elements.ValueKind == JsonValueKind.Array,
+            "Fixture invalido: falta $.elements. No corresponde al body bruto real de /requirements/extract.");
+        Assert.True(
+            root.TryGetProperty("evidence", out var evidence)
+            && evidence.ValueKind == JsonValueKind.Array,
+            "Fixture invalido: falta $.evidence. No corresponde al body bruto real de /requirements/extract.");
+        Assert.True(
+            root.TryGetProperty("extraction_metadata", out var metadata)
+            && metadata.ValueKind == JsonValueKind.Object,
+            "Fixture invalido: falta $.extraction_metadata. No corresponde al body bruto real de /requirements/extract.");
+
+        Assert.Equal(15, elements.GetArrayLength());
+        Assert.True(
+            metadata.TryGetProperty("element_count", out var elementCount)
+            && elementCount.GetInt32() == 15,
+            "Fixture invalido: $.extraction_metadata.element_count debe ser 15.");
+        Assert.True(
+            metadata.TryGetProperty("model", out var model)
+            && model.GetString() == "gemini-3.6-flash",
+            "Fixture invalido: $.extraction_metadata.model debe ser gemini-3.6-flash.");
+
+        var hasMeasurementAreaMismatch =
+            root.TryGetProperty("warnings", out var warnings)
+            && warnings.ValueKind == JsonValueKind.Array
+            && warnings.EnumerateArray().Any(warning =>
+                warning.ValueKind == JsonValueKind.Object
+                && warning.TryGetProperty("code", out var code)
+                && code.GetString() == "MEASUREMENT_AREA_MISMATCH");
+        Assert.True(
+            hasMeasurementAreaMismatch,
+            "Fixture invalido: debe contener warning MEASUREMENT_AREA_MISMATCH.");
     }
 }

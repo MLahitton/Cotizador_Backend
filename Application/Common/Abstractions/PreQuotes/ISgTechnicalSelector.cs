@@ -1,5 +1,7 @@
 using Application.Common.Abstractions.Catalogs;
 using Domain.Catalogs;
+using System.Globalization;
+using System.Text;
 
 namespace Application.Common.Abstractions.PreQuotes;
 
@@ -25,7 +27,24 @@ public sealed record SgTechnicalSelectionInput(
     string? GeometryType,
     string? RequestedCommercialLine,
     string? RequestedSystemRaw,
-    string? Configuration = null);
+    string? Configuration = null,
+    IReadOnlyList<SgHistoricalSystemEvidence>? HistoricalSystemEvidence = null);
+
+public sealed record SgHistoricalSystemEvidence(
+    string ProductSystemCode,
+    decimal BestSimilarity,
+    decimal AverageSimilarity,
+    int SupportCount,
+    IReadOnlyList<SgHistoricalSystemExample> Examples);
+
+public sealed record SgHistoricalSystemExample(
+    string CandidateId,
+    string QuoteId,
+    string? HistoricalReference,
+    decimal SimilarityScore,
+    IReadOnlyList<string> MatchedFeatures,
+    IReadOnlyList<string> Differences,
+    string TechnicalExplanation);
 
 public sealed record SgTechnicalSelectionResult(
     string? SuggestedSystemCode,
@@ -33,7 +52,11 @@ public sealed record SgTechnicalSelectionResult(
     decimal Confidence,
     bool RequiresReview,
     IReadOnlyList<string> ReviewReasons,
-    IReadOnlyList<string> Alternatives);
+    IReadOnlyList<string> Alternatives,
+    int HistoricalSupportCount = 0,
+    decimal? HistoricalBestSimilarity = null,
+    decimal? HistoricalAverageSimilarity = null,
+    IReadOnlyList<SgHistoricalSystemExample>? HistoricalExamples = null);
 
 public static class SgTechnicalSelectionRuleCodes
 {
@@ -81,6 +104,7 @@ public sealed class DeterministicSgTechnicalSelector(
     private const int ExactVariantMatchScore = 80;
     private const int SpecialFeatureMatchScore = 70;
     private const int StrongHistoricalPriorScore = 60;
+    private const int HistoricalSimilarityMaxBonus = 25;
     private const int CommercialLinePreferenceScore = 10;
     private const int CatalogRequiresReviewPenalty = 20;
     private const int CloseCandidateScoreDelta = 10;
@@ -181,7 +205,11 @@ public sealed class DeterministicSgTechnicalSelector(
                     != top.ProductSystem.Code)
                 .Take(MaxAlternatives)
                 .Select(candidate => candidate.ProductSystem.Code)
-                .ToArray());
+                .ToArray(),
+            top.HistoricalEvidence?.SupportCount ?? 0,
+            top.HistoricalEvidence?.BestSimilarity,
+            top.HistoricalEvidence?.AverageSimilarity,
+            top.HistoricalEvidence?.Examples ?? []);
     }
 
     private SgTechnicalCandidate BuildCandidate(
@@ -211,6 +239,7 @@ public sealed class DeterministicSgTechnicalSelector(
         }
 
         ApplyPreferencePriors(candidate, input);
+        ApplyHistoricalSimilarity(candidate, input);
         ApplyCommercialLine(candidate, input);
         if (system.RequiresReview)
         {
@@ -296,7 +325,7 @@ public sealed class DeterministicSgTechnicalSelector(
             }
         }
 
-        if (Code(input.FunctionalType) == "BATHROOM_DIVISION"
+        if (Code(input.FunctionalType) == "SHOWER_DIVISION"
             && HasInox(input, features)
             && IsInox(candidate.ProductSystem))
         {
@@ -395,12 +424,12 @@ public sealed class DeterministicSgTechnicalSelector(
             return SgTechnicalSelectionRuleCodes.SystemSpecialPergola;
         }
 
-        if (functionalType == "BATHROOM_DIVISION" && IsInox(system))
+        if (functionalType == "SHOWER_DIVISION" && IsInox(system))
         {
             return SgTechnicalSelectionRuleCodes.SystemSpecialBathroomDivisionInox;
         }
 
-        if (functionalType == "LOUVER")
+        if (functionalType == "GRILLE")
         {
             return SgTechnicalSelectionRuleCodes.SystemSpecialLouver;
         }
@@ -440,6 +469,40 @@ public sealed class DeterministicSgTechnicalSelector(
 
         candidate.ReviewReasons.Add(
             SgTechnicalSelectionReviewReasons.CommercialLineMismatch);
+    }
+
+    private static void ApplyHistoricalSimilarity(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input)
+    {
+        if (input.HistoricalSystemEvidence is not { Count: > 0 } evidence)
+        {
+            return;
+        }
+
+        var candidateCode = Code(candidate.ProductSystem.Code);
+        if (candidateCode is null)
+        {
+            return;
+        }
+
+        var match = evidence.FirstOrDefault(value =>
+            Code(value.ProductSystemCode) == candidateCode);
+        if (match is null || match.SupportCount <= 0)
+        {
+            return;
+        }
+
+        var best = ClampSimilarity(match.BestSimilarity);
+        var average = ClampSimilarity(match.AverageSimilarity);
+        var support = Math.Min(match.SupportCount, 5);
+        var bonus = (int)Math.Round(
+            best * 15m + average * 7m + support * 0.6m,
+            MidpointRounding.AwayFromZero);
+
+        candidate.Score += Math.Min(HistoricalSimilarityMaxBonus, bonus);
+        candidate.HistoricalEvidence = match;
+        candidate.MatchedRuleCodes.Add("HISTORICAL_SIMILARITY");
     }
 
     private static decimal Confidence(
@@ -499,11 +562,11 @@ public sealed class DeterministicSgTechnicalSelector(
 
     private static bool IsBathroomDivisionWithoutMaterial(
         SgTechnicalSelectionInput input) =>
-        Code(input.FunctionalType) == "BATHROOM_DIVISION"
+        Code(input.FunctionalType) == "SHOWER_DIVISION"
         && !HasInox(input, Features(input));
 
     private static bool HasSpecialGeometry(SgTechnicalSelectionInput input) =>
-        Code(input.GeometryType) is "L_SHAPE" or "TRIANGULAR" or "ARCH" or "CURVED";
+        Code(input.GeometryType) is "L_SHAPE" or "CORNER" or "TRIANGULAR" or "ARCH" or "CURVED";
 
     private static bool HasInox(
         SgTechnicalSelectionInput input,
@@ -531,10 +594,54 @@ public sealed class DeterministicSgTechnicalSelector(
     private static bool Contains(string? value, string expected) =>
         value?.Contains(expected, StringComparison.OrdinalIgnoreCase) == true;
 
+    internal static string NormalizeTechnicalText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        var previousWasSpace = true;
+        foreach (var character in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            var upper = char.ToUpperInvariant(character);
+            if (char.IsLetterOrDigit(upper))
+            {
+                builder.Append(upper);
+                previousWasSpace = false;
+                continue;
+            }
+
+            if (!previousWasSpace)
+            {
+                builder.Append(' ');
+                previousWasSpace = true;
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
     private static string? Code(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? null
-            : value.Trim().ToUpperInvariant();
+            : value.Trim().ToUpperInvariant() switch
+            {
+                "BATHROOM_DIVISION" => "SHOWER_DIVISION",
+                "LOUVER" => "GRILLE",
+                var normalized => normalized
+            };
+
+    private static decimal ClampSimilarity(decimal value) =>
+        Math.Max(0m, Math.Min(1m, value));
 
     private static SgTechnicalSelectionResult NoMatch(
         IReadOnlyList<string> reasons) =>
@@ -557,6 +664,7 @@ public sealed class DeterministicSgTechnicalSelector(
         public SgTechnicalCandidateTier Tier { get; set; } =
             SgTechnicalCandidateTier.Unknown;
         public string? PrimaryRuleCode { get; set; }
+        public SgHistoricalSystemEvidence? HistoricalEvidence { get; set; }
         public List<string> MatchedRuleCodes { get; } = [];
         public List<string> FailedRuleCodes { get; } = [];
         public List<string> ReviewReasons { get; } = [];

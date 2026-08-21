@@ -290,6 +290,175 @@ namespace Infrastructure.Persistence.Migrations
                             MatchPolicy = "TECHNICAL_PHRASE",
                             NormalizedAlias = "ALUCOLOR POLIESTER NEGRO MATE",
                             RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000016"),
+                            Alias = "NEGRO PINTURA AL HORNO",
+                            CanonicalCode = "BLACK_MATTE",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "NEGRO PINTURA AL HORNO",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000017"),
+                            Alias = "PP13",
+                            CanonicalCode = "BLACK_MATTE",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "PP13",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000018"),
+                            Alias = "BLANCO",
+                            CanonicalCode = "FINISH_PP003",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "BLANCO",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000019"),
+                            Alias = "PP003",
+                            CanonicalCode = "FINISH_PP003",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "PP003",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000020"),
+                            Alias = "GRIS",
+                            CanonicalCode = "FINISH_GRAY_POLYESTER",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "GRIS",
+                            RequiresContext = true
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000021"),
+                            Alias = "CHAMPAÑA",
+                            CanonicalCode = "FINISH_CHAMPAGNE_POLY",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "CHAMPANA",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000022"),
+                            Alias = "CHAMPAGNE",
+                            CanonicalCode = "FINISH_CHAMPAGNE_POLY",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "CHAMPAGNE",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000023"),
+                            Alias = "ANODIZADO BLANCO",
+                            CanonicalCode = "FINISH_AN001",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "ANODIZADO BLANCO",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000024"),
+                            Alias = "AN001",
+                            CanonicalCode = "FINISH_AN001",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "AN001",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000025"),
+                            Alias = "INOX",
+                            CanonicalCode = "FINISH_INOX",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "INOX",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000026"),
+                            Alias = "ACERO INOXIDABLE",
+                            CanonicalCode = "FINISH_INOX",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "ACERO INOXIDABLE",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000027"),
+                            Alias = "STAINLESS STEEL",
+                            CanonicalCode = "FINISH_INOX",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "TECHNICAL_PHRASE",
+                            NormalizedAlias = "STAINLESS STEEL",
+                            RequiresContext = false
+                        },
+                        new
+                        {
+                            Id = new Guid("60000000-0000-0000-0000-000000000028"),
+                            Alias = "N.A",
+                            CanonicalCode = "FINISH_NA",
+                            Category = "FINISH",
+                            Confidence = 1.0m,
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            MatchPolicy = "EXACT_NORMALIZED",
+                            NormalizedAlias = "N.A",
+                            RequiresContext = false
                         });
                 });
 
@@ -305,6 +474,16 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(30)")
                         .HasColumnName("code");
 
+                    b.Property<string>("Color")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("color");
+
+                    b.Property<string>("CommercialCode")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("commercial_code");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at_utc");
@@ -313,15 +492,41 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsSelectable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_selectable");
+
+                    b.Property<string>("Material")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("material");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("NormalizedType")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("normalized_type");
+
+                    b.Property<string>("Process")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("process");
+
                     b.Property<bool>("RequiresReview")
                         .HasColumnType("boolean")
                         .HasColumnName("requires_review");
+
+                    b.Property<string>("Texture")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("texture");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -333,6 +538,10 @@ namespace Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_finish_types_code");
 
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_finish_types_name");
+
                     b.ToTable("finish_types", "core");
 
                     b.HasData(
@@ -342,6 +551,7 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "STANDARD_NATURAL",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
+                            IsSelectable = false,
                             Name = "Acabado natural estandar",
                             RequiresReview = false
                         },
@@ -351,6 +561,7 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "ANODIZED_GRAY",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
+                            IsSelectable = false,
                             Name = "Anodizado gris",
                             RequiresReview = false
                         },
@@ -358,10 +569,17 @@ namespace Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("50000000-0000-0000-0000-000000000003"),
                             Code = "BLACK_MATTE",
+                            Color = "BLACK",
+                            CommercialCode = "PP13",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Negro mate",
-                            RequiresReview = false
+                            IsSelectable = true,
+                            Material = "ALUMINUM",
+                            Name = "ALUCOLOR POLIESTER NEGRO MATE PP13",
+                            NormalizedType = "PAINTED",
+                            Process = "POLYESTER",
+                            RequiresReview = false,
+                            Texture = "MATTE"
                         },
                         new
                         {
@@ -369,6 +587,7 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "SPECIAL",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
+                            IsSelectable = false,
                             Name = "Acabado especial",
                             RequiresReview = true
                         },
@@ -378,7 +597,89 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "UNKNOWN",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
+                            IsSelectable = false,
                             Name = "Acabado por confirmar",
+                            RequiresReview = true
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000006"),
+                            Code = "FINISH_PP003",
+                            Color = "WHITE",
+                            CommercialCode = "PP003",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Material = "ALUMINUM",
+                            Name = "ALUCOLOR POLIESTER BLANCO PP003",
+                            NormalizedType = "PAINTED",
+                            Process = "POLYESTER",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000007"),
+                            Code = "FINISH_GRAY_POLYESTER",
+                            Color = "GRAY",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Material = "ALUMINUM",
+                            Name = "ALUCOLOR POLIESTER PINTURA GRIS",
+                            NormalizedType = "PAINTED",
+                            Process = "POLYESTER",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000008"),
+                            Code = "FINISH_CHAMPAGNE_POLY",
+                            Color = "CHAMPAGNE",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Material = "ALUMINUM",
+                            Name = "ALUCOLOR POLIESTER PINTURA CHAMPAÑA",
+                            NormalizedType = "PAINTED",
+                            Process = "POLYESTER",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000009"),
+                            Code = "FINISH_AN001",
+                            Color = "WHITE",
+                            CommercialCode = "AN001",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Material = "ALUMINUM",
+                            Name = "ANODIZADO BLANCO MATE AN001",
+                            NormalizedType = "ANODIZED",
+                            RequiresReview = false,
+                            Texture = "MATTE"
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000010"),
+                            Code = "FINISH_INOX",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Material = "STAINLESS_STEEL",
+                            Name = "INOX",
+                            NormalizedType = "STAINLESS_STEEL",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("50000000-0000-0000-0000-000000000011"),
+                            Code = "FINISH_NA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "N.A",
+                            NormalizedType = "NOT_APPLICABLE",
                             RequiresReview = true
                         });
                 });
@@ -635,11 +936,26 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<decimal?>("ChamberThicknessMm")
+                        .HasPrecision(8, 3)
+                        .HasColumnType("numeric(8,3)")
+                        .HasColumnName("chamber_thickness_mm");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)")
                         .HasColumnName("code");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("color");
+
+                    b.Property<string>("Composition")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("composition");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -650,15 +966,75 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
+                    b.Property<string>("Family")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("family");
+
+                    b.Property<decimal?>("InnerThicknessMm")
+                        .HasPrecision(8, 3)
+                        .HasColumnType("numeric(8,3)")
+                        .HasColumnName("inner_thickness_mm");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsSelectable")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_selectable");
+
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
                         .HasColumnName("name");
+
+                    b.Property<decimal?>("OuterThicknessMm")
+                        .HasPrecision(8, 3)
+                        .HasColumnType("numeric(8,3)")
+                        .HasColumnName("outer_thickness_mm");
+
+                    b.Property<string>("Pattern")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("pattern");
+
+                    b.Property<string>("ProductLine")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("product_line");
+
+                    b.Property<string>("ProductToken")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("product_token");
+
+                    b.Property<string>("PvbColor")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("pvb_color");
+
+                    b.Property<decimal?>("PvbThicknessMm")
+                        .HasPrecision(8, 3)
+                        .HasColumnType("numeric(8,3)")
+                        .HasColumnName("pvb_thickness_mm");
+
+                    b.Property<string>("PvbType")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("pvb_type");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.Property<string>("Treatment")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("treatment");
 
                     b.Property<DateTimeOffset?>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone")
@@ -670,6 +1046,10 @@ namespace Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_glass_types_code");
 
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_glass_types_name");
+
                     b.ToTable("glass_types", "core");
 
                     b.HasData(
@@ -677,65 +1057,121 @@ namespace Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000005"),
                             Code = "TEMP_5",
+                            Color = "INC",
+                            Composition = "TEMPERED",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
                             IsActive = true,
-                            Name = "Vidrio templado monolitico 5 mm"
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO TEMPLADO 5 MM INC",
+                            OuterThicknessMm = 5m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000006"),
                             Code = "TEMP_6",
+                            Color = "INC",
+                            Composition = "TEMPERED",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
                             IsActive = true,
-                            Name = "Vidrio templado monolitico 6 mm"
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO TEMPLADO 6 MM INC",
+                            OuterThicknessMm = 6m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000007"),
                             Code = "TEMP_8",
+                            Color = "INC",
+                            Composition = "TEMPERED",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
                             IsActive = true,
-                            Name = "Vidrio templado monolitico 8 mm"
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO TEMPLADO 8 MM INC",
+                            OuterThicknessMm = 8m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000008"),
                             Code = "TEMP_10",
+                            Color = "INC",
+                            Composition = "TEMPERED",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
                             IsActive = true,
-                            Name = "Vidrio templado monolitico 10 mm"
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO TEMPLADO 10 MM INC",
+                            OuterThicknessMm = 10m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000001"),
                             Code = "LAM_4_4",
+                            Composition = "RAW",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
                             IsActive = true,
-                            Name = "Vidrio laminado 4+4"
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM INC",
+                            OuterThicknessMm = 4m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000002"),
                             Code = "LAM_4_4_GRAY",
+                            Composition = "RAW",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
                             IsActive = true,
-                            Name = "Vidrio laminado gris 4+4"
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,38 MM GRIS + 4 MM INC",
+                            OuterThicknessMm = 4m,
+                            PvbColor = "GRIS",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000003"),
                             Code = "LAM_5_5",
+                            Composition = "RAW",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 5m,
                             IsActive = true,
-                            Name = "Vidrio laminado 5+5"
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC",
+                            OuterThicknessMm = 5m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
                         },
                         new
                         {
                             Id = new Guid("10000000-0000-0000-0000-000000000004"),
                             Code = "LAM_5_5_GRAY",
+                            Composition = "RAW",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 5m,
                             IsActive = true,
-                            Name = "Vidrio laminado gris 5+5"
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM GRIS + 5 MM INC",
+                            OuterThicknessMm = 5m,
+                            PvbColor = "GRIS",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
                         },
                         new
                         {
@@ -743,7 +1179,314 @@ namespace Infrastructure.Persistence.Migrations
                             Code = "UNKNOWN_GLASS",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             IsActive = true,
-                            Name = "Tipo de vidrio por confirmar"
+                            IsSelectable = false,
+                            Name = "Tipo de vidrio por confirmar",
+                            RequiresReview = true
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000a"),
+                            Code = "TEMP_4",
+                            Color = "INC",
+                            Composition = "TEMPERED",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO TEMPLADO 4 MM INC",
+                            OuterThicknessMm = 4m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000b"),
+                            Code = "RAW_4_INC",
+                            Color = "INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO CRUDO 4 MM INC",
+                            OuterThicknessMm = 4m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000c"),
+                            Code = "RAW_4_MINI_BOREAL",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO CRUDO 4 MM MINI BOREAL",
+                            OuterThicknessMm = 4m,
+                            Pattern = "MINI_BOREAL",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000d"),
+                            Code = "RAW_5_INC",
+                            Color = "INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO CRUDO 5 MM INC",
+                            OuterThicknessMm = 5m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000e"),
+                            Code = "RAW_6_INC",
+                            Color = "INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "MONOLITHIC",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION MONOLITICO CRUDO 6 MM INC",
+                            OuterThicknessMm = 6m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000000f"),
+                            Code = "LAM_4_038_6_INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 6m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 6 MM INC",
+                            OuterThicknessMm = 4m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000010"),
+                            Code = "LAM_4_076_6_INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 6m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,76 MM INC + 6 MM INC",
+                            OuterThicknessMm = 4m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.76m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000011"),
+                            Code = "LAM_4_114_6_INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 6m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 1,14 MM INC + 6 MM INC",
+                            OuterThicknessMm = 4m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 1.14m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000012"),
+                            Code = "LAM_6_076_AC_8_INC",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 8m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO CRUDO 6 MM INC + PVB 0,76 MM ACÚSTICO + 8 MM INC",
+                            OuterThicknessMm = 6m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.76m,
+                            PvbType = "ACOUSTIC",
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000013"),
+                            Code = "LAMT_5_114_5_INC",
+                            Composition = "TEMPERED",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 5m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO TEMPLADO 5 MM INC + PVB 1,14 MM INC + 5 MM INC",
+                            OuterThicknessMm = 5m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 1.14m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000014"),
+                            Code = "LAMT_6_152_6_INC",
+                            Composition = "TEMPERED",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 6m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION LAMINADO TEMPLADO 6 MM INC + PVB 1,52 MM INC + 6 MM INC",
+                            OuterThicknessMm = 6m,
+                            PvbColor = "INC",
+                            PvbThicknessMm = 1.52m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000015"),
+                            ChamberThicknessMm = 12m,
+                            Code = "IGU_T5_CAM12_T6",
+                            Color = "INC",
+                            Composition = "TEMPERED",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "IGU",
+                            InnerThicknessMm = 6m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION TEMPLADO 5 MM INC + CÁMARA 12 MM + TEMPLADO 6 MM INC",
+                            OuterThicknessMm = 5m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000016"),
+                            Code = "QG_PREMIUM_CL120",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS PREMIUM LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM CL120",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_PREMIUM",
+                            ProductToken = "CL120",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000017"),
+                            Code = "QG_PREMIUM_CL150",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS PREMIUM LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM CL150",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_PREMIUM",
+                            ProductToken = "CL150",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000018"),
+                            Code = "QG_PREMIUM_CL167",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS PREMIUM LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM CL167",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_PREMIUM",
+                            ProductToken = "CL167",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-000000000019"),
+                            Code = "QG_CLASSIC_BLUE",
+                            Color = "BLUE",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS CLASSIC LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM BLUE",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_CLASSIC",
+                            ProductToken = "BLUE",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000001a"),
+                            Code = "QG_CLASSIC_BRONZE",
+                            Color = "BRONZE",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS CLASSIC LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM BRONZE",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_CLASSIC",
+                            ProductToken = "BRONZE",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000001b"),
+                            Code = "QG_CLASSIC_GREEN",
+                            Color = "GREEN",
+                            Composition = "RAW",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "LAMINATED",
+                            InnerThicknessMm = 4m,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "COMPOSICION CONTROL SOLAR QUALITY GLASS CLASSIC LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM GREEN",
+                            OuterThicknessMm = 4m,
+                            ProductLine = "QUALITY_GLASS_CLASSIC",
+                            ProductToken = "GREEN",
+                            PvbColor = "INC",
+                            PvbThicknessMm = 0.38m,
+                            RequiresReview = false
+                        },
+                        new
+                        {
+                            Id = new Guid("10000000-0000-0000-0000-00000000001c"),
+                            Code = "GLASS_NA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 7, 31, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "NOT_APPLICABLE",
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "N.A.",
+                            RequiresReview = true
                         });
                 });
 
@@ -845,257 +1588,197 @@ namespace Infrastructure.Persistence.Migrations
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000001"),
                             ActiveForRecognition = true,
-                            Code = "K40",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA FERMO",
+                            Code = "SYS_BARANDA_APLIQUE_ACCESORIOS",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA FERMO",
-                            FunctionalType = "FIXED",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema K40",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "40",
-                            TechnicalName = "CUERPO FIJO SISTEMA VENECIA SERIE 40",
-                            Variant = "STANDARD"
+                            Name = "BARANDA DE APLIQUE CON ACCESORIOS INOX CON TUBO SUPERIOR EN ALUMINIO SG",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA DE APLIQUE CON ACCESORIOS INOX CON TUBO SUPERIOR EN ALUMINIO SG",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000002"),
                             ActiveForRecognition = true,
-                            Code = "K50",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA MONZA",
+                            Code = "SYS_BARANDA_APLIQUE_ACCESORI_2",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA MONZA",
-                            FunctionalType = "SLIDING_WINDOW",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema K50",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "50",
-                            TechnicalName = "VENTANA CORREDIZA SISTEMA VENECIA SERIE 50",
-                            Variant = "STANDARD"
+                            Name = "BARANDA DE APLIQUE CON ACCESORIOS INOX CON TUBO SUPERIOR INOX",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA DE APLIQUE CON ACCESORIOS INOX CON TUBO SUPERIOR INOX",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000003"),
                             ActiveForRecognition = true,
-                            Code = "K55",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA PIEGA",
+                            Code = "SYS_BARANDA_APLIQUE_ACCESORI_3",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA PIEGA",
-                            FunctionalType = "FOLDING_DOOR",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema K55",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "55",
-                            TechnicalName = "PUERTA PLEGABLE SISTEMA VENECIA SERIE 55",
-                            Variant = "STANDARD"
+                            Name = "BARANDA DE APLIQUE CON ACCESORIOS INOX SIN TUBO SUPERIOR",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA DE APLIQUE CON ACCESORIOS INOX SIN TUBO SUPERIOR",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000004"),
                             ActiveForRecognition = true,
-                            Code = "K70",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA NAPOLES",
+                            Code = "SYS_BARANDA_EMBEBIDA_TUBO_SUPE",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA NAPOLES",
-                            FunctionalType = "SLIDING_DOOR",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema K70",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "70",
-                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 70",
-                            Variant = "STANDARD"
+                            Name = "BARANDA EMBEBIDA CON TUBO SUPERIOR EN ALUMINIO SG",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EMBEBIDA CON TUBO SUPERIOR EN ALUMINIO SG",
+                            Variant = "TUBO_SUPERIOR"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000005"),
                             ActiveForRecognition = true,
-                            Code = "K90",
+                            Code = "SYS_BARANDA_EMBEBIDA_TUBO_SU_2",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
-                            IsSelectable = false,
-                            Name = "Sistema K90",
-                            Priceable = true,
-                            RequiresReview = false
+                            IsSelectable = true,
+                            Name = "BARANDA EMBEBIDA CON TUBO SUPERIOR EN INOX",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EMBEBIDA CON TUBO SUPERIOR EN INOX",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000006"),
                             ActiveForRecognition = true,
-                            Code = "K100",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA MONACO",
+                            Code = "SYS_BARANDA_EMBEBIDA_TUBO_SU_3",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA MONACO",
-                            FunctionalType = "SLIDING_WINDOW",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema K100",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "100",
-                            TechnicalName = "VENTANA CORREDIZA SISTEMA VENECIA SERIE 100",
-                            Variant = "STANDARD"
+                            Name = "BARANDA EMBEBIDA SIN TUBO SUPERIOR",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EMBEBIDA SIN TUBO SUPERIOR",
+                            Variant = "TUBO_SUPERIOR"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000007"),
                             ActiveForRecognition = true,
-                            Code = "S35",
-                            CommercialLine = "CLASSIC",
-                            CommercialName = "PRIMAVERA SIENA",
+                            Code = "SYS_BARANDA_EMBEBIDA_TUBO_SU_4",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "PRIMAVERA SIENA",
-                            FunctionalType = "PROJECTING",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema S35",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "SG 4",
-                            TechnicalName = "CUERPO PROYECTANTE SISTEMA PRIMAVERA SG 4",
-                            Variant = "STANDARD"
+                            Name = "BARANDA EMBEBIDA SIN TUBO SUPERIOR EN ALUMINIO SG",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EMBEBIDA SIN TUBO SUPERIOR EN ALUMINIO SG",
+                            Variant = "TUBO_SUPERIOR"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000008"),
                             ActiveForRecognition = true,
-                            Code = "S50",
-                            CommercialLine = "CLASSIC",
-                            CommercialName = "PRIMAVERA LAGO",
+                            Code = "SYS_BARANDA_BOTELLAS_ACCESORIO",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "PRIMAVERA LAGO",
-                            FunctionalType = "SLIDING_WINDOW",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema S50",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "SG 5",
-                            TechnicalName = "VENTANA CORREDIZA SISTEMA PRIMAVERA SG 5",
-                            Variant = "STANDARD"
+                            Name = "BARANDA EN BOTELLAS  CON ACCESORIOS INOX CON TUBO SUPERIOR",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EN BOTELLAS  CON ACCESORIOS INOX CON TUBO SUPERIOR",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000009"),
                             ActiveForRecognition = true,
-                            Code = "S80",
-                            CommercialLine = "CLASSIC",
-                            CommercialName = "PRIMAVERA LUCCA",
+                            Code = "SYS_BARANDA_BOTELLAS_ACCESOR_2",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "BARANDA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "PRIMAVERA LUCCA",
-                            FunctionalType = "SLIDING_WINDOW",
+                            Family = "BARANDA",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema S80",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "SG 8",
-                            TechnicalName = "VENTANA CORREDIZA SISTEMA PRIMAVERA SG 8",
-                            Variant = "STANDARD"
+                            Name = "BARANDA EN BOTELLAS  CON ACCESORIOS INOX SIN TUBO SUPERIOR",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "BARANDA EN BOTELLAS  CON ACCESORIOS INOX SIN TUBO SUPERIOR",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000010"),
                             ActiveForRecognition = true,
-                            Code = "3890",
-                            CommercialLine = "CLASSIC",
-                            CommercialName = "SG 3890",
+                            Code = "SYS_BARANDILLA_TUBO_SUPERIOR_I",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "SG 3890",
-                            FunctionalType = "SWING_DOOR",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Sistema 3890",
+                            Name = "BARANDILLA CON TUBO SUPERIOR EN INOX",
                             Priceable = true,
                             RequiresReview = false,
-                            Series = "3890",
-                            TechnicalName = "PUERTA BATIENTE SISTEMA SG 3890",
-                            Variant = "STANDARD"
+                            TechnicalName = "BARANDILLA CON TUBO SUPERIOR EN INOX",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000011"),
                             ActiveForRecognition = true,
-                            Code = "SG45",
+                            Code = "SYS_BARANDILLA_TUBO_SUPERIOR",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             FuturePriceable = true,
                             IsActive = true,
-                            IsSelectable = false,
-                            Name = "Sistema SG45",
+                            IsSelectable = true,
+                            Name = "BARANDILLA SIN TUBO SUPERIOR",
                             Priceable = true,
-                            RequiresReview = false
+                            RequiresReview = false,
+                            TechnicalName = "BARANDILLA SIN TUBO SUPERIOR",
+                            Variant = "TUBO_SUPERIOR"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000012"),
-                            ActiveForRecognition = true,
-                            Code = "BARANDA",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FuturePriceable = true,
-                            IsActive = true,
-                            IsSelectable = false,
-                            Name = "Sistema para barandas",
-                            Priceable = false,
-                            RequiresReview = true
-                        },
-                        new
-                        {
-                            Id = new Guid("30000000-0000-0000-0000-000000000013"),
-                            ActiveForRecognition = true,
-                            Code = "DIVISION_BANO",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FuturePriceable = true,
-                            IsActive = true,
-                            IsSelectable = false,
-                            Name = "Sistema para divisiones de bano",
-                            Priceable = false,
-                            RequiresReview = true
-                        },
-                        new
-                        {
-                            Id = new Guid("30000000-0000-0000-0000-000000000014"),
-                            ActiveForRecognition = true,
-                            Code = "SG_VEN70_POCKET_DOOR",
-                            CommercialLine = "ESSENTIAL",
-                            CommercialName = "VENECIA NAPOLES POCKET",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Family = "VENECIA NAPOLES",
-                            FunctionalType = "SLIDING_DOOR",
-                            FuturePriceable = true,
-                            IsActive = true,
-                            IsSelectable = true,
-                            Name = "Puerta corrediza pocket Venecia serie 70",
-                            Priceable = true,
-                            RequiresReview = false,
-                            Series = "70",
-                            TechnicalName = "PUERTA CORREDIZA POCKET SISTEMA VENECIA SERIE 70",
-                            Variant = "POCKET"
-                        },
-                        new
-                        {
-                            Id = new Guid("30000000-0000-0000-0000-000000000015"),
                             ActiveForRecognition = true,
                             Code = "SG_PRIM_SIENA_CASEMENT",
                             CommercialLine = "CLASSIC",
@@ -1106,16 +1789,36 @@ namespace Infrastructure.Persistence.Migrations
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Ventana batiente Primavera Siena",
+                            Name = "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
                             Priceable = true,
                             RequiresReview = false,
                             Series = "SG 4",
-                            TechnicalName = "VENTANA BATIENTE SISTEMA PRIMAVERA SG 4",
+                            TechnicalName = "CUERPO BATIENTE LINEA CLASSIC SISTEMA PRIMAVERA SERIE SG 4",
                             Variant = "STANDARD"
                         },
                         new
                         {
-                            Id = new Guid("30000000-0000-0000-0000-000000000016"),
+                            Id = new Guid("30000000-0000-0000-0000-000000000013"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_BATIENTE_PREMIUM_VE",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "CASEMENT",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "CUERPO BATIENTE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000014"),
                             ActiveForRecognition = true,
                             Code = "SG_PRIM_SIENA_DBL_CASE",
                             CommercialLine = "CLASSIC",
@@ -1126,99 +1829,1207 @@ namespace Infrastructure.Persistence.Migrations
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Ventana doble batiente Primavera Siena",
+                            Name = "CUERPO DOBLE BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
                             Priceable = true,
                             RequiresReview = false,
                             Series = "SG 4",
-                            TechnicalName = "VENTANA DOBLE BATIENTE SISTEMA PRIMAVERA SG 4",
-                            Variant = "DOUBLE"
+                            TechnicalName = "CUERPO DOBLE BATIENTE LINEA CLASSIC SISTEMA PRIMAVERA SERIE SG 4",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000015"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_DOBLE_BATIENTE_PREM",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "DOUBLE_CASEMENT",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "CUERPO DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000016"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_FIJO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO FIJO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO",
+                            Variant = "STANDARD"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000017"),
                             ActiveForRecognition = true,
-                            Code = "SG_PERGOLA",
-                            CommercialLine = "SPECIAL",
-                            CommercialName = "PERGOLA",
+                            Code = "SYS_CUERPO_FIJO_ACCESORIOS_INO",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FunctionalType = "PERGOLA",
+                            FunctionalType = "FIXED",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Pergola",
-                            Priceable = false,
-                            RequiresReview = true,
-                            TechnicalName = "PERGOLA",
-                            Variant = "STANDARD"
+                            Name = "CUERPO FIJO CON ACCESORIOS INOX",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO CON ACCESORIOS INOX",
+                            Variant = "INOX"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000018"),
                             ActiveForRecognition = true,
-                            Code = "SG_BATH_DIV_INOX",
-                            CommercialLine = "SPECIAL",
-                            CommercialName = "DIVISION DE BANO INOX",
+                            Code = "SYS_CUERPO_FIJO_CLASSIC_3831",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "SG 3831",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FunctionalType = "BATHROOM_DIVISION",
+                            Family = "SG 3831",
+                            FunctionalType = "FIXED",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Division de bano inox",
-                            Priceable = false,
-                            RequiresReview = true,
-                            TechnicalName = "DIVISION DE BANO INOX",
-                            Variant = "INOX"
+                            Name = "CUERPO FIJO LINEA CLASSIC SISTEMA 3831",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO LINEA CLASSIC SISTEMA 3831",
+                            Variant = "STANDARD"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000019"),
                             ActiveForRecognition = true,
-                            Code = "SG_LOUVER",
-                            CommercialLine = "SPECIAL",
-                            CommercialName = "PERSIANA",
+                            Code = "SYS_CUERPO_FIJO_CLASSIC_PRIMAV",
+                            CommercialLine = "CLASSIC",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FunctionalType = "LOUVER",
+                            FunctionalType = "FIXED",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Persiana",
-                            Priceable = false,
-                            RequiresReview = true,
-                            TechnicalName = "PERSIANA",
+                            Name = "CUERPO FIJO LINEA CLASSIC SISTEMA PRIMAVERA SERIE      SG 3",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO LINEA CLASSIC SISTEMA PRIMAVERA SERIE      SG 3",
                             Variant = "STANDARD"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000020"),
                             ActiveForRecognition = true,
-                            Code = "SG_SKYLIGHT",
-                            CommercialLine = "SPECIAL",
-                            CommercialName = "CLARABOYA",
+                            Code = "SYS_CUERPO_FIJO_CLASSIC_PRIM_2",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA SIENA",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FunctionalType = "SKYLIGHT",
+                            Family = "PRIMAVERA SIENA",
+                            FunctionalType = "FIXED",
                             FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = true,
-                            Name = "Claraboia",
-                            Priceable = false,
-                            RequiresReview = true,
-                            TechnicalName = "CLARABOYA",
+                            Name = "CUERPO FIJO LINEA CLASSIC PRIMAVERA SIENA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 4",
+                            TechnicalName = "CUERPO FIJO LINEA CLASSIC SISTEMA PRIMAVERA SERIE SG 4",
                             Variant = "STANDARD"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000021"),
                             ActiveForRecognition = true,
-                            Code = "SG_SYS_NA",
-                            CommercialName = "N.A",
+                            Code = "SYS_CUERPO_FIJO_PREMIUM_LSA",
+                            CommercialLine = "PREMIUM",
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            FuturePriceable = false,
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO FIJO LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000022"),
+                            ActiveForRecognition = true,
+                            Code = "K40",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO FIJO LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "CUERPO FIJO LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000023"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_FIJO_TRADICIONAL_SG",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 3831",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3831",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO FIJO LINEA TRADICIONAL SISTEMA SG 3831",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 3831",
+                            TechnicalName = "CUERPO FIJO LINEA TRADICIONAL SISTEMA SG 3831",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000024"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_FIJO_TUBULAR_SG",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO FIJO TUBULAR SG",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO FIJO TUBULAR SG",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000025"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_PLEGABLE_PREMIUM_VE",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "FOLDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PLEGABLE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "CUERPO PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000026"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_PROYECTANTE_CLASSIC",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "SG 3831",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3831",
+                            FunctionalType = "PROJECTING",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PROYECTANTE LINEA CLASSIC SISTEMA 3831",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO PROYECTANTE LINEA CLASSIC SISTEMA 3831",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000027"),
+                            ActiveForRecognition = true,
+                            Code = "S35",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA SIENA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA SIENA",
+                            FunctionalType = "PROJECTING",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 4",
+                            TechnicalName = "CUERPO PROYECTANTE LINEA CLASSIC SISTEMA PRIMAVERA SERIE SG 4",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000028"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_PROYECTANTE_PREMIUM",
+                            CommercialLine = "PREMIUM",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "PROJECTING",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PROYECTANTE LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "CUERPO PROYECTANTE LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000029"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_PROYECTANTE_PREMI_2",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "PROJECTING",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PROYECTANTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "CUERPO PROYECTANTE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000030"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_CUERPO_PROYECTANTE_TRADICI",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 3831",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3831",
+                            FunctionalType = "PROJECTING",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "CUERPO PROYECTANTE LINEA TRADICIONAL SISTEMA SG 3831",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 3831",
+                            TechnicalName = "CUERPO PROYECTANTE LINEA TRADICIONAL SISTEMA SG 3831",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000031"),
+                            ActiveForRecognition = true,
+                            Code = "SG_BATH_DIV_INOX",
+                            CommercialLine = "SPECIAL",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SHOWER_DIVISION",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "DIVISIONES DE BAÑO CON ACCESORIOS EN ACERO INOXIDABLE",
+                            Priceable = false,
+                            RequiresReview = false,
+                            TechnicalName = "DIVISIONES DE BAÑO CON ACCESORIOS EN ACERO INOXIDABLE",
+                            Variant = "INOX"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000032"),
+                            ActiveForRecognition = true,
+                            Code = "SG45",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG45",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG45",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA ENTRE PLACAS LINEA STICK SISTEMA SG45 PIEL DE VIDRIO",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG45",
+                            TechnicalName = "FACHADA ENTRE PLACAS LINEA STICK SISTEMA SG45 PIEL DE VIDRIO",
+                            Variant = "PIEL_DE_VIDRIO"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000033"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_FACHADA_ENTRE_PLACAS_STICK",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG45",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG45",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA ENTRE PLACAS LINEA STICK SISTEMA SG45 TAPA Y PISAVIDRIO",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG45",
+                            TechnicalName = "FACHADA ENTRE PLACAS LINEA STICK SISTEMA SG45 TAPA Y PISAVIDRIO",
+                            Variant = "TAPA_PISAVIDRIO"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000034"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_FACHADA_FLOTANTE_STICK_SG1",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG101",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG101",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA FLOTANTE LINEA STICK SISTEMA SG101",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG101",
+                            TechnicalName = "FACHADA FLOTANTE LINEA STICK SISTEMA SG101",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000035"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_FACHADA_FLOTANTE_STICK_S_2",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG103",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG103",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA FLOTANTE LINEA STICK SISTEMA SG103",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG103",
+                            TechnicalName = "FACHADA FLOTANTE LINEA STICK SISTEMA SG103",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000036"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_FACHADA_FLOTANTE_STICK_SG4",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG45",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG45",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA FLOTANTE LINEA STICK SISTEMA SG45 PIEL DE VIDRIO",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG45",
+                            TechnicalName = "FACHADA FLOTANTE LINEA STICK SISTEMA SG45 PIEL DE VIDRIO",
+                            Variant = "PIEL_DE_VIDRIO"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000037"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_FACHADA_FLOTANTE_STICK_S_3",
+                            CommercialLine = "STICK",
+                            CommercialName = "SG45",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG45",
+                            FunctionalType = "FIXED",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "FACHADA FLOTANTE LINEA STICK SISTEMA SG45 TAPA Y PISAVIDRIO",
+                            Priceable = false,
+                            RequiresReview = true,
+                            Series = "SG45",
+                            TechnicalName = "FACHADA FLOTANTE LINEA STICK SISTEMA SG45 TAPA Y PISAVIDRIO",
+                            Variant = "TAPA_PISAVIDRIO"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000038"),
+                            ActiveForRecognition = true,
+                            Code = "SG_SYS_NA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FuturePriceable = true,
                             IsActive = true,
                             IsSelectable = false,
                             Name = "N.A",
                             Priceable = false,
                             RequiresReview = true,
-                            TechnicalName = "N.A"
+                            TechnicalName = "N.A",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000039"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_BATIENTE_ACCESORIOS",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA BATIENTE CON ACCESORIOS INOX",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA BATIENTE CON ACCESORIOS INOX",
+                            Variant = "INOX"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000040"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_BATIENTE_CLASSIC_PR",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA SIENA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA SIENA",
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 4",
+                            TechnicalName = "PUERTA BATIENTE LINEA CLASSIC SISTEMA PRIMAVERA SERIE SG 4",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000041"),
+                            ActiveForRecognition = true,
+                            Code = "3890",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "SG 3890",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3890",
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 3890",
+                            TechnicalName = "PUERTA BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000042"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_BATIENTE_PREMIUM_VE",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "PUERTA BATIENTE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000043"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_ACCESIORI",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA CON ACCESIORIOS INOX",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA CORREDIZA CON ACCESIORIOS INOX",
+                            Variant = "INOX"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000044"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_CLASSIC_8",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "SG 8025",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 8025",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA CLASSIC SISTEMA 8025",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA CORREDIZA LINEA CLASSIC SISTEMA 8025",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000045"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_CLASSIC_P",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA LAGO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA LAGO",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA CLASSIC PRIMAVERA LAGO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 5",
+                            TechnicalName = "PUERTA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 5",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000046"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_CLASSIC_2",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA LUCCA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA LUCCA",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA CLASSIC PRIMAVERA LUCCA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 8",
+                            TechnicalName = "PUERTA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 8",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000047"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_PREMIUM_L",
+                            CommercialLine = "PREMIUM",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9052",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9052",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000048"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_PREMIUM_V",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA MONACO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA MONACO",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 100",
+                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 100",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000049"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_PREMIUM_2",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA MONACO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA MONACO",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 100 TIPO POKET",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 100",
+                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 100 TIPO POKET",
+                            Variant = "POCKET"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000050"),
+                            ActiveForRecognition = true,
+                            Code = "K70",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA NAPOLES",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA NAPOLES",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 70",
+                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 70",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000051"),
+                            ActiveForRecognition = true,
+                            Code = "SG_VEN70_POCKET_DOOR",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA NAPOLES",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA NAPOLES",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES TIPO POKET",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 70",
+                            TechnicalName = "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 70 TIPO POKET",
+                            Variant = "POCKET"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000052"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_TRADICION",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 7038",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 7038",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 7038",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 7038",
+                            TechnicalName = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 7038",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000053"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_TRADICI_2",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 744",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 744",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 744",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 744",
+                            TechnicalName = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 744",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000054"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_TRADICI_3",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 8025",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 8025",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 8025",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 8025",
+                            TechnicalName = "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA  SG 8025",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000055"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_SG_3890",
+                            CommercialName = "SG 3890",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3890",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA SG 3890",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 3890",
+                            TechnicalName = "PUERTA CORREDIZA SG 3890",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000056"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_CORREDIZA_TUBULAR_S",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA CORREDIZA TUBULAR SG",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA CORREDIZA TUBULAR SG",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000057"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_DOBLE_BATIENTE_ACCE",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA DOBLE BATIENTE CON ACCESORIOS INOX",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "PUERTA DOBLE BATIENTE CON ACCESORIOS INOX",
+                            Variant = "INOX"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000058"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_DOBLE_BATIENTE_CLAS",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "SG 3890",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 3890",
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA DOBLE BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 3890",
+                            TechnicalName = "PUERTA DOBLE BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000059"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PUERTA_DOBLE_BATIENTE_PREM",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA FERMO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA FERMO",
+                            FunctionalType = "SWING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 40",
+                            TechnicalName = "PUERTA DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 40",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000060"),
+                            ActiveForRecognition = true,
+                            Code = "K55",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA PIEGA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA PIEGA",
+                            FunctionalType = "FOLDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "PUERTA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 55",
+                            TechnicalName = "PUERTA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 55",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000061"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_APILABLE_SIGMA",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "SIGMA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SIGMA",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA APILABLE SIGMA",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "SISTEMA APILABLE SIGMA",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000062"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_DESLIZANTE_TWIN_DN",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "TWIN DN",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "TWIN DN",
+                            FunctionalType = "SLIDING_DOOR",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA DESLIZANTE TWIN DN",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "SISTEMA DESLIZANTE TWIN DN",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000063"),
+                            ActiveForRecognition = true,
+                            Code = "SG_PERGOLA",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "PERGOLA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PERGOLA",
+                            FunctionalType = "PERGOLA",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA PERGOLA SG",
+                            Priceable = false,
+                            RequiresReview = false,
+                            TechnicalName = "SISTEMA PERGOLA SG",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000064"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_PLEGABLE_TAURO",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "TAURO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "TAURO",
+                            FunctionalType = "FOLDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA PLEGABLE TAURO",
+                            Priceable = false,
+                            RequiresReview = true,
+                            TechnicalName = "SISTEMA PLEGABLE TAURO",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000065"),
+                            ActiveForRecognition = true,
+                            Code = "SG_LOUVER",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "REJILLA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "REJILLA",
+                            FunctionalType = "GRILLE",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA REJILLA",
+                            Priceable = false,
+                            RequiresReview = false,
+                            TechnicalName = "SISTEMA REJILLA",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000066"),
+                            ActiveForRecognition = true,
+                            Code = "SG_SKYLIGHT",
+                            CommercialLine = "SPECIAL",
+                            CommercialName = "CLARABOYA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "CLARABOYA",
+                            FunctionalType = "SKYLIGHT",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "SISTEMA SG CLARABOYA",
+                            Priceable = false,
+                            RequiresReview = false,
+                            TechnicalName = "SISTEMA SG CLARABOYA",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000067"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_CLASSIC",
+                            CommercialLine = "CLASSIC",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 3",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "VENTANA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 3",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000068"),
+                            ActiveForRecognition = true,
+                            Code = "S50",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA LAGO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA LAGO",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA CLASSIC PRIMAVERA LAGO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 5",
+                            TechnicalName = "VENTANA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 5",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000069"),
+                            ActiveForRecognition = true,
+                            Code = "S80",
+                            CommercialLine = "CLASSIC",
+                            CommercialName = "PRIMAVERA LUCCA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "PRIMAVERA LUCCA",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA CLASSIC PRIMAVERA LUCCA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 8",
+                            TechnicalName = "VENTANA CORREDIZA LINEA CLASSIC  SISTEMA PRIMAVERA SERIE SG 8",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000070"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_PREMIUM",
+                            CommercialLine = "PREMIUM",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9060",
+                            Priceable = true,
+                            RequiresReview = false,
+                            TechnicalName = "VENTANA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9060",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000071"),
+                            ActiveForRecognition = true,
+                            Code = "K100",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA MONACO",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA MONACO",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 100",
+                            TechnicalName = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 100",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000072"),
+                            ActiveForRecognition = true,
+                            Code = "K50",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA MONZA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA MONZA",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 50",
+                            TechnicalName = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 50",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000073"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_PREMIU_2",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA NAPOLES",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA NAPOLES",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 70",
+                            TechnicalName = "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 70",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000074"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_TRADICIO",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 5020",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 5020",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 5020",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 5020",
+                            TechnicalName = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 5020",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000075"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_TRADIC_2",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 744",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 744",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 744",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 744",
+                            TechnicalName = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 744",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000076"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_CORREDIZA_TRADIC_3",
+                            CommercialLine = "TRADITIONAL",
+                            CommercialName = "SG 8025",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "SG 8025",
+                            FunctionalType = "SLIDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 8025",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SG 8025",
+                            TechnicalName = "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 8025",
+                            Variant = "STANDARD"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000077"),
+                            ActiveForRecognition = true,
+                            Code = "SYS_VENTANA_PLEGABLE_PREMIUM_V",
+                            CommercialLine = "PREMIUM",
+                            CommercialName = "VENECIA PIEGA",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 5, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            Family = "VENECIA PIEGA",
+                            FunctionalType = "FOLDING_WINDOW",
+                            FuturePriceable = true,
+                            IsActive = true,
+                            IsSelectable = true,
+                            Name = "VENTANA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA",
+                            Priceable = true,
+                            RequiresReview = false,
+                            Series = "SERIE 55",
+                            TechnicalName = "VENTANA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 55",
+                            Variant = "STANDARD"
                         });
                 });
 
@@ -3035,6 +4846,909 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.Requirement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("PreQuoteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pre_quote_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_requirements_created_by_user_id");
+
+                    b.HasIndex("PreQuoteId")
+                        .HasDatabaseName("ix_requirements_pre_quote_id");
+
+                    b.HasIndex("PreQuoteId", "IsActive")
+                        .HasDatabaseName("ix_requirements_pre_quote_id_is_active");
+
+                    b.ToTable("requirements", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirements_status", "\"status\" IN ('Pending', 'Processing', 'Processed', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Ai2ElementId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("ai2_element_id");
+
+                    b.Property<decimal?>("AreaSquareMeters")
+                        .HasColumnType("numeric(12,4)")
+                        .HasColumnName("area_square_meters");
+
+                    b.Property<string>("Arrangement")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("arrangement");
+
+                    b.Property<decimal?>("Confidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ElementType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("element_type");
+
+                    b.Property<string>("ExtractionStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("extraction_status");
+
+                    b.Property<string>("FinishColorNormalized")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_color_normalized");
+
+                    b.Property<string>("FinishColorRaw")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_color_raw");
+
+                    b.Property<string>("FinishExplicitCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_explicit_code");
+
+                    b.Property<string>("FinishNormalizedType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_normalized_type");
+
+                    b.Property<string>("FinishRawDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("finish_raw_description");
+
+                    b.Property<bool?>("FinishRequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("finish_requires_review");
+
+                    b.Property<string>("FinishTextureNormalized")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_texture_normalized");
+
+                    b.Property<string>("FinishTextureRaw")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("finish_texture_raw");
+
+                    b.Property<int?>("FixedPanelCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("fixed_panel_count");
+
+                    b.Property<string>("FunctionalType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("functional_type");
+
+                    b.Property<string>("GeometryType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("geometry_type");
+
+                    b.Property<string>("GlassCoating")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_coating");
+
+                    b.Property<string>("GlassColorNormalized")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_color_normalized");
+
+                    b.Property<string>("GlassColorRaw")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_color_raw");
+
+                    b.Property<string>("GlassComposition")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_composition");
+
+                    b.Property<string>("GlassRawSpecification")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("glass_raw_specification");
+
+                    b.Property<bool?>("GlassRequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("glass_requires_review");
+
+                    b.Property<decimal?>("GlassThicknessMm")
+                        .HasColumnType("numeric(8,3)")
+                        .HasColumnName("glass_thickness_mm");
+
+                    b.Property<string>("GlassTransparency")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_transparency");
+
+                    b.Property<string>("GlassTreatmentNormalized")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_treatment_normalized");
+
+                    b.Property<string>("GlassTreatmentRaw")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_treatment_raw");
+
+                    b.Property<string>("GlassTypeNormalized")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_type_normalized");
+
+                    b.Property<string>("GlassTypeRaw")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("glass_type_raw");
+
+                    b.Property<int?>("HeightMillimeters")
+                        .HasColumnType("integer")
+                        .HasColumnName("height_millimeters");
+
+                    b.Property<string>("Modulation")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("modulation");
+
+                    b.Property<int?>("MovablePanelCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("movable_panel_count");
+
+                    b.Property<string>("OpeningDirection")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("opening_direction");
+
+                    b.Property<string>("Operation")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("operation");
+
+                    b.Property<int?>("PanelCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("panel_count");
+
+                    b.Property<int?>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("RequestedProfileRaw")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("requested_profile_raw");
+
+                    b.Property<string>("RequestedSystemRaw")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("requested_system_raw");
+
+                    b.Property<Guid>("RequirementExtractionResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_extraction_result_id");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.PrimitiveCollection<string[]>("ReviewReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("review_reasons");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.PrimitiveCollection<string[]>("SpecialFeatures")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("special_features");
+
+                    b.Property<int?>("WidthMillimeters")
+                        .HasColumnType("integer")
+                        .HasColumnName("width_millimeters");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementExtractionResultId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_extracted_items_extraction_sequence");
+
+                    b.ToTable("requirement_extracted_items", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_extracted_items_positive_values", "\"sequence\" > 0 AND (\"quantity\" IS NULL OR \"quantity\" > 0) AND (\"width_millimeters\" IS NULL OR \"width_millimeters\" > 0) AND (\"height_millimeters\" IS NULL OR \"height_millimeters\" > 0) AND (\"area_square_meters\" IS NULL OR \"area_square_meters\" > 0) AND (\"confidence\" IS NULL OR (\"confidence\" >= 0 AND \"confidence\" <= 1)) AND (\"glass_thickness_mm\" IS NULL OR \"glass_thickness_mm\" > 0)");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItemEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CellRange")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("cell_range");
+
+                    b.Property<decimal?>("Confidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int?>("PageNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("page_number");
+
+                    b.Property<Guid>("RequirementExtractedItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_extracted_item_id");
+
+                    b.Property<string>("SheetName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("sheet_name");
+
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_id");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("source_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementExtractedItemId")
+                        .HasDatabaseName("ix_requirement_extracted_item_evidence_item_id");
+
+                    b.ToTable("requirement_extracted_item_evidence", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_extracted_item_evidence_location", "((\"source_type\" IN ('Native','Ocr') AND \"page_number\" IS NOT NULL AND \"page_number\" > 0 AND \"sheet_name\" IS NULL AND \"cell_range\" IS NULL) OR (\"source_type\" = 'Xlsx' AND \"page_number\" IS NULL AND \"sheet_name\" IS NOT NULL AND \"cell_range\" IS NOT NULL AND btrim(\"sheet_name\") <> '' AND btrim(\"cell_range\") <> '')) AND (\"confidence\" IS NULL OR (\"confidence\" >= 0 AND \"confidence\" <= 1))");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractionResult", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ConflictCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("conflict_count");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<int>("IssueCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("issue_count");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("item_count");
+
+                    b.Property<int>("ItemsRequiringReview")
+                        .HasColumnType("integer")
+                        .HasColumnName("items_requiring_review");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload_json");
+
+                    b.Property<string>("ProcessingMethod")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("processing_method");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("provider");
+
+                    b.Property<Guid>("RequirementProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_processing_attempt_id");
+
+                    b.Property<string>("SchemaVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("schema_version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementProcessingAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_extraction_results_processing_attempt_id");
+
+                    b.ToTable("requirement_extraction_results", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_extraction_results_counts", "\"item_count\" >= 0 AND \"items_requiring_review\" >= 0 AND \"items_requiring_review\" <= \"item_count\" AND \"issue_count\" >= 0 AND \"conflict_count\" >= 0");
+
+                            t.HasCheckConstraint("ck_requirement_extraction_results_duration", "\"duration_ms\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_key");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementId")
+                        .HasDatabaseName("ix_requirement_files_requirement_id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_files_storage_key");
+
+                    b.ToTable("requirement_files", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_files_size_bytes_positive", "\"size_bytes\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementProcessingAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("ProcessingState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("processing_state");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_processing_attempts_correlation_id");
+
+                    b.HasIndex("RequestedByUserId")
+                        .HasDatabaseName("ix_requirement_processing_attempts_requested_by_user_id");
+
+                    b.HasIndex("RequirementId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_processing_attempts_active_requirement_id")
+                        .HasFilter("\"processing_state\" IN ('Pending', 'Processing')");
+
+                    b.HasIndex("ProcessingState", "CreatedAtUtc", "Id")
+                        .HasDatabaseName("ix_requirement_processing_attempts_state_created_id");
+
+                    b.ToTable("requirement_processing_attempts", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_processing_attempts_lifecycle", "((\"processing_state\" = 'Pending' AND \"started_at_utc\" IS NULL AND \"outcome\" IS NULL AND \"completed_at_utc\" IS NULL AND \"error_code\" IS NULL) OR (\"processing_state\" = 'Processing' AND \"started_at_utc\" IS NOT NULL AND \"started_at_utc\" >= \"created_at_utc\" AND \"outcome\" IS NULL AND \"completed_at_utc\" IS NULL AND \"error_code\" IS NULL) OR (\"processing_state\" = 'Finished' AND \"started_at_utc\" IS NOT NULL AND \"started_at_utc\" >= \"created_at_utc\" AND \"completed_at_utc\" IS NOT NULL AND \"completed_at_utc\" >= \"started_at_utc\" AND ((\"outcome\" IN ('Completed', 'RequiresReview') AND \"error_code\" IS NULL) OR (\"outcome\" = 'Failed' AND \"error_code\" IS NOT NULL AND \"error_code\" <> ''))))");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("RequirementExtractionResultId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_extraction_result_id");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<Guid>("RequirementProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_processing_attempt_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementExtractionResultId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_technical_proposals_extraction_result_id");
+
+                    b.HasIndex("RequirementId")
+                        .HasDatabaseName("ix_requirement_technical_proposals_requirement_id");
+
+                    b.HasIndex("RequirementProcessingAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_technical_proposals_processing_attempt_id");
+
+                    b.HasIndex("RequirementId", "CreatedAtUtc", "Id")
+                        .HasDatabaseName("ix_requirement_technical_proposals_requirement_created_id");
+
+                    b.ToTable("requirement_technical_proposals", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_technical_proposals_status", "\"status\" IN ('Completed', 'RequiresReview')");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalFinishAlternative", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Confidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<Guid>("FinishTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("finish_type_id");
+
+                    b.Property<Guid>("ProposalItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_item_id");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
+
+                    b.PrimitiveCollection<string[]>("Reasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("reasons");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FinishTypeId");
+
+                    b.HasIndex("ProposalItemId", "Rank")
+                        .IsUnique()
+                        .HasDatabaseName("ux_req_tech_proposal_finish_alt_item_rank");
+
+                    b.ToTable("requirement_technical_proposal_finish_alternatives", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_req_tech_proposal_finish_alt_confidence", "\"confidence\" >= 0 AND \"confidence\" <= 1");
+
+                            t.HasCheckConstraint("ck_req_tech_proposal_finish_alt_rank", "\"rank\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalGlassAlternative", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Confidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<Guid>("GlassTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("glass_type_id");
+
+                    b.Property<Guid>("ProposalItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_item_id");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
+
+                    b.PrimitiveCollection<string[]>("Reasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("reasons");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GlassTypeId");
+
+                    b.HasIndex("ProposalItemId", "Rank")
+                        .IsUnique()
+                        .HasDatabaseName("ux_req_tech_proposal_glass_alt_item_rank");
+
+                    b.ToTable("requirement_technical_proposal_glass_alternatives", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_req_tech_proposal_glass_alt_confidence", "\"confidence\" >= 0 AND \"confidence\" <= 1");
+
+                            t.HasCheckConstraint("ck_req_tech_proposal_glass_alt_rank", "\"rank\" > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalHistoricalExample", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CandidateId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("candidate_id");
+
+                    b.PrimitiveCollection<string[]>("Differences")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("differences");
+
+                    b.Property<string>("HistoricalReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("historical_reference");
+
+                    b.PrimitiveCollection<string[]>("MatchedFeatures")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("matched_features");
+
+                    b.Property<Guid>("ProposalItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_item_id");
+
+                    b.Property<string>("QuoteId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("quote_id");
+
+                    b.Property<decimal>("SimilarityScore")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("similarity_score");
+
+                    b.Property<string>("TechnicalExplanation")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("technical_explanation");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProposalItemId")
+                        .HasDatabaseName("ix_req_tech_proposal_hist_examples_item_id");
+
+                    b.ToTable("requirement_technical_proposal_historical_examples", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_req_tech_proposal_hist_examples_similarity", "\"similarity_score\" >= 0 AND \"similarity_score\" <= 1");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<decimal>("FinishConfidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("finish_confidence");
+
+                    b.PrimitiveCollection<string[]>("FinishResolutionReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("finish_resolution_reasons");
+
+                    b.Property<decimal>("GlassConfidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("glass_confidence");
+
+                    b.PrimitiveCollection<string[]>("GlassResolutionReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("glass_resolution_reasons");
+
+                    b.Property<decimal?>("HistoricalAverageSimilarity")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("historical_average_similarity");
+
+                    b.Property<decimal?>("HistoricalBestSimilarity")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("historical_best_similarity");
+
+                    b.Property<string>("HistoricalSimilarityStatus")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("historical_similarity_status");
+
+                    b.Property<int>("HistoricalSupportCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("historical_support_count");
+
+                    b.Property<bool>("IsPriceable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_priceable");
+
+                    b.Property<bool>("IsTechnicallyComplete")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_technically_complete");
+
+                    b.Property<decimal>("OverallConfidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("overall_confidence");
+
+                    b.Property<Guid>("RequirementExtractedItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_extracted_item_id");
+
+                    b.Property<bool>("RequiresReview")
+                        .HasColumnType("boolean")
+                        .HasColumnName("requires_review");
+
+                    b.PrimitiveCollection<string[]>("ReviewReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("review_reasons");
+
+                    b.Property<Guid?>("SuggestedFinishTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("suggested_finish_type_id");
+
+                    b.Property<Guid?>("SuggestedGlassTypeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("suggested_glass_type_id");
+
+                    b.Property<Guid?>("SuggestedSystemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("suggested_system_id");
+
+                    b.Property<decimal>("SystemConfidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("system_confidence");
+
+                    b.PrimitiveCollection<string[]>("SystemResolutionReasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("system_resolution_reasons");
+
+                    b.Property<Guid>("TechnicalProposalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("technical_proposal_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequirementExtractedItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_requirement_technical_proposal_items_extracted_item_id");
+
+                    b.HasIndex("SuggestedFinishTypeId");
+
+                    b.HasIndex("SuggestedGlassTypeId");
+
+                    b.HasIndex("SuggestedSystemId");
+
+                    b.HasIndex("TechnicalProposalId")
+                        .HasDatabaseName("ix_requirement_technical_proposal_items_proposal_id");
+
+                    b.ToTable("requirement_technical_proposal_items", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_technical_proposal_items_confidence", "\"overall_confidence\" >= 0 AND \"overall_confidence\" <= 1 AND \"system_confidence\" >= 0 AND \"system_confidence\" <= 1 AND \"glass_confidence\" >= 0 AND \"glass_confidence\" <= 1 AND \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1 AND (\"historical_best_similarity\" IS NULL OR (\"historical_best_similarity\" >= 0 AND \"historical_best_similarity\" <= 1)) AND (\"historical_average_similarity\" IS NULL OR (\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1))");
+
+                            t.HasCheckConstraint("ck_requirement_technical_proposal_items_historical_support", "\"historical_support_count\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalSystemAlternative", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Confidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("confidence");
+
+                    b.Property<Guid>("ProductSystemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_system_id");
+
+                    b.Property<Guid>("ProposalItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("proposal_item_id");
+
+                    b.Property<int>("Rank")
+                        .HasColumnType("integer")
+                        .HasColumnName("rank");
+
+                    b.PrimitiveCollection<string[]>("Reasons")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("reasons");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductSystemId");
+
+                    b.HasIndex("ProposalItemId", "Rank")
+                        .IsUnique()
+                        .HasDatabaseName("ux_req_tech_proposal_system_alt_item_rank");
+
+                    b.ToTable("requirement_technical_proposal_system_alternatives", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_requirement_technical_proposal_system_alternatives_confidence", "\"confidence\" >= 0 AND \"confidence\" <= 1");
+
+                            t.HasCheckConstraint("ck_requirement_technical_proposal_system_alternatives_rank", "\"rank\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.StructuredDocumentExtraction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4236,6 +6950,211 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("Draft");
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.Requirement", b =>
+                {
+                    b.HasOne("Domain.Identity.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.PreQuote", "PreQuote")
+                        .WithMany()
+                        .HasForeignKey("PreQuoteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("PreQuote");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementExtractionResult", "ExtractionResult")
+                        .WithMany("Items")
+                        .HasForeignKey("RequirementExtractionResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExtractionResult");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItemEvidence", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementExtractedItem", "Item")
+                        .WithMany("Evidence")
+                        .HasForeignKey("RequirementExtractedItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractionResult", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", "ProcessingAttempt")
+                        .WithOne("ExtractionResult")
+                        .HasForeignKey("Domain.PreQuotes.RequirementExtractionResult", "RequirementProcessingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProcessingAttempt");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementFile", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.Requirement", "Requirement")
+                        .WithMany("Files")
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Requirement");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementProcessingAttempt", b =>
+                {
+                    b.HasOne("Domain.Identity.User", "RequestedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.Requirement", "Requirement")
+                        .WithMany("ProcessingAttempts")
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("RequestedByUser");
+
+                    b.Navigation("Requirement");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposal", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementExtractionResult", "ExtractionResult")
+                        .WithMany()
+                        .HasForeignKey("RequirementExtractionResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.Requirement", "Requirement")
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", "ProcessingAttempt")
+                        .WithMany()
+                        .HasForeignKey("RequirementProcessingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExtractionResult");
+
+                    b.Navigation("ProcessingAttempt");
+
+                    b.Navigation("Requirement");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalFinishAlternative", b =>
+                {
+                    b.HasOne("Domain.Catalogs.FinishType", null)
+                        .WithMany()
+                        .HasForeignKey("FinishTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.RequirementTechnicalProposalItem", "ProposalItem")
+                        .WithMany("FinishAlternatives")
+                        .HasForeignKey("ProposalItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProposalItem");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalGlassAlternative", b =>
+                {
+                    b.HasOne("Domain.Catalogs.GlassType", null)
+                        .WithMany()
+                        .HasForeignKey("GlassTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.RequirementTechnicalProposalItem", "ProposalItem")
+                        .WithMany("GlassAlternatives")
+                        .HasForeignKey("ProposalItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProposalItem");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalHistoricalExample", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementTechnicalProposalItem", "ProposalItem")
+                        .WithMany("HistoricalExamples")
+                        .HasForeignKey("ProposalItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProposalItem");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalItem", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementExtractedItem", "ExtractedItem")
+                        .WithMany()
+                        .HasForeignKey("RequirementExtractedItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.Catalogs.FinishType", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedFinishTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.Catalogs.GlassType", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedGlassTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.Catalogs.ProductSystem", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestedSystemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.PreQuotes.RequirementTechnicalProposal", "TechnicalProposal")
+                        .WithMany("Items")
+                        .HasForeignKey("TechnicalProposalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExtractedItem");
+
+                    b.Navigation("TechnicalProposal");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalSystemAlternative", b =>
+                {
+                    b.HasOne("Domain.Catalogs.ProductSystem", null)
+                        .WithMany()
+                        .HasForeignKey("ProductSystemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.RequirementTechnicalProposalItem", "ProposalItem")
+                        .WithMany("SystemAlternatives")
+                        .HasForeignKey("ProposalItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProposalItem");
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.StructuredDocumentExtraction", b =>
                 {
                     b.HasOne("Domain.PreQuotes.DocumentExtractionResult", "DocumentExtractionResult")
@@ -4474,6 +7393,44 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("ReviewReasons");
 
                     b.Navigation("SourcePages");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.Requirement", b =>
+                {
+                    b.Navigation("Files");
+
+                    b.Navigation("ProcessingAttempts");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
+                {
+                    b.Navigation("Evidence");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractionResult", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementProcessingAttempt", b =>
+                {
+                    b.Navigation("ExtractionResult");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposal", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposalItem", b =>
+                {
+                    b.Navigation("FinishAlternatives");
+
+                    b.Navigation("GlassAlternatives");
+
+                    b.Navigation("HistoricalExamples");
+
+                    b.Navigation("SystemAlternatives");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.StructuredDocumentExtraction", b =>

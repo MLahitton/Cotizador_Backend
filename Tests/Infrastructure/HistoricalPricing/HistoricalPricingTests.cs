@@ -73,6 +73,27 @@ public sealed class HistoricalPricingTests : IDisposable
     }
 
     [Fact]
+    public async Task CandidateSearch_DoesNotRequireExactRequestedSystem()
+    {
+        CreateWorkbook("quote.xlsx", true);
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var corpus = new HistoricalQuoteCorpus(options, new HistoricalWorkbookReader());
+        await corpus.ReloadAsync(TestContext.Current.CancellationToken);
+        var service = new HistoricalComparableCandidateService(corpus, options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "XYZ", "LAMINADO 4+4", 4m, "CORREDIZA",
+            3m, 2m, 6m, "NEGRO MATE", 2m));
+
+        var candidate = Assert.Single(candidates);
+        Assert.Contains("category", candidate.MatchedSignals);
+        Assert.Contains("glass", candidate.MatchedSignals);
+        Assert.Contains("area", candidate.MatchedSignals);
+        Assert.Contains("system", candidate.MissingSignals);
+        Assert.DoesNotContain("system", candidate.MatchedSignals);
+    }
+
+    [Fact]
     public async Task CandidateSearch_AppliesCandidateAndQuoteExclusionsBeforeTopK()
     {
         CreateWorkbook("quote.xlsx", true);

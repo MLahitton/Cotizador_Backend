@@ -62,5 +62,20 @@ public sealed class GlassTypeCatalogRepository(ApplicationDbContext dbContext)
                         range.Status,
                         range.ValidFromUtc,
                         range.ValidToUtc))
-                    .SingleOrDefault()));
+                    .SingleOrDefault(),
+                value.Family,
+                value.Composition,
+                value.Treatment,
+                value.OuterThicknessMm,
+                value.InnerThicknessMm,
+                value.PvbThicknessMm,
+                value.PvbType,
+                value.PvbColor,
+                value.ChamberThicknessMm,
+                value.ProductLine,
+                value.ProductToken,
+                value.Pattern,
+                value.Color,
+                value.IsSelectable,
+                value.RequiresReview));
 }

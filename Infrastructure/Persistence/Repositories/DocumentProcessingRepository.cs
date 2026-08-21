@@ -13,16 +13,6 @@ public sealed class DocumentProcessingRepository(
     private const string ActiveAttemptIndexName =
         "ux_document_processing_attempts_active_pre_quote_document_id";
 
-    public const string ClaimPendingAttemptSql =
-        """
-        SELECT *
-        FROM core.document_processing_attempts
-        WHERE processing_state = 'Pending'
-        ORDER BY created_at_utc, id
-        LIMIT 1
-        FOR UPDATE SKIP LOCKED
-        """;
-
     public async Task<DocumentProcessingSource?> FindDocumentSourceAsync(
         Guid documentId,
         CancellationToken cancellationToken)
@@ -58,42 +48,6 @@ public sealed class DocumentProcessingRepository(
         catch (DbException exception)
         {
             throw new DocumentProcessingQueryException(exception);
-        }
-    }
-
-    public async Task<Guid?> ClaimNextPendingDocumentProcessingAttemptAsync(
-        DateTimeOffset startedAtUtc,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await using var transaction =
-                await dbContext.Database.BeginTransactionAsync(
-                    cancellationToken);
-            var attempts = await dbContext.DocumentProcessingAttempts
-                .FromSqlRaw(ClaimPendingAttemptSql)
-                .AsTracking()
-                .ToListAsync(cancellationToken);
-            var attempt = attempts.SingleOrDefault();
-
-            if (attempt is null)
-            {
-                await transaction.CommitAsync(cancellationToken);
-                return null;
-            }
-
-            attempt.Start(startedAtUtc);
-            await SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            return attempt.Id;
-        }
-        catch (DocumentProcessingPersistenceException)
-        {
-            throw;
-        }
-        catch (DbException exception)
-        {
-            throw new DocumentProcessingPersistenceException(exception);
         }
     }
 

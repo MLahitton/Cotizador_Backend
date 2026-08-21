@@ -78,8 +78,27 @@ public sealed record FinishTypeCatalogReadModel(
     Guid Id,
     string Code,
     string Name,
+    string? NormalizedType,
+    string? Color,
+    string? Texture,
+    string? Process,
+    string? CommercialCode,
+    string? Material,
+    bool IsSelectable,
     bool RequiresReview,
-    bool IsActive);
+    bool IsActive)
+{
+    public FinishTypeCatalogReadModel(
+        Guid id,
+        string code,
+        string name,
+        bool requiresReview,
+        bool isActive)
+        : this(id, code, name, null, null, null, null, null, null, true,
+            requiresReview, isActive)
+    {
+    }
+}
 
 public sealed record CatalogAliasReadModel(
     Guid Id,

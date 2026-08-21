@@ -1,0 +1,593 @@
+using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
+using Application.Common.Abstractions.Clients;
+using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Projects;
+using Domain.PreQuotes;
+
+namespace Application.PreQuotes.GetRequirementTechnicalProposal;
+
+public sealed record GetRequirementTechnicalProposalCommand(Guid RequirementId);
+
+public enum GetRequirementTechnicalProposalFailure
+{
+    None = 0,
+    InvalidRequest,
+    Unauthorized,
+    InactiveUser,
+    RequirementNotFound,
+    PreQuoteNotFound,
+    ProjectNotFound,
+    InactiveProject,
+    ClientNotFound,
+    InactiveClient,
+    TechnicalProposalNotFound,
+    QueryError
+}
+
+public sealed record GetRequirementTechnicalProposalResult(
+    bool IsSuccess,
+    GetRequirementTechnicalProposalFailure Failure,
+    RequirementTechnicalProposalReadModel? Proposal)
+{
+    public static GetRequirementTechnicalProposalResult Success(
+        RequirementTechnicalProposalReadModel proposal) =>
+        new(true, GetRequirementTechnicalProposalFailure.None, proposal);
+
+    public static GetRequirementTechnicalProposalResult Failed(
+        GetRequirementTechnicalProposalFailure failure) =>
+        new(false, failure, null);
+}
+
+public sealed class GetRequirementTechnicalProposalService(
+    ICurrentUser currentUser,
+    IIdentityRepository identityRepository,
+    IRequirementRepository requirementRepository,
+    IPreQuoteRepository preQuoteRepository,
+    IProjectRepository projectRepository,
+    IClientRepository clientRepository,
+    IProductSystemCatalogRepository productSystemCatalog,
+    IGlassTypeCatalogRepository glassCatalog,
+    IFinishTypeCatalogRepository finishCatalog)
+{
+    public async Task<GetRequirementTechnicalProposalResult> ExecuteAsync(
+        GetRequirementTechnicalProposalCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.RequirementId == Guid.Empty)
+        {
+            return GetRequirementTechnicalProposalResult.Failed(
+                GetRequirementTechnicalProposalFailure.InvalidRequest);
+        }
+
+        if (!currentUser.IsAuthenticated
+            || currentUser.UserId is not Guid userId)
+        {
+            return GetRequirementTechnicalProposalResult.Failed(
+                GetRequirementTechnicalProposalFailure.Unauthorized);
+        }
+
+        var access = await ValidateAccessAsync(
+            command.RequirementId,
+            userId,
+            cancellationToken);
+        if (access.Failure != GetRequirementTechnicalProposalFailure.None)
+        {
+            return GetRequirementTechnicalProposalResult.Failed(access.Failure);
+        }
+
+        RequirementTechnicalProposal? proposal;
+        IReadOnlyList<ProductSystemCatalogReadModel> systems;
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses;
+        IReadOnlyList<FinishTypeCatalogReadModel> finishes;
+        try
+        {
+            proposal = await requirementRepository.GetCurrentTechnicalProposalAsync(
+                command.RequirementId,
+                cancellationToken);
+            if (proposal is null)
+            {
+                return GetRequirementTechnicalProposalResult.Failed(
+                    GetRequirementTechnicalProposalFailure.TechnicalProposalNotFound);
+            }
+
+            systems = await productSystemCatalog.ListActiveAsync(cancellationToken);
+            glasses = await glassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                cancellationToken);
+            finishes = await finishCatalog.ListActiveAsync(cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return GetRequirementTechnicalProposalResult.Failed(
+                GetRequirementTechnicalProposalFailure.QueryError);
+        }
+
+        return GetRequirementTechnicalProposalResult.Success(
+            MapProposal(proposal, systems, glasses, finishes));
+    }
+
+    private async Task<AccessValidationResult> ValidateAccessAsync(
+        Guid requirementId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        Requirement? requirement;
+        try
+        {
+            var user = await identityRepository.FindUserByIdAsync(
+                userId,
+                cancellationToken);
+            if (user is null)
+            {
+                return new(GetRequirementTechnicalProposalFailure.Unauthorized);
+            }
+
+            if (!user.IsActive)
+            {
+                return new(GetRequirementTechnicalProposalFailure.InactiveUser);
+            }
+
+            requirement = await requirementRepository.FindByIdAsync(
+                requirementId,
+                cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new(GetRequirementTechnicalProposalFailure.QueryError);
+        }
+
+        if (requirement is null || !requirement.IsActive)
+        {
+            return new(GetRequirementTechnicalProposalFailure.RequirementNotFound);
+        }
+
+        return await ValidatePreQuoteAccessAsync(
+            requirement.PreQuoteId,
+            userId,
+            cancellationToken);
+    }
+
+    private async Task<AccessValidationResult> ValidatePreQuoteAccessAsync(
+        Guid preQuoteId,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var preQuote = await preQuoteRepository.FindByIdAsync(
+                preQuoteId,
+                cancellationToken);
+            if (preQuote is null)
+            {
+                return new(GetRequirementTechnicalProposalFailure.PreQuoteNotFound);
+            }
+
+            var project = await projectRepository.FindByIdAsync(
+                preQuote.ProjectId,
+                cancellationToken);
+            if (project is null)
+            {
+                return new(GetRequirementTechnicalProposalFailure.ProjectNotFound);
+            }
+
+            if (project.CreatedByUserId != userId)
+            {
+                return new(GetRequirementTechnicalProposalFailure.RequirementNotFound);
+            }
+
+            if (!project.IsActive)
+            {
+                return new(GetRequirementTechnicalProposalFailure.InactiveProject);
+            }
+
+            var client = await clientRepository.FindByIdAsync(
+                project.ClientId,
+                cancellationToken);
+            if (client is null)
+            {
+                return new(GetRequirementTechnicalProposalFailure.ClientNotFound);
+            }
+
+            return client.IsActive
+                ? new(GetRequirementTechnicalProposalFailure.None)
+                : new(GetRequirementTechnicalProposalFailure.InactiveClient);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return new(GetRequirementTechnicalProposalFailure.QueryError);
+        }
+    }
+
+    private static RequirementTechnicalProposalReadModel MapProposal(
+        RequirementTechnicalProposal proposal,
+        IReadOnlyList<ProductSystemCatalogReadModel> systems,
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        IReadOnlyList<FinishTypeCatalogReadModel> finishes)
+    {
+        var systemById = systems.ToDictionary(system => system.Id);
+        var glassById = glasses.ToDictionary(glass => glass.GlassTypeId);
+        var finishById = finishes.ToDictionary(finish => finish.Id);
+        var items = proposal.Items
+            .OrderBy(item => item.ExtractedItem.Sequence)
+            .ThenBy(item => item.Id)
+            .Select(item => MapItem(item, systemById, glassById, finishById))
+            .ToArray();
+
+        return new RequirementTechnicalProposalReadModel(
+            proposal.RequirementId,
+            proposal.Id,
+            proposal.RequirementProcessingAttemptId,
+            proposal.RequirementExtractionResultId,
+            proposal.Status.ToString(),
+            proposal.CreatedAtUtc,
+            items.Length,
+            items.Count(item => item.RequiresReview),
+            items.Count(item => item.IsTechnicallyComplete),
+            items.Count(item => item.IsPriceable),
+            items);
+    }
+
+    private static RequirementTechnicalProposalItemReadModel MapItem(
+        RequirementTechnicalProposalItem item,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems,
+        IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses,
+        IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes)
+    {
+        var extracted = item.ExtractedItem;
+        return new RequirementTechnicalProposalItemReadModel(
+            item.Id,
+            item.RequirementExtractedItemId,
+            extracted.Ai2ElementId,
+            extracted.Sequence,
+            extracted.Reference,
+            extracted.Description,
+            extracted.ElementType.ToString(),
+            extracted.Quantity,
+            extracted.WidthMillimeters,
+            extracted.HeightMillimeters,
+            extracted.AreaSquareMeters,
+            extracted.Confidence,
+            extracted.ExtractionStatus.ToString(),
+            new RequirementTechnicalProposalSuggestedReadModel(
+                MapSystem(item.SuggestedSystemId, systems),
+                MapGlass(item.SuggestedGlassTypeId, glasses),
+                MapFinish(item.SuggestedFinishTypeId, finishes)),
+            new RequirementTechnicalProposalAlternativesReadModel(
+                item.SystemAlternatives
+                    .OrderBy(alternative => alternative.Rank)
+                    .Select(alternative =>
+                        MapSystemAlternative(alternative, systems))
+                    .WhereNotNull()
+                    .ToArray(),
+                item.GlassAlternatives
+                    .OrderBy(alternative => alternative.Rank)
+                    .Select(alternative =>
+                        MapGlassAlternative(alternative, glasses))
+                    .WhereNotNull()
+                    .ToArray(),
+                item.FinishAlternatives
+                    .OrderBy(alternative => alternative.Rank)
+                    .Select(alternative =>
+                        MapFinishAlternative(alternative, finishes))
+                    .WhereNotNull()
+                    .ToArray()),
+            new RequirementTechnicalProposalConfidenceReadModel(
+                item.OverallConfidence,
+                item.SystemConfidence,
+                item.GlassConfidence,
+                item.FinishConfidence),
+            item.RequiresReview,
+            item.ReviewReasons,
+            item.IsTechnicallyComplete,
+            item.IsPriceable,
+            new RequirementTechnicalProposalHistoricalEvidenceReadModel(
+                item.HistoricalSimilarityStatus,
+                item.HistoricalSupportCount,
+                item.HistoricalBestSimilarity,
+                item.HistoricalAverageSimilarity,
+                item.HistoricalExamples
+                    .OrderByDescending(example => example.SimilarityScore)
+                    .ThenBy(example => example.CandidateId)
+                    .Select(MapHistoricalExample)
+                    .ToArray()),
+            new RequirementTechnicalProposalTraceReadModel(
+                extracted.RequestedSystemRaw,
+                extracted.RequestedProfileRaw,
+                extracted.FunctionalType,
+                extracted.Operation,
+                extracted.GlassRawSpecification,
+                extracted.GlassTypeRaw,
+                extracted.GlassTypeNormalized,
+                extracted.GlassThicknessMm,
+                extracted.FinishRawDescription,
+                extracted.FinishNormalizedType,
+                extracted.FinishColorRaw,
+                extracted.FinishColorNormalized,
+                extracted.SpecialFeatures),
+            extracted.Evidence
+                .OrderBy(evidence => evidence.PageNumber ?? int.MaxValue)
+                .ThenBy(evidence => evidence.SheetName)
+                .ThenBy(evidence => evidence.CellRange)
+                .ThenBy(evidence => evidence.Id)
+                .Select(MapEvidence)
+                .ToArray());
+    }
+
+    private static RequirementTechnicalProposalSystemAlternativeReadModel?
+        MapSystemAlternative(
+            RequirementTechnicalProposalSystemAlternative alternative,
+            IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems) =>
+        MapSystem(alternative.ProductSystemId, systems) is { } option
+            ? new(option, alternative.Rank, alternative.Confidence,
+                alternative.Reasons)
+            : null;
+
+    private static RequirementTechnicalProposalGlassAlternativeReadModel?
+        MapGlassAlternative(
+            RequirementTechnicalProposalGlassAlternative alternative,
+            IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses) =>
+        MapGlass(alternative.GlassTypeId, glasses) is { } option
+            ? new(option, alternative.Rank, alternative.Confidence,
+                alternative.Reasons)
+            : null;
+
+    private static RequirementTechnicalProposalFinishAlternativeReadModel?
+        MapFinishAlternative(
+            RequirementTechnicalProposalFinishAlternative alternative,
+            IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes) =>
+        MapFinish(alternative.FinishTypeId, finishes) is { } option
+            ? new(option, alternative.Rank, alternative.Confidence,
+                alternative.Reasons)
+            : null;
+
+    private static RequirementTechnicalProposalSystemOptionReadModel? MapSystem(
+        Guid? id,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems) =>
+        id is { } value && systems.TryGetValue(value, out var system)
+            ? new(
+                system.Id,
+                system.Code,
+                system.Name,
+                system.TechnicalName,
+                system.CommercialName,
+                system.FunctionalType,
+                system.Family,
+                system.Series,
+                system.CommercialLine,
+                system.Variant)
+            : null;
+
+    private static RequirementTechnicalProposalGlassOptionReadModel? MapGlass(
+        Guid? id,
+        IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses) =>
+        id is { } value && glasses.TryGetValue(value, out var glass)
+            ? new(
+                glass.GlassTypeId,
+                glass.Code,
+                glass.Name,
+                glass.Family,
+                glass.Composition,
+                glass.Treatment,
+                glass.OuterThicknessMm,
+                glass.InnerThicknessMm,
+                glass.PvbThicknessMm,
+                glass.PvbType,
+                glass.PvbColor,
+                glass.ChamberThicknessMm,
+                glass.ProductLine,
+                glass.ProductToken,
+                glass.Pattern,
+                glass.Color)
+            : null;
+
+    private static RequirementTechnicalProposalFinishOptionReadModel? MapFinish(
+        Guid? id,
+        IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes) =>
+        id is { } value && finishes.TryGetValue(value, out var finish)
+            ? new(
+                finish.Id,
+                finish.Code,
+                finish.Name,
+                finish.NormalizedType,
+                finish.Color,
+                finish.Texture,
+                finish.Process,
+                finish.CommercialCode,
+                finish.Material)
+            : null;
+
+    private static RequirementTechnicalProposalHistoricalExampleReadModel
+        MapHistoricalExample(RequirementTechnicalProposalHistoricalExample example) =>
+        new(
+            example.CandidateId,
+            example.QuoteId,
+            example.HistoricalReference,
+            example.SimilarityScore,
+            example.MatchedFeatures,
+            example.Differences,
+            example.TechnicalExplanation);
+
+    private static RequirementTechnicalProposalEvidenceReadModel MapEvidence(
+        RequirementExtractedItemEvidence evidence) =>
+        new(
+            evidence.PageNumber,
+            evidence.SourceType.ToString(),
+            evidence.Text,
+            evidence.SheetName,
+            evidence.CellRange,
+            evidence.SourceId,
+            evidence.Confidence,
+            evidence.Status.ToString());
+
+    private sealed record AccessValidationResult(
+        GetRequirementTechnicalProposalFailure Failure);
+}
+
+internal static class EnumerableNullFilteringExtensions
+{
+    public static IEnumerable<T> WhereNotNull<T>(this IEnumerable<T?> values)
+        where T : class
+    {
+        foreach (var value in values)
+        {
+            if (value is not null)
+            {
+                yield return value;
+            }
+        }
+    }
+}
+
+public sealed record RequirementTechnicalProposalReadModel(
+    Guid RequirementId,
+    Guid TechnicalProposalId,
+    Guid ProcessingAttemptId,
+    Guid ExtractionResultId,
+    string Status,
+    DateTimeOffset CreatedAtUtc,
+    int ItemCount,
+    int ItemsRequiringReview,
+    int TechnicallyCompleteItems,
+    int PriceableItems,
+    IReadOnlyList<RequirementTechnicalProposalItemReadModel> Items);
+
+public sealed record RequirementTechnicalProposalItemReadModel(
+    Guid ItemId,
+    Guid ExtractedItemId,
+    string? ElementId,
+    int Sequence,
+    string? Reference,
+    string Description,
+    string ElementType,
+    int? Quantity,
+    int? WidthMm,
+    int? HeightMm,
+    decimal? AreaM2,
+    decimal? ExtractionConfidence,
+    string ExtractionStatus,
+    RequirementTechnicalProposalSuggestedReadModel Suggested,
+    RequirementTechnicalProposalAlternativesReadModel Alternatives,
+    RequirementTechnicalProposalConfidenceReadModel Confidence,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons,
+    bool IsTechnicallyComplete,
+    bool IsPriceable,
+    RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
+    RequirementTechnicalProposalTraceReadModel Trace,
+    IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence);
+
+public sealed record RequirementTechnicalProposalSuggestedReadModel(
+    RequirementTechnicalProposalSystemOptionReadModel? System,
+    RequirementTechnicalProposalGlassOptionReadModel? Glass,
+    RequirementTechnicalProposalFinishOptionReadModel? Finish);
+
+public sealed record RequirementTechnicalProposalAlternativesReadModel(
+    IReadOnlyList<RequirementTechnicalProposalSystemAlternativeReadModel> Systems,
+    IReadOnlyList<RequirementTechnicalProposalGlassAlternativeReadModel> Glass,
+    IReadOnlyList<RequirementTechnicalProposalFinishAlternativeReadModel> Finishes);
+
+public sealed record RequirementTechnicalProposalConfidenceReadModel(
+    decimal Overall,
+    decimal System,
+    decimal Glass,
+    decimal Finish);
+
+public sealed record RequirementTechnicalProposalSystemOptionReadModel(
+    Guid Id,
+    string Code,
+    string DisplayName,
+    string? TechnicalName,
+    string? CommercialName,
+    string? FunctionalType,
+    string? Family,
+    string? Series,
+    string? CommercialLine,
+    string? Variant);
+
+public sealed record RequirementTechnicalProposalGlassOptionReadModel(
+    Guid Id,
+    string Code,
+    string DisplayName,
+    string? Family,
+    string? Composition,
+    string? Treatment,
+    decimal? OuterThicknessMm,
+    decimal? InnerThicknessMm,
+    decimal? PvbThicknessMm,
+    string? PvbType,
+    string? PvbColor,
+    decimal? ChamberThicknessMm,
+    string? ProductLine,
+    string? ProductToken,
+    string? Pattern,
+    string? Color);
+
+public sealed record RequirementTechnicalProposalFinishOptionReadModel(
+    Guid Id,
+    string Code,
+    string DisplayName,
+    string? NormalizedType,
+    string? Color,
+    string? Texture,
+    string? Process,
+    string? CommercialCode,
+    string? Material);
+
+public sealed record RequirementTechnicalProposalSystemAlternativeReadModel(
+    RequirementTechnicalProposalSystemOptionReadModel Option,
+    int Rank,
+    decimal Confidence,
+    IReadOnlyList<string> Reasons);
+
+public sealed record RequirementTechnicalProposalGlassAlternativeReadModel(
+    RequirementTechnicalProposalGlassOptionReadModel Option,
+    int Rank,
+    decimal Confidence,
+    IReadOnlyList<string> Reasons);
+
+public sealed record RequirementTechnicalProposalFinishAlternativeReadModel(
+    RequirementTechnicalProposalFinishOptionReadModel Option,
+    int Rank,
+    decimal Confidence,
+    IReadOnlyList<string> Reasons);
+
+public sealed record RequirementTechnicalProposalHistoricalEvidenceReadModel(
+    string Status,
+    int SupportCount,
+    decimal? BestSimilarity,
+    decimal? AverageSimilarity,
+    IReadOnlyList<RequirementTechnicalProposalHistoricalExampleReadModel> Examples);
+
+public sealed record RequirementTechnicalProposalHistoricalExampleReadModel(
+    string CandidateId,
+    string QuoteId,
+    string? HistoricalReference,
+    decimal SimilarityScore,
+    IReadOnlyList<string> MatchedFeatures,
+    IReadOnlyList<string> Differences,
+    string TechnicalExplanation);
+
+public sealed record RequirementTechnicalProposalTraceReadModel(
+    string? RequestedSystemRaw,
+    string? RequestedProfileRaw,
+    string? FunctionalType,
+    string? Operation,
+    string? GlassRawSpecification,
+    string? GlassTypeRaw,
+    string? GlassTypeNormalized,
+    decimal? GlassThicknessMm,
+    string? FinishRawDescription,
+    string? FinishNormalizedType,
+    string? FinishColorRaw,
+    string? FinishColorNormalized,
+    IReadOnlyList<string> SpecialFeatures);
+
+public sealed record RequirementTechnicalProposalEvidenceReadModel(
+    int? PageNumber,
+    string SourceType,
+    string Text,
+    string? SheetName,
+    string? CellRange,
+    string? SourceId,
+    decimal? Confidence,
+    string Status);

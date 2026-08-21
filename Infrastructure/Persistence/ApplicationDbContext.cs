@@ -41,6 +41,33 @@ public sealed class ApplicationDbContext(
     public DbSet<DocumentExtractionResult> DocumentExtractionResults =>
         Set<DocumentExtractionResult>();
 
+    public DbSet<Requirement> Requirements => Set<Requirement>();
+    public DbSet<RequirementFile> RequirementFiles => Set<RequirementFile>();
+    public DbSet<RequirementProcessingAttempt>
+        RequirementProcessingAttempts => Set<RequirementProcessingAttempt>();
+    public DbSet<RequirementExtractionResult>
+        RequirementExtractionResults => Set<RequirementExtractionResult>();
+    public DbSet<RequirementExtractedItem>
+        RequirementExtractedItems => Set<RequirementExtractedItem>();
+    public DbSet<RequirementExtractedItemEvidence>
+        RequirementExtractedItemEvidence => Set<RequirementExtractedItemEvidence>();
+    public DbSet<RequirementTechnicalProposal>
+        RequirementTechnicalProposals => Set<RequirementTechnicalProposal>();
+    public DbSet<RequirementTechnicalProposalItem>
+        RequirementTechnicalProposalItems => Set<RequirementTechnicalProposalItem>();
+    public DbSet<RequirementTechnicalProposalSystemAlternative>
+        RequirementTechnicalProposalSystemAlternatives =>
+            Set<RequirementTechnicalProposalSystemAlternative>();
+    public DbSet<RequirementTechnicalProposalGlassAlternative>
+        RequirementTechnicalProposalGlassAlternatives =>
+            Set<RequirementTechnicalProposalGlassAlternative>();
+    public DbSet<RequirementTechnicalProposalFinishAlternative>
+        RequirementTechnicalProposalFinishAlternatives =>
+            Set<RequirementTechnicalProposalFinishAlternative>();
+    public DbSet<RequirementTechnicalProposalHistoricalExample>
+        RequirementTechnicalProposalHistoricalExamples =>
+            Set<RequirementTechnicalProposalHistoricalExample>();
+
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();
     public DbSet<StructuredExtractionItemGlassDetection>

@@ -28,6 +28,7 @@ builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
     options.AddOperationTransformer<BearerSecurityRequirementTransformer>();
+    options.AddOperationTransformer<RequirementUploadMultipartOperationTransformer>();
 });
 
 builder.Services.AddApplication();

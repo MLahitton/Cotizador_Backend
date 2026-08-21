@@ -12,10 +12,6 @@ public interface IDocumentProcessingRepository
         Guid documentId,
         CancellationToken cancellationToken);
 
-    Task<Guid?> ClaimNextPendingDocumentProcessingAttemptAsync(
-        DateTimeOffset startedAtUtc,
-        CancellationToken cancellationToken);
-
     Task<DocumentProcessingWorkItem?> FindProcessingWorkItemAsync(
         Guid processingAttemptId,
         CancellationToken cancellationToken);
