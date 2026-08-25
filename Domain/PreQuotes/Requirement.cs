@@ -19,6 +19,14 @@ public enum RequirementExtractionValueStatus
     NotApplicable = 5
 }
 
+public enum RequirementCommercialLine
+{
+    Classic = 1,
+    Essential = 2,
+    Bioconfort = 3,
+    Signature = 4
+}
+
 public enum RequirementTechnicalProposalStatus
 {
     Completed = 1,
@@ -36,6 +44,7 @@ public sealed class Requirement
     public Guid PreQuoteId { get; private set; }
     public Guid CreatedByUserId { get; private set; }
     public RequirementStatus Status { get; private set; }
+    public RequirementCommercialLine? CommercialLine { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
     public bool IsActive { get; private set; }
@@ -48,6 +57,7 @@ public sealed class Requirement
     public static Requirement Create(
         Guid preQuoteId,
         Guid createdByUserId,
+        RequirementCommercialLine commercialLine,
         DateTimeOffset createdAtUtc)
     {
         if (preQuoteId == Guid.Empty)
@@ -72,6 +82,7 @@ public sealed class Requirement
             PreQuoteId = preQuoteId,
             CreatedByUserId = createdByUserId,
             Status = RequirementStatus.Pending,
+            CommercialLine = commercialLine,
             CreatedAtUtc = createdAtUtc,
             UpdatedAtUtc = createdAtUtc,
             IsActive = true
@@ -898,6 +909,11 @@ public sealed class RequirementTechnicalProposalItem
     public Guid? SuggestedSystemId { get; private set; }
     public Guid? SuggestedGlassTypeId { get; private set; }
     public Guid? SuggestedFinishTypeId { get; private set; }
+    public Guid? SelectedSystemId { get; private set; }
+    public Guid? SelectedGlassTypeId { get; private set; }
+    public Guid? SelectedFinishTypeId { get; private set; }
+    public DateTimeOffset? SelectedAtUtc { get; private set; }
+    public Guid? SelectedByUserId { get; private set; }
     public decimal OverallConfidence { get; private set; }
     public decimal SystemConfidence { get; private set; }
     public decimal GlassConfidence { get; private set; }
@@ -1028,6 +1044,29 @@ public sealed class RequirementTechnicalProposalItem
     public void AddHistoricalExample(
         RequirementTechnicalProposalHistoricalExample example) =>
         AddAlternative(example, _historicalExamples);
+
+    public void Select(
+        Guid? selectedSystemId,
+        Guid? selectedGlassTypeId,
+        Guid? selectedFinishTypeId,
+        Guid selectedByUserId,
+        DateTimeOffset selectedAtUtc)
+    {
+        if (selectedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario que selecciona es obligatorio.",
+                nameof(selectedByUserId));
+        }
+
+        Requirement.EnsureUtc(selectedAtUtc, nameof(selectedAtUtc));
+
+        SelectedSystemId = EmptyToNull(selectedSystemId);
+        SelectedGlassTypeId = EmptyToNull(selectedGlassTypeId);
+        SelectedFinishTypeId = EmptyToNull(selectedFinishTypeId);
+        SelectedByUserId = selectedByUserId;
+        SelectedAtUtc = selectedAtUtc;
+    }
 
     private void AddAlternative<T>(T value, List<T> target)
         where T : IRequirementTechnicalProposalChild

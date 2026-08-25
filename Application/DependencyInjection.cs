@@ -30,6 +30,7 @@ using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.BuildRequirementTechnicalProposal;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.GetCurrentRequirement;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -78,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<BuildRequirementTechnicalProposalService>();
         services.AddScoped<GetRequirementTechnicalProposalService>();
         services.AddScoped<GetCurrentRequirementService>();
+        services.AddScoped<
+            UpdateRequirementTechnicalProposalItemSelectionService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
         services.AddSingleton<ITechnicalProposalItemToHistoricalPricingMapper,
             TechnicalProposalItemToHistoricalPricingMapper>();

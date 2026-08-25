@@ -128,6 +128,7 @@ public sealed class RequirementPricingController(
             item.Reference,
             item.Description,
             item.Status,
+            item.ConfigurationSource,
             item.Quantity,
             item.PricingAreaM2,
             Map(item.Unit),

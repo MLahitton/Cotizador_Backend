@@ -10,6 +10,9 @@ public sealed class CreateRequirementCommandValidator
         RuleFor(command => command.PreQuoteId)
             .NotEmpty();
 
+        RuleFor(command => command.CommercialLine)
+            .NotEmpty();
+
         RuleFor(command => command.Files)
             .NotNull();
 

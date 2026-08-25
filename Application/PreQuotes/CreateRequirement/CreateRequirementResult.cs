@@ -25,6 +25,7 @@ public sealed record CreatedRequirementResult(
     Guid RequirementId,
     Guid PreQuoteId,
     int FileCount,
+    string CommercialLine,
     string Status,
     DateTimeOffset CreatedAtUtc);
 

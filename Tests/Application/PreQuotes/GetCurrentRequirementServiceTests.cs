@@ -27,6 +27,7 @@ public sealed class GetCurrentRequirementServiceTests
             Guid.NewGuid(),
             context.PreQuote.Id,
             RequirementStatus.Processed,
+            RequirementCommercialLine.Essential,
             At,
             true,
             Guid.NewGuid(),

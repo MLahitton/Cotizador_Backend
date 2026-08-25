@@ -230,6 +230,9 @@ public sealed class GetRequirementTechnicalProposalService(
             proposal.RequirementProcessingAttemptId,
             proposal.RequirementExtractionResultId,
             proposal.Status.ToString(),
+            proposal.Requirement.CommercialLine is null
+                ? null
+                : ToContract(proposal.Requirement.CommercialLine.Value),
             proposal.CreatedAtUtc,
             items.Length,
             items.Count(item => item.RequiresReview),
@@ -264,6 +267,8 @@ public sealed class GetRequirementTechnicalProposalService(
                 MapSystem(item.SuggestedSystemId, systems),
                 MapGlass(item.SuggestedGlassTypeId, glasses),
                 MapFinish(item.SuggestedFinishTypeId, finishes)),
+            MapSelected(item, systems, glasses, finishes),
+            SelectionState(item),
             new RequirementTechnicalProposalAlternativesReadModel(
                 item.SystemAlternatives
                     .OrderBy(alternative => alternative.Rank)
@@ -337,6 +342,40 @@ public sealed class GetRequirementTechnicalProposalService(
             ? new(option, alternative.Rank, alternative.Confidence,
                 alternative.Reasons)
             : null;
+
+    private static RequirementTechnicalProposalSelectedReadModel? MapSelected(
+        RequirementTechnicalProposalItem item,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems,
+        IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses,
+        IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes)
+    {
+        if (item.SelectedAtUtc is not { } selectedAtUtc
+            || item.SelectedByUserId is not { } selectedByUserId)
+        {
+            return null;
+        }
+
+        return new RequirementTechnicalProposalSelectedReadModel(
+            MapSystem(item.SelectedSystemId, systems),
+            MapGlass(item.SelectedGlassTypeId, glasses),
+            MapFinish(item.SelectedFinishTypeId, finishes),
+            selectedAtUtc,
+            selectedByUserId);
+    }
+
+    private static string SelectionState(RequirementTechnicalProposalItem item)
+    {
+        if (item.SelectedAtUtc is null || item.SelectedByUserId is null)
+        {
+            return "UNCONFIRMED";
+        }
+
+        return item.SelectedSystemId == item.SuggestedSystemId
+            && item.SelectedGlassTypeId == item.SuggestedGlassTypeId
+            && item.SelectedFinishTypeId == item.SuggestedFinishTypeId
+                ? "CONFIRMED_AS_SUGGESTED"
+                : "MODIFIED";
+    }
 
     private static RequirementTechnicalProposalGlassAlternativeReadModel?
         MapGlassAlternative(
@@ -444,6 +483,16 @@ public sealed class GetRequirementTechnicalProposalService(
             evidence.Status.ToString());
     }
 
+    private static string ToContract(RequirementCommercialLine commercialLine) =>
+        commercialLine switch
+        {
+            RequirementCommercialLine.Classic => "CLASSIC",
+            RequirementCommercialLine.Essential => "ESSENTIAL",
+            RequirementCommercialLine.Bioconfort => "BIOCONFORT",
+            RequirementCommercialLine.Signature => "SIGNATURE",
+            _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
+        };
+
     private static IReadOnlyDictionary<string, SourceMetadata> SourceMetadataById(
         IReadOnlyList<RequirementFile> files) =>
         files
@@ -509,6 +558,7 @@ public sealed record RequirementTechnicalProposalReadModel(
     Guid ProcessingAttemptId,
     Guid ExtractionResultId,
     string Status,
+    string? CommercialLine,
     DateTimeOffset CreatedAtUtc,
     int ItemCount,
     int ItemsRequiringReview,
@@ -531,6 +581,8 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     decimal? ExtractionConfidence,
     string ExtractionStatus,
     RequirementTechnicalProposalSuggestedReadModel Suggested,
+    RequirementTechnicalProposalSelectedReadModel? Selected,
+    string SelectionState,
     RequirementTechnicalProposalAlternativesReadModel Alternatives,
     RequirementTechnicalProposalConfidenceReadModel Confidence,
     bool RequiresReview,
@@ -548,6 +600,13 @@ public sealed record RequirementTechnicalProposalSuggestedReadModel(
     RequirementTechnicalProposalSystemOptionReadModel? System,
     RequirementTechnicalProposalGlassOptionReadModel? Glass,
     RequirementTechnicalProposalFinishOptionReadModel? Finish);
+
+public sealed record RequirementTechnicalProposalSelectedReadModel(
+    RequirementTechnicalProposalSystemOptionReadModel? System,
+    RequirementTechnicalProposalGlassOptionReadModel? Glass,
+    RequirementTechnicalProposalFinishOptionReadModel? Finish,
+    DateTimeOffset SelectedAtUtc,
+    Guid SelectedByUserId);
 
 public sealed record RequirementTechnicalProposalAlternativesReadModel(
     IReadOnlyList<RequirementTechnicalProposalSystemAlternativeReadModel> Systems,

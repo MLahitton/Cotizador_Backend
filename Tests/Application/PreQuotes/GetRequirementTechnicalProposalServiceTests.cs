@@ -36,6 +36,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             result.Proposal);
         Assert.Equal(context.Requirement.Id, proposal.RequirementId);
         Assert.Equal(1, proposal.ItemCount);
+        Assert.Equal("ESSENTIAL", proposal.CommercialLine);
         Assert.Equal(0, proposal.ItemsRequiringReview);
         Assert.Equal(1, proposal.TechnicallyCompleteItems);
         Assert.Equal(1, proposal.PriceableItems);
@@ -69,6 +70,8 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal(
             "ALUCOLOR POLIESTER NEGRO MATE PP13",
             item.Suggested.Finish.DisplayName);
+        Assert.Null(item.Selected);
+        Assert.Equal("UNCONFIRMED", item.SelectionState);
 
         var systemAlternative = Assert.Single(item.Alternatives.Systems);
         Assert.Equal("K72", systemAlternative.Option.Code);
@@ -79,7 +82,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         var finishAlternative = Assert.Single(item.Alternatives.Finishes);
         Assert.Equal("WHITE_MATTE", finishAlternative.Option.Code);
 
-        Assert.Equal("Completed", item.HistoricalEvidence.Status);
+        Assert.Equal("AVAILABLE", item.HistoricalEvidence.Status);
         Assert.Equal(3, item.HistoricalEvidence.SupportCount);
         Assert.Equal(0.91m, item.HistoricalEvidence.BestSimilarity);
         var example = Assert.Single(item.HistoricalEvidence.Examples);
@@ -100,6 +103,28 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal("A12:H12", evidence.CellRange);
         Assert.Equal("CUADRO VENTANAS NIVEL 1 (3).pdf", evidence.SourceFileName);
         Assert.Equal("Nivel 1", evidence.ContextLabel);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedProposal_ReturnsSelectedSeparatelyFromSuggested()
+    {
+        var context = CreateContext(withProposal: true, withSelected: true);
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.NotNull(item.Suggested.System);
+        Assert.NotNull(item.Selected);
+        Assert.Equal("K70", item.Suggested.System!.Code);
+        Assert.Equal("K72", item.Selected!.System!.Code);
+        Assert.Equal("TEMP_8", item.Selected.Glass!.Code);
+        Assert.Equal("WHITE_MATTE", item.Selected.Finish!.Code);
+        Assert.Equal("MODIFIED", item.SelectionState);
+        Assert.Equal(At.AddMinutes(5), item.Selected.SelectedAtUtc);
+        Assert.Equal(UserId, item.Selected.SelectedByUserId);
     }
 
     [Fact]
@@ -137,7 +162,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Empty(forbidden);
     }
 
-    private static Context CreateContext(bool withProposal)
+    private static Context CreateContext(
+        bool withProposal,
+        bool withSelected = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -176,7 +203,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             UserId,
             At);
         var preQuote = PreQuote.Create(project.Id, UserId, At);
-        var requirement = Requirement.Create(preQuote.Id, UserId, At);
+        var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
 
         var system = ProductSystem(
             Guid.Parse("22222222-2222-2222-2222-222222222222"),
@@ -218,13 +245,15 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                 Arg.Any<CancellationToken>())
             .Returns(withProposal
                 ? CreateProposal(
+                    requirement,
                     requirement.Id,
                     system.Id,
                     alternativeSystem.Id,
                     glass.GlassTypeId,
                     alternativeGlass.GlassTypeId,
                     finish.Id,
-                    alternativeFinish.Id)
+                    alternativeFinish.Id,
+                    withSelected)
                 : null);
         requirements.ListFilesByRequirementIdAsync(
                 requirement.Id,
@@ -278,13 +307,15 @@ public sealed class GetRequirementTechnicalProposalServiceTests
     }
 
     private static RequirementTechnicalProposal CreateProposal(
+        Requirement requirement,
         Guid requirementId,
         Guid systemId,
         Guid alternativeSystemId,
         Guid glassId,
         Guid alternativeGlassId,
         Guid finishId,
-        Guid alternativeFinishId)
+        Guid alternativeFinishId,
+        bool withSelected)
     {
         var attemptId = Guid.NewGuid();
         var extraction = RequirementExtractionResult.Create(
@@ -366,6 +397,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             attemptId,
             false,
             At);
+        SetPrivateProperty(proposal, "Requirement", requirement);
         var proposalItem = RequirementTechnicalProposalItem.Create(
             proposal.Id,
             item.Id,
@@ -386,7 +418,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             3,
             0.91m,
             0.87m,
-            "Completed",
+            "AVAILABLE",
             At);
         SetPrivateProperty(proposalItem, "ExtractedItem", item);
         proposalItem.AddSystemAlternative(
@@ -420,6 +452,16 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                 ["system", "glass"],
                 ["finish"],
                 "Comparable tecnico cercano."));
+        if (withSelected)
+        {
+            proposalItem.Select(
+                alternativeSystemId,
+                alternativeGlassId,
+                alternativeFinishId,
+                UserId,
+                At.AddMinutes(5));
+        }
+
         proposal.AddItem(proposalItem);
 
         return proposal;

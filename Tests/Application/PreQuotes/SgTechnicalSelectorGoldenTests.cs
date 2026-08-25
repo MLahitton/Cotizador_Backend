@@ -164,12 +164,29 @@ public sealed class SgTechnicalSelectorGoldenTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal("K50", result.SuggestedSystemCode);
-        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza,
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
             result.AppliedRuleCode);
         Assert.Contains("S50", result.Alternatives);
         Assert.True(result.RequiresReview);
         Assert.Contains(SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
             result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task G11B_GenericSlidingWindowOver2600_IsTreatedAsSlidingDoor()
+    {
+        var result = await Selector().SelectAsync(
+            Input(functionalType: "WINDOW", operation: "SLIDING",
+                height: 2800),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("K50", result.Alternatives);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
     }
 
     [Theory]
@@ -258,8 +275,8 @@ public sealed class SgTechnicalSelectorGoldenTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal("S35", result.SuggestedSystemCode);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(SgTechnicalSelectionReviewReasons.CommercialLineMismatch,
+        Assert.False(result.RequiresReview);
+        Assert.DoesNotContain(SgTechnicalSelectionReviewReasons.CommercialLineMismatch,
             result.ReviewReasons);
     }
 

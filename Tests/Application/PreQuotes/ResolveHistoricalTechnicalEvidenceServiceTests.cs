@@ -36,6 +36,10 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
 
         Assert.Equal("S35", result.Selection.SuggestedSystemCode);
         Assert.Equal(0, result.Selection.HistoricalSupportCount);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.NoComparables,
+            result.EvidenceStatus.Status);
+        Assert.Equal(0, result.EvidenceStatus.SupportCount);
+        Assert.Null(result.EvidenceStatus.BestSimilarity);
         Assert.Single(result.HistoricalEvidence);
         Assert.Equal("K40", result.HistoricalEvidence[0].ProductSystemCode);
     }
@@ -65,6 +69,10 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
         Assert.Equal(1, result.Selection.HistoricalSupportCount);
         Assert.Equal(0.96m, result.Selection.HistoricalBestSimilarity);
         Assert.Single(result.Selection.HistoricalExamples!);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.Available,
+            result.EvidenceStatus.Status);
+        Assert.Equal(1, result.EvidenceStatus.SupportCount);
+        Assert.Equal(0.96m, result.EvidenceStatus.BestSimilarity);
     }
 
     [Fact]
@@ -93,6 +101,10 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
             result.SimilarityFailureCode);
         Assert.Equal("S35", result.Selection.SuggestedSystemCode);
         Assert.Empty(result.HistoricalEvidence);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.SimilarityUnavailable,
+            result.EvidenceStatus.Status);
+        Assert.Equal(1, result.EvidenceStatus.SupportCount);
+        Assert.Null(result.EvidenceStatus.BestSimilarity);
     }
 
     [Fact]
@@ -122,6 +134,8 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
             SgTechnicalSelectionReviewReasons.SpecialGeometryWithoutConstraints,
             result.Selection.ReviewReasons);
         Assert.Equal(1, result.Selection.HistoricalSupportCount);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.Available,
+            result.EvidenceStatus.Status);
     }
 
     [Fact]
@@ -147,6 +161,97 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
 
         Assert.Null(result.Selection.SuggestedSystemCode);
         Assert.Empty(result.HistoricalEvidence);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.NoComparables,
+            result.EvidenceStatus.Status);
+        Assert.Equal(0, result.EvidenceStatus.SupportCount);
+        Assert.Null(result.EvidenceStatus.BestSimilarity);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithNoCandidates_ReturnsNoComparables()
+    {
+        var service = CreateService(
+            [
+                System("SG_PERGOLA", "PERGOLA", "PERGOLA SG",
+                    technicalName: "SISTEMA PERGOLA SG")
+            ],
+            Completed([]));
+
+        var result = await service.ResolveAsync(
+            Input(functionalType: "PERGOLA"),
+            Query,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.NoComparables,
+            result.EvidenceStatus.Status);
+        Assert.Equal(0, result.EvidenceStatus.SupportCount);
+        Assert.Null(result.EvidenceStatus.BestSimilarity);
+        Assert.Null(result.EvidenceStatus.AverageSimilarity);
+    }
+
+    [Fact]
+    public async Task ResolveBatchAsync_WhenOneSimilarityResultFails_IsolatesUnavailableStatus()
+    {
+        var firstItemId = Guid.NewGuid();
+        var failedItemId = Guid.NewGuid();
+        var thirdItemId = Guid.NewGuid();
+        var requests = new[]
+        {
+            new HistoricalTechnicalEvidenceBatchRequest(
+                firstItemId,
+                Input(functionalType: "PERGOLA"),
+                Query),
+            new HistoricalTechnicalEvidenceBatchRequest(
+                failedItemId,
+                Input(functionalType: "PERGOLA"),
+                Query),
+            new HistoricalTechnicalEvidenceBatchRequest(
+                thirdItemId,
+                Input(functionalType: "PERGOLA"),
+                Query)
+        };
+        var service = CreateBatchService(
+            [
+                System("SG_PERGOLA", "PERGOLA", "PERGOLA SG",
+                    technicalName: "SISTEMA PERGOLA SG")
+            ],
+            values =>
+            {
+                var first = values[0].RequestId;
+                var failed = values[1].RequestId;
+                var third = values[2].RequestId;
+                return new Dictionary<string, HistoricalSimilarityEvaluationResult>(
+                    StringComparer.Ordinal)
+                {
+                    [first] = Completed([
+                        Candidate("cand-first", "SG_PERGOLA", "P-01",
+                            "SISTEMA PERGOLA SG", 0.94m)
+                    ]),
+                    [failed] = new HistoricalSimilarityEvaluationResult(
+                        HistoricalSimilarityStatus.TechnicalFailure,
+                        [
+                            Candidate("cand-failed", "SG_PERGOLA", "P-02",
+                                "SISTEMA PERGOLA SG", null)
+                        ],
+                        "AI2_SIMILARITY_CHUNK_ERROR"),
+                    [third] = Completed([
+                        Candidate("cand-third", "SG_PERGOLA", "P-03",
+                            "SISTEMA PERGOLA SG", 0.91m)
+                    ])
+                };
+            });
+
+        var results = await service.ResolveBatchAsync(
+            requests,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.Available,
+            results[firstItemId].EvidenceStatus.Status);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.SimilarityUnavailable,
+            results[failedItemId].EvidenceStatus.Status);
+        Assert.Equal(1, results[failedItemId].EvidenceStatus.SupportCount);
+        Assert.Equal(HistoricalTechnicalEvidenceStatuses.Available,
+            results[thirdItemId].EvidenceStatus.Status);
     }
 
     private static ResolveHistoricalTechnicalEvidenceService CreateService(
@@ -157,6 +262,25 @@ public sealed class ResolveHistoricalTechnicalEvidenceServiceTests
         similarity.EvaluateAsync(Arg.Any<HistoricalCandidateQuery>(),
                 Arg.Any<CancellationToken>())
             .Returns(similarityResult);
+        var catalog = new Catalog(systems);
+        return new ResolveHistoricalTechnicalEvidenceService(
+            similarity,
+            catalog,
+            new DeterministicSgTechnicalSelector(catalog));
+    }
+
+    private static ResolveHistoricalTechnicalEvidenceService CreateBatchService(
+        IReadOnlyList<ProductSystemCatalogReadModel> systems,
+        Func<IReadOnlyList<HistoricalSimilarityBatchQuery>,
+            IReadOnlyDictionary<string, HistoricalSimilarityEvaluationResult>>
+            results)
+    {
+        var similarity = Substitute.For<IHistoricalSimilarityEvaluationService>();
+        similarity.EvaluateBatchAsync(
+                Arg.Any<IReadOnlyList<HistoricalSimilarityBatchQuery>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => results(
+                call.Arg<IReadOnlyList<HistoricalSimilarityBatchQuery>>()));
         var catalog = new Catalog(systems);
         return new ResolveHistoricalTechnicalEvidenceService(
             similarity,

@@ -135,6 +135,7 @@ public sealed class RequirementTechnicalProposalController(
             proposal.ProcessingAttemptId,
             proposal.ExtractionResultId,
             proposal.Status,
+            proposal.CommercialLine,
             proposal.CreatedAtUtc,
             proposal.ItemCount,
             proposal.ItemsRequiringReview,
@@ -162,6 +163,15 @@ public sealed class RequirementTechnicalProposalController(
                 Map(item.Suggested.System),
                 Map(item.Suggested.Glass),
                 Map(item.Suggested.Finish)),
+            item.Selected is null
+                ? null
+                : new RequirementTechnicalProposalSelectedResponse(
+                    Map(item.Selected.System),
+                    Map(item.Selected.Glass),
+                    Map(item.Selected.Finish),
+                    item.Selected.SelectedAtUtc,
+                    item.Selected.SelectedByUserId),
+            item.SelectionState,
             new RequirementTechnicalProposalAlternativesResponse(
                 item.Alternatives.Systems
                     .Select(alternative => new

@@ -24,6 +24,9 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     private static readonly Guid SystemNapolesId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid GlassTemp6Id = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid FinishBlackId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+    private static readonly Guid SystemLsa9060Id = Guid.Parse("55555555-5555-5555-5555-555555555555");
+    private static readonly Guid GlassTemp8Id = Guid.Parse("66666666-6666-6666-6666-666666666666");
+    private static readonly Guid FinishWhiteId = Guid.Parse("77777777-7777-7777-7777-777777777777");
 
     [Fact]
     public void Mapper_UsesSuggestedCatalogValuesInsteadOfRequestedRawSystem()
@@ -85,12 +88,181 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         Assert.True(result.IsSuccess);
         var item = Assert.Single(result.Pricing!.Items);
         Assert.Equal("PRICEABLE", item.Status);
+        Assert.Equal("SUGGESTED", item.ConfigurationSource);
         Assert.Equal(200m, item.Unit.Expected);
         Assert.Equal(800m, item.Line.Expected);
         Assert.Equal(800m, result.Pricing.EstimatedSubtotal.Expected);
         Assert.Equal("PUBLIC_QUOTED_ITEM_PRICES", result.Pricing.PricingBasis);
         Assert.Equal(4m, captured!.Quantity);
         Assert.Equal(9.35m, captured.Area);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedSameAsSuggested_ReportsSelectedSource()
+    {
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            SystemNapolesId,
+            GlassTemp6Id,
+            FinishBlackId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m));
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Pricing!.Items);
+        Assert.Equal("PRICEABLE", item.Status);
+        Assert.Equal("SELECTED", item.ConfigurationSource);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedSystem_UsesSelectedSystemForComparables()
+    {
+        HistoricalCandidateQuery? captured = null;
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            SystemLsa9060Id,
+            GlassTemp6Id,
+            FinishBlackId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m),
+            query => captured = query);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            "PUERTA CORREDIZA LINEA PREMIUM LSA 9060",
+            captured!.System);
+        Assert.Equal(SystemNapolesId, proposalItem.SuggestedSystemId);
+        Assert.Equal("SELECTED", Assert.Single(result.Pricing!.Items).ConfigurationSource);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedGlass_UsesSelectedGlassForComparables()
+    {
+        HistoricalCandidateQuery? captured = null;
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            SystemNapolesId,
+            GlassTemp8Id,
+            FinishBlackId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m),
+            query => captured = query);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            "COMPOSICION MONOLITICO TEMPLADO 8 MM INC",
+            captured!.Glass);
+        Assert.Equal(8m, captured.GlassThickness);
+        Assert.Equal(GlassTemp6Id, proposalItem.SuggestedGlassTypeId);
+        Assert.Equal("SELECTED", Assert.Single(result.Pricing!.Items).ConfigurationSource);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedFinish_UsesSelectedFinishForComparables()
+    {
+        HistoricalCandidateQuery? captured = null;
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            SystemNapolesId,
+            GlassTemp6Id,
+            FinishWhiteId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m),
+            query => captured = query);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            "ALUCOLOR POLIESTER BLANCO MATE",
+            captured!.Finish);
+        Assert.Equal(FinishBlackId, proposalItem.SuggestedFinishTypeId);
+        Assert.Equal("SELECTED", Assert.Single(result.Pricing!.Items).ConfigurationSource);
+    }
+
+    [Fact]
+    public async Task Execute_WithSelectedGlassOnlyFromSelectionFlow_UsesCompleteSelectedConfiguration()
+    {
+        HistoricalCandidateQuery? captured = null;
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            SystemNapolesId,
+            GlassTemp8Id,
+            FinishBlackId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m),
+            query => captured = query);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("SELECTED", Assert.Single(result.Pricing!.Items).ConfigurationSource);
+        Assert.Equal(
+            "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES",
+            captured!.System);
+        Assert.Equal(
+            "COMPOSICION MONOLITICO TEMPLADO 8 MM INC",
+            captured.Glass);
+        Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", captured.Finish);
+    }
+
+    [Fact]
+    public async Task Execute_WithInvalidSelectedCatalogReference_DoesNotFallbackToSuggested()
+    {
+        var proposalItem = ProposalItem(Item());
+        proposalItem.Select(
+            Guid.Parse("99999999-9999-9999-9999-999999999999"),
+            GlassTemp6Id,
+            FinishBlackId,
+            UserId,
+            At.AddMinutes(1));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m));
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Pricing!.Items);
+        Assert.Equal("NOT_PRICEABLE", item.Status);
+        Assert.Equal("SELECTED", item.ConfigurationSource);
+        Assert.Contains("SELECTED_SYSTEM_MISSING", item.MissingData);
+        await context.TechnicalEstimator.DidNotReceive().EstimateAsync(
+            Arg.Any<HistoricalCandidateQuery>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -178,7 +350,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
         var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, UserId, At);
         var preQuote = PreQuote.Create(project.Id, UserId, At);
-        var requirement = Requirement.Create(preQuote.Id, UserId, At);
+        var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
         var proposal = RequirementTechnicalProposal.Create(requirement.Id, Guid.NewGuid(), Guid.NewGuid(), false, At);
         foreach (var item in items)
         {
@@ -195,9 +367,12 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             preQuote.Id, preQuote.ProjectId, 0, preQuote.CreatedAtUtc, preQuote.UpdatedAtUtc));
         projects.FindByIdAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>()).Returns(client);
-        systems.ListActiveAsync(Arg.Any<CancellationToken>()).Returns([SystemNapoles()]);
-        glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>()).Returns([GlassTemp6()]);
-        finishes.ListActiveAsync(Arg.Any<CancellationToken>()).Returns([FinishBlack()]);
+        systems.ListActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([SystemNapoles(), SystemLsa9060()]);
+        glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
+            .Returns([GlassTemp6(), GlassTemp8()]);
+        finishes.ListActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([FinishBlack(), FinishWhite()]);
         technicalEstimator.EstimateAsync(Arg.Do<HistoricalCandidateQuery>(query => captureQuery?.Invoke(query)), Arg.Any<CancellationToken>())
             .Returns(technicalEstimate);
 
@@ -298,7 +473,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             0,
             null,
             null,
-            "Completed",
+            "AVAILABLE",
             At);
         SetPrivateProperty(proposalItem, "ExtractedItem", item);
         return proposalItem;
@@ -323,6 +498,25 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             false,
             true);
 
+    private static ProductSystemCatalogReadModel SystemLsa9060() =>
+        new(
+            SystemLsa9060Id,
+            "LSA_9060",
+            "PUERTA CORREDIZA LINEA PREMIUM LSA 9060",
+            "PUERTA CORREDIZA LINEA PREMIUM LSA 9060",
+            "LSA 9060",
+            "SLIDING_DOOR",
+            "LSA 9060",
+            "SERIE 90",
+            "ESSENTIAL",
+            "STANDARD",
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
+
     private static GlassTypeCatalogReadModel GlassTemp6() =>
         new(
             GlassTemp6Id,
@@ -336,6 +530,19 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             Treatment: "TEMPLADO",
             OuterThicknessMm: 6m);
 
+    private static GlassTypeCatalogReadModel GlassTemp8() =>
+        new(
+            GlassTemp8Id,
+            "TEMP_8",
+            "COMPOSICION MONOLITICO TEMPLADO 8 MM INC",
+            null,
+            true,
+            null,
+            Family: "MONOLITHIC",
+            Composition: "MONOLITICO",
+            Treatment: "TEMPLADO",
+            OuterThicknessMm: 8m);
+
     private static FinishTypeCatalogReadModel FinishBlack() =>
         new(
             FinishBlackId,
@@ -346,6 +553,21 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             "MATTE",
             "PAINTED",
             "PP13",
+            "ALUMINUM",
+            true,
+            false,
+            true);
+
+    private static FinishTypeCatalogReadModel FinishWhite() =>
+        new(
+            FinishWhiteId,
+            "WHITE_MATTE",
+            "ALUCOLOR POLIESTER BLANCO MATE",
+            "PAINTED",
+            "BLANCO MATE",
+            "MATTE",
+            "PAINTED",
+            "PW01",
             "ALUMINUM",
             true,
             false,

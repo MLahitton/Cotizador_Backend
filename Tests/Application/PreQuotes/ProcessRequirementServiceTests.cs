@@ -180,9 +180,11 @@ public sealed class ProcessRequirementServiceTests
         Assert.True(result.IsSuccess);
         var item = Assert.Single(proposal!.Items);
         Assert.NotNull(item.SuggestedGlassTypeId);
-        Assert.True(item.RequiresReview);
-        Assert.Contains("HISTORICAL_DEFAULT_GLASS", item.ReviewReasons);
-        Assert.Contains("HISTORICAL_DEFAULT_GLASS", item.GlassResolutionReasons);
+        Assert.False(item.RequiresReview);
+        Assert.DoesNotContain("HISTORICAL_DEFAULT_GLASS", item.ReviewReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassLineTempered,
+            item.GlassResolutionReasons);
     }
 
     [Fact]
@@ -204,6 +206,85 @@ public sealed class ProcessRequirementServiceTests
         Assert.False(item.RequiresReview);
         Assert.DoesNotContain("FINISH_NOT_SPECIFIED", item.ReviewReasons);
         Assert.Contains("HISTORICAL_DEFAULT_FINISH", item.FinishResolutionReasons);
+    }
+
+    [Theory]
+    [InlineData("tempered_2400", "TEMP_5")]
+    [InlineData("tempered_2401", "TEMP_6")]
+    [InlineData("tempered_2601", "TEMP_8")]
+    [InlineData("tempered_2801", "TEMP_10")]
+    [InlineData("tempered_narrow_2700", "TEMP_6")]
+    [InlineData("tempered_joint_1951", "TEMP_10")]
+    [InlineData("tempered_joint_5000", "TEMP_10")]
+    public async Task Execute_WithTemperedLine_AppliesConfirmedThicknessRules(
+        string scenario,
+        string expectedGlassCode)
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(scenario, File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal(expectedGlassCode, SuggestedGlassCode(context, item));
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassLineTempered,
+            item.GlassResolutionReasons);
+    }
+
+    [Theory]
+    [InlineData("signature_laminated_normal", "LAM_4_4")]
+    [InlineData("signature_laminated_5_5", "LAM_5_5")]
+    public async Task Execute_WithLaminatedLine_AppliesConfirmedLaminatedRules(
+        string scenario,
+        string expectedGlassCode)
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(scenario, File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal(expectedGlassCode, SuggestedGlassCode(context, item));
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassLineLaminated,
+            item.GlassResolutionReasons);
+    }
+
+    [Theory]
+    [InlineData("special_shower", "TEMP_8", GlassResolutionReasonCodes.SpecialGlassShower8Mm)]
+    [InlineData("special_railing", "TEMP_10", GlassResolutionReasonCodes.SpecialGlassRailing10Mm)]
+    public async Task Execute_WithSpecialGlassCase_AppliesSpecialGlassRule(
+        string scenario,
+        string expectedGlassCode,
+        string expectedReason)
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(scenario, File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal(expectedGlassCode, SuggestedGlassCode(context, item));
+        Assert.Contains(expectedReason, item.GlassResolutionReasons);
     }
 
     [Fact]
@@ -342,7 +423,13 @@ public sealed class ProcessRequirementServiceTests
         var project = ProjectEntity.Create(
             client.Id, "P-001", "Project", null, null, UserId, At);
         var preQuote = PreQuote.Create(project.Id, UserId, At);
-        var requirement = Requirement.Create(preQuote.Id, UserId, At.AddMinutes(1));
+        var requirement = Requirement.Create(
+            preQuote.Id,
+            UserId,
+            scenario.StartsWith("signature_", StringComparison.Ordinal)
+                ? RequirementCommercialLine.Signature
+                : RequirementCommercialLine.Essential,
+            At.AddMinutes(1));
         RequirementProcessingAttempt? activeAttempt = null;
 
         if (scenario == "already_processing")
@@ -419,7 +506,9 @@ public sealed class ProcessRequirementServiceTests
                             call.Arg<DocumentProcessingClientRequest>(),
                             invalidEvidenceLocation: true))),
                 _ => Task.FromResult(DocumentProcessingClientResult.Success(
-                    CreateResponse(call.Arg<DocumentProcessingClientRequest>())))
+                    CreateResponse(
+                        call.Arg<DocumentProcessingClientRequest>(),
+                        scenario: scenario)))
             });
         requirements.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
@@ -467,13 +556,11 @@ public sealed class ProcessRequirementServiceTests
                     new InvalidOperationException(
                         "The LINQ expression could not be translated."))
                 : Task.FromResult<IReadOnlyList<ProductSystemCatalogReadModel>>(
-                    [ProductSystem("K70", "SLIDING_DOOR", "VENECIA NAPOLES")]));
+                    ProductSystemsFor(scenario)));
         var glassCatalog = Substitute.For<IGlassTypeCatalogRepository>();
+        var glassCatalogItems = GlassCatalogItems();
         glassCatalog.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
-            .Returns([
-                Glass("TEMP_6", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC"),
-                Glass("TEMP_5", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC")
-            ]);
+            .Returns(glassCatalogItems);
         var finishCatalog = Substitute.For<IFinishTypeCatalogRepository>();
         finishCatalog.ListActiveAsync(Arg.Any<CancellationToken>())
             .Returns([Finish("BLACK_MATTE", "ALUCOLOR POLIESTER NEGRO MATE PP13")]);
@@ -530,13 +617,15 @@ public sealed class ProcessRequirementServiceTests
             requirement,
             project,
             requirements,
-            ai2);
+            ai2,
+            glassCatalogItems);
     }
 
     private static ProductSystemCatalogReadModel ProductSystem(
         string code,
         string functionalType,
-        string family) =>
+        string family,
+        string commercialLine = "ESSENTIAL") =>
         new(
             Guid.NewGuid(),
             code,
@@ -546,7 +635,7 @@ public sealed class ProcessRequirementServiceTests
             functionalType,
             family,
             "SERIE 70",
-            "ESSENTIAL",
+            commercialLine,
             "STANDARD",
             true,
             true,
@@ -555,13 +644,36 @@ public sealed class ProcessRequirementServiceTests
             false,
             true);
 
+    private static IReadOnlyList<ProductSystemCatalogReadModel> ProductSystemsFor(
+        string scenario) =>
+        scenario.StartsWith("signature_", StringComparison.Ordinal)
+            ? [ProductSystem("SIG70", "SLIDING_DOOR", "SIGNATURE", "SIGNATURE")]
+            : [ProductSystem("K70", "SLIDING_DOOR", "VENECIA NAPOLES")];
+
+    private static IReadOnlyList<GlassTypeCatalogReadModel> GlassCatalogItems() =>
+    [
+        Glass("TEMP_5", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC"),
+        Glass("TEMP_6", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC"),
+        Glass("TEMP_8", "COMPOSICION MONOLITICO TEMPLADO 8 MM INC"),
+        Glass("TEMP_10", "COMPOSICION MONOLITICO TEMPLADO 10 MM INC"),
+        Glass("LAM_4_4", "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM INC"),
+        Glass("LAM_5_5", "COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC")
+    ];
+
     private static GlassTypeCatalogReadModel Glass(
         string code,
         string name)
     {
-        var thickness = code.EndsWith("_5", StringComparison.Ordinal)
-            ? 5m
-            : 6m;
+        var thickness = code switch
+        {
+            "TEMP_5" => 5m,
+            "TEMP_6" => 6m,
+            "TEMP_8" => 8m,
+            "TEMP_10" => 10m,
+            "LAM_5_5" => 5m,
+            _ => 4m
+        };
+        var laminated = code.StartsWith("LAM_", StringComparison.Ordinal);
         return
         new(
             Guid.NewGuid(),
@@ -570,10 +682,13 @@ public sealed class ProcessRequirementServiceTests
             null,
             true,
             null,
-            Family: "MONOLITHIC",
-            Composition: "TEMPERED",
-            Treatment: "TEMPERED",
+            Family: laminated ? "LAMINATED" : "MONOLITHIC",
+            Composition: laminated ? "RAW" : "TEMPERED",
+            Treatment: laminated ? "RAW" : "TEMPERED",
             OuterThicknessMm: thickness,
+            InnerThicknessMm: laminated ? thickness : null,
+            PvbThicknessMm: laminated ? 0.38m : null,
+            PvbColor: laminated ? "INC" : null,
             IsSelectable: true);
     }
 
@@ -607,14 +722,59 @@ public sealed class ProcessRequirementServiceTests
             At.AddMinutes(1));
     }
 
+    private static string SuggestedGlassCode(
+        Context context,
+        RequirementTechnicalProposalItem item) =>
+        context.Glasses.Single(glass =>
+            glass.GlassTypeId == item.SuggestedGlassTypeId).Code;
+
     private static DocumentProcessingResponseData CreateResponse(
         DocumentProcessingClientRequest request,
         DocumentProcessingOutcome outcome = DocumentProcessingOutcome.Completed,
         int itemsRequiringReview = 0,
         bool invalidEvidenceLocation = false,
         bool omitGlassSignal = false,
-        bool omitFinishSignal = false)
+        bool omitFinishSignal = false,
+        string scenario = "success")
     {
+        var width = scenario switch
+        {
+            "tempered_2400" => 1200,
+            "tempered_2401" => 1200,
+            "tempered_2601" => 1200,
+            "tempered_2801" => 1200,
+            "tempered_joint_1951" => 1951,
+            "tempered_joint_5000" => 5000,
+            "signature_laminated_5_5" => 5000,
+            _ => 3740
+        };
+        var height = scenario switch
+        {
+            "tempered_2400" => 2400,
+            "tempered_2401" => 2401,
+            "tempered_2601" => 2601,
+            "tempered_2801" => 2801,
+            "tempered_narrow_2700" => 2700,
+            "signature_laminated_5_5" => 3000,
+            _ => 2500
+        };
+        if (scenario == "tempered_narrow_2700")
+        {
+            width = 500;
+        }
+
+        var elementType = scenario switch
+        {
+            "special_shower" => StructuredElementType.ShowerDivision,
+            "special_railing" => StructuredElementType.Railing,
+            _ => StructuredElementType.Door
+        };
+        var functionalType = scenario switch
+        {
+            "special_shower" => "SHOWER_DIVISION",
+            "special_railing" => "RAILING",
+            _ => "SLIDING_DOOR"
+        };
         var status = outcome == DocumentProcessingOutcome.RequiresReview
             ? StructuredExtractionStatus.RequiresReview
             : StructuredExtractionStatus.Completed;
@@ -622,10 +782,10 @@ public sealed class ProcessRequirementServiceTests
             1,
             "PV-06",
             "Puerta vidriera",
-            StructuredElementType.Door,
-            "3740 x 2500",
-            3740,
-            2500,
+            elementType,
+            $"{width} x {height}",
+            width,
+            height,
             1,
             itemsRequiringReview > 0,
             [],
@@ -655,7 +815,7 @@ public sealed class ProcessRequirementServiceTests
             "corrediza",
             0.92m,
             CanonicalExtractionValueStatus.Explicit,
-            "SLIDING_DOOR",
+            functionalType,
             "SLIDING",
             null,
             null,
@@ -738,5 +898,6 @@ public sealed class ProcessRequirementServiceTests
         Requirement Requirement,
         ProjectEntity Project,
         IRequirementRepository Requirements,
-        IAi2DocumentProcessingClient Ai2);
+        IAi2DocumentProcessingClient Ai2,
+        IReadOnlyList<GlassTypeCatalogReadModel> Glasses);
 }

@@ -41,9 +41,7 @@ public sealed class CreateRequirementServiceTests
             .Do(call => file = call.Arg<RequirementFile>());
 
         var result = await context.Service.ExecuteAsync(
-            new CreateRequirementCommand(
-                context.PreQuote.Id,
-                [CreateFile("requirement.pdf", PdfContentType)]),
+            new CreateRequirementCommand(context.PreQuote.Id, "ESSENTIAL", [CreateFile("requirement.pdf", PdfContentType)]),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
@@ -51,6 +49,7 @@ public sealed class CreateRequirementServiceTests
         Assert.Equal(1, result.Requirement.FileCount);
         Assert.NotNull(requirement);
         Assert.NotNull(file);
+        Assert.Equal(RequirementCommercialLine.Essential, requirement!.CommercialLine);
         Assert.Equal(requirement!.Id, file!.RequirementId);
         Assert.Equal(PdfContentType, file.ContentType);
         Assert.EndsWith("/original.pdf", file.StorageKey, StringComparison.Ordinal);
@@ -60,6 +59,33 @@ public sealed class CreateRequirementServiceTests
             Arg.Any<CancellationToken>());
         await context.Requirements.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData("CLASSIC", RequirementCommercialLine.Classic)]
+    [InlineData("ESSENTIAL", RequirementCommercialLine.Essential)]
+    [InlineData("BIOCONFORT", RequirementCommercialLine.Bioconfort)]
+    [InlineData("SIGNATURE", RequirementCommercialLine.Signature)]
+    public async Task Execute_WithSupportedCommercialLine_PersistsCommercialLine(
+        string commercialLine,
+        RequirementCommercialLine expected)
+    {
+        var context = CreateContext("success");
+        Requirement? requirement = null;
+        context.Requirements.When(repository => repository.Add(
+                Arg.Any<Requirement>()))
+            .Do(call => requirement = call.Arg<Requirement>());
+
+        var result = await context.Service.ExecuteAsync(
+            new CreateRequirementCommand(
+                context.PreQuote.Id,
+                commercialLine,
+                [CreateFile("requirement.pdf", PdfContentType)]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(commercialLine, result.Requirement!.CommercialLine);
+        Assert.Equal(expected, requirement!.CommercialLine);
     }
 
     [Fact]
@@ -72,9 +98,7 @@ public sealed class CreateRequirementServiceTests
             .Do(call => files.Add(call.Arg<RequirementFile>()));
 
         var result = await context.Service.ExecuteAsync(
-            new CreateRequirementCommand(
-                context.PreQuote.Id,
-                [
+            new CreateRequirementCommand(context.PreQuote.Id, "ESSENTIAL", [
                     CreateFile("requirement.pdf", PdfContentType),
                     CreateFile("photo.jpg", JpegContentType),
                     CreateFile("schedule.xlsx", XlsxContentType)
@@ -99,6 +123,8 @@ public sealed class CreateRequirementServiceTests
     [InlineData("unsupported", CreateRequirementFailure.UnsupportedFileType)]
     [InlineData("too_large", CreateRequirementFailure.FileTooLarge)]
     [InlineData("too_many", CreateRequirementFailure.TooManyFiles)]
+    [InlineData("missing_commercial_line", CreateRequirementFailure.InvalidRequest)]
+    [InlineData("invalid_commercial_line", CreateRequirementFailure.InvalidRequest)]
     [InlineData("unauthorized", CreateRequirementFailure.Unauthorized)]
     [InlineData("inactive_user", CreateRequirementFailure.InactiveUser)]
     [InlineData("prequote_not_found", CreateRequirementFailure.PreQuoteNotFound)]
@@ -130,6 +156,11 @@ public sealed class CreateRequirementServiceTests
                 scenario == "empty_prequote"
                     ? Guid.Empty
                     : context.PreQuote.Id,
+                scenario == "missing_commercial_line"
+                    ? null
+                    : scenario == "invalid_commercial_line"
+                        ? "premium"
+                        : "ESSENTIAL",
                 files),
             TestContext.Current.CancellationToken);
 
@@ -145,9 +176,7 @@ public sealed class CreateRequirementServiceTests
         var context = CreateContext("storage_second_failure");
 
         var result = await context.Service.ExecuteAsync(
-            new CreateRequirementCommand(
-                context.PreQuote.Id,
-                [
+            new CreateRequirementCommand(context.PreQuote.Id, "ESSENTIAL", [
                     CreateFile("first.pdf", PdfContentType),
                     CreateFile("second.jpg", JpegContentType)
                 ]),
@@ -170,9 +199,7 @@ public sealed class CreateRequirementServiceTests
         var context = CreateContext("persistence");
 
         var result = await context.Service.ExecuteAsync(
-            new CreateRequirementCommand(
-                context.PreQuote.Id,
-                [
+            new CreateRequirementCommand(context.PreQuote.Id, "ESSENTIAL", [
                     CreateFile("first.pdf", PdfContentType),
                     CreateFile("second.jpg", JpegContentType)
                 ]),

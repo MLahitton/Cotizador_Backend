@@ -50,6 +50,7 @@ public sealed record TechnicalProposalPricingItemReadModel(
     string? Reference,
     string Description,
     string Status,
+    string ConfigurationSource,
     decimal? Quantity,
     decimal? PricingAreaM2,
     TechnicalProposalPricingMoneyRange Unit,

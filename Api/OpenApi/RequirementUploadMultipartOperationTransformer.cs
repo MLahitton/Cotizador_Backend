@@ -31,7 +31,8 @@ public sealed class RequirementUploadMultipartOperationTransformer
                         Type = JsonSchemaType.Object,
                         Required = new HashSet<string>
                         {
-                            "files"
+                            "files",
+                            "commercialLine"
                         },
                         Properties = new Dictionary<string, IOpenApiSchema>
                         {
@@ -43,6 +44,10 @@ public sealed class RequirementUploadMultipartOperationTransformer
                                     Type = JsonSchemaType.String,
                                     Format = "binary"
                                 }
+                            },
+                            ["commercialLine"] = new OpenApiSchema
+                            {
+                                Type = JsonSchemaType.String
                             }
                         }
                     }

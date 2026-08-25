@@ -124,8 +124,93 @@ public sealed class DeterministicSgTechnicalSelectorTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal("K50", result.SuggestedSystemCode);
-        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza,
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
             result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithHeight2600_DoesNotResolveAsDoor()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 2600),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K50", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithHeight2601_ResolvesAsSlidingDoorAndPreservesOperation()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 2601),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
+            result.AppliedRuleCode);
+        Assert.Contains("K100_DOOR", result.Alternatives);
+        Assert.DoesNotContain("K50", result.Alternatives);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
+    }
+
+    [Fact]
+    public async Task SlidingWindowWithHeightOver2600_ResolvesAsSlidingDoor()
+    {
+        var result = await Selector().SelectAsync(
+            Input("SLIDING_WINDOW", height: 2800),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("K50", result.Alternatives);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithNullOrInvalidHeight_DoesNotResolveAsDoor()
+    {
+        var nullHeight = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: null),
+            TestContext.Current.CancellationToken);
+        var zeroHeight = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 0),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotEqual("K70", nullHeight.SuggestedSystemCode);
+        Assert.NotEqual("K100_DOOR", nullHeight.SuggestedSystemCode);
+        Assert.NotEqual("K70", zeroHeight.SuggestedSystemCode);
+        Assert.NotEqual("K100_DOOR", zeroHeight.SuggestedSystemCode);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            nullHeight.ResolutionReasons ?? []);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            zeroHeight.ResolutionReasons ?? []);
+    }
+
+    [Fact]
+    public async Task GenericWindowWithSwingAndHeightOver2600_ResolvesAsSwingDoor()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SWING", height: 2800),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("3890", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSwingDoor3890,
+            result.AppliedRuleCode);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
     }
 
     [Fact]
@@ -149,7 +234,7 @@ public sealed class DeterministicSgTechnicalSelectorTests
         Assert.Equal("K70", result.SuggestedSystemCode);
         Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
             result.AppliedRuleCode);
-        Assert.Contains("SG_SLIDING_ALT", result.Alternatives);
+        Assert.Contains("K100_DOOR", result.Alternatives);
     }
 
     [Fact]
@@ -234,10 +319,65 @@ public sealed class DeterministicSgTechnicalSelectorTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal("K50", result.SuggestedSystemCode);
-        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza,
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
             result.AppliedRuleCode);
         Assert.Contains("S50", result.Alternatives);
         Assert.True(result.RequiresReview);
+    }
+
+    [Fact]
+    public async Task ClassicSlidingWindow_FiltersToClassicAndPrefersLago()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 2500,
+                requestedCommercialLine: "CLASSIC"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("S50", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.ClassicWindowSlidingLago,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("K50", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task ClassicSlidingWindowOver2600_ResolvesAsDoorAndPrefersLucca()
+    {
+        var result = await Selector().SelectAsync(
+            Input("WINDOW", operation: "SLIDING", height: 2800,
+                requestedCommercialLine: "CLASSIC"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("S80", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.ClassicDoorSlidingLucca,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("S50", result.Alternatives);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
+    }
+
+    [Fact]
+    public async Task ClassicSlidingDoor_FiltersToClassicAndPrefersLucca()
+    {
+        var result = await Selector().SelectAsync(
+            Input("SLIDING_DOOR", requestedCommercialLine: "CLASSIC"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("S80", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.ClassicDoorSlidingLucca,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("K70", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task Signature_FiltersOutNonSignatureCandidates()
+    {
+        var result = await Selector().SelectAsync(
+            Input("FIXED", requestedCommercialLine: "SIGNATURE"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("SIG_FIXED", result.SuggestedSystemCode);
+        Assert.DoesNotContain("K40", result.Alternatives);
     }
 
     [Fact]
@@ -252,17 +392,92 @@ public sealed class DeterministicSgTechnicalSelectorTests
     }
 
     [Fact]
-    public async Task RequestedEssential_DoesNotExcludeTechnicallyPreferredSiena()
+    public async Task RequestedEssential_DoesNotFilterOrAddLineMismatchReview()
     {
         var result = await Selector().SelectAsync(
             Input("PROJECTING", requestedCommercialLine: "ESSENTIAL"),
             TestContext.Current.CancellationToken);
 
         Assert.Equal("S35", result.SuggestedSystemCode);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(
+        Assert.DoesNotContain(
             SgTechnicalSelectionReviewReasons.CommercialLineMismatch,
             result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task RequestedBioconfort_DoesNotFilterCompatibleSystemsByLine()
+    {
+        var result = await Selector().SelectAsync(
+            Input("PROJECTING", requestedCommercialLine: "BIOCONFORT"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("S35", result.SuggestedSystemCode);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionReviewReasons.CommercialLineMismatch,
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Monza_DoesNotWinSlidingDoor()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("MONZA_DOOR_BAD", "SLIDING_DOOR", "VENECIA MONZA", "STANDARD", "PREMIUM"),
+                System("K70", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "PREMIUM")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.DoesNotContain("MONZA_DOOR_BAD", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task VeniceCompatibleWinsOverEquivalentLsa()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("LSA9052", "SLIDING_DOOR", "LSA 9052", "STANDARD", "PREMIUM"),
+                System("K70", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "PREMIUM")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+    }
+
+    [Fact]
+    public async Task NapolesVsMonaco_KeepsReviewBecauseBoundaryIsNotDefined()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("K70", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "PREMIUM"),
+                System("K100_DOOR", "SLIDING_DOOR", "VENECIA MONACO", "STANDARD", "PREMIUM")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K70", result.SuggestedSystemCode);
+        Assert.True(result.RequiresReview);
+        Assert.Contains(
+            SgTechnicalSelectionRuleCodes.RuleNotDefinedRequiresReview,
+            result.ReviewReasons);
+        Assert.Contains("K100_DOOR", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task TraditionalSystem_DoesNotWinAutomaticSuggested()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("TRAD_FIXED", "FIXED", "TRADICIONAL", "STANDARD", "TRADITIONAL"),
+                System("K40", "FIXED", "VENECIA FERMO", "STANDARD", "PREMIUM")
+            ])).SelectAsync(
+                Input("FIXED"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("K40", result.SuggestedSystemCode);
+        Assert.DoesNotContain("TRAD_FIXED", result.Alternatives);
     }
 
     [Theory]
@@ -523,10 +738,12 @@ public sealed class DeterministicSgTechnicalSelectorTests
         System("SG_PROJECTING_ALT", "PROJECTING", "GENERIC PROJECTING", null, "ESSENTIAL"),
         System("SG_PRIM_SIENA_CASEMENT", "CASEMENT", "PRIMAVERA SIENA", null, "CLASSIC"),
         System("SG_PRIM_SIENA_DBL_CASE", "DOUBLE_CASEMENT", "PRIMAVERA SIENA", null, "CLASSIC"),
+        System("SIG_FIXED", "FIXED", "SIGNATURE FIXED", "STANDARD", "SIGNATURE"),
         System("3890", "SWING_DOOR", "SG 3890", null, "CLASSIC"),
         System("3890_DOOR", "DOOR", "SG 3890", null, "CLASSIC"),
         System("K70", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "ESSENTIAL"),
         System("SG_SLIDING_ALT", "SLIDING_DOOR", "GENERIC SLIDING", "STANDARD", "CLASSIC"),
+        System("S80", "SLIDING_DOOR", "PRIMAVERA LUCCA", "STANDARD", "CLASSIC"),
         System("SG_VEN70_POCKET_DOOR", "SLIDING_DOOR", "VENECIA NAPOLES", "POCKET", "ESSENTIAL"),
         System("SG_POCKET_ALT", "SLIDING_DOOR", "GENERIC POCKET", "POCKET", "CLASSIC"),
         System("SG_PERGOLA", "PERGOLA", null, "STANDARD", "SPECIAL"),
@@ -536,6 +753,8 @@ public sealed class DeterministicSgTechnicalSelectorTests
         System("S50", "SLIDING_WINDOW", "PRIMAVERA LAGO", "STANDARD", "CLASSIC"),
         System("K50", "SLIDING_WINDOW", "VENECIA MONZA", "STANDARD", "ESSENTIAL"),
         System("K100", "SLIDING_WINDOW", "VENECIA MONACO", "STANDARD", "ESSENTIAL"),
+        System("K100_DOOR", "SLIDING_DOOR", "VENECIA MONACO", "STANDARD", "ESSENTIAL"),
+        System("TRAD_FIXED", "FIXED", "TRADICIONAL", "STANDARD", "TRADITIONAL"),
         System("SG_UNKNOWN", null, null, null, "ESSENTIAL")
     ];
 

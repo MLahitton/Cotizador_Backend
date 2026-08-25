@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825153337_AddRequirementCommercialLine")]
+    partial class AddRequirementCommercialLine
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5665,26 +5668,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("text[]")
                         .HasColumnName("review_reasons");
 
-                    b.Property<DateTimeOffset?>("SelectedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("selected_at_utc");
-
-                    b.Property<Guid?>("SelectedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("selected_by_user_id");
-
-                    b.Property<Guid?>("SelectedFinishTypeId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("selected_finish_type_id");
-
-                    b.Property<Guid?>("SelectedGlassTypeId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("selected_glass_type_id");
-
-                    b.Property<Guid?>("SelectedSystemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("selected_system_id");
-
                     b.Property<Guid?>("SuggestedFinishTypeId")
                         .HasColumnType("uuid")
                         .HasColumnName("suggested_finish_type_id");
@@ -5715,18 +5698,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("RequirementExtractedItemId")
                         .IsUnique()
                         .HasDatabaseName("ux_requirement_technical_proposal_items_extracted_item_id");
-
-                    b.HasIndex("SelectedByUserId")
-                        .HasDatabaseName("ix_requirement_technical_proposal_items_selected_by_user_id");
-
-                    b.HasIndex("SelectedFinishTypeId")
-                        .HasDatabaseName("ix_requirement_technical_proposal_items_selected_finish_type_id");
-
-                    b.HasIndex("SelectedGlassTypeId")
-                        .HasDatabaseName("ix_requirement_technical_proposal_items_selected_glass_type_id");
-
-                    b.HasIndex("SelectedSystemId")
-                        .HasDatabaseName("ix_requirement_technical_proposal_items_selected_system_id");
 
                     b.HasIndex("SuggestedFinishTypeId");
 
@@ -7150,26 +7121,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasForeignKey("RequirementExtractedItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Domain.Identity.User", null)
-                        .WithMany()
-                        .HasForeignKey("SelectedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Catalogs.FinishType", null)
-                        .WithMany()
-                        .HasForeignKey("SelectedFinishTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Catalogs.GlassType", null)
-                        .WithMany()
-                        .HasForeignKey("SelectedGlassTypeId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Domain.Catalogs.ProductSystem", null)
-                        .WithMany()
-                        .HasForeignKey("SelectedSystemId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Domain.Catalogs.FinishType", null)
                         .WithMany()

@@ -29,10 +29,7 @@ public sealed class RequirementTests
     [Fact]
     public void Requirement_Create_WithValidData_CreatesPendingActiveRequirement()
     {
-        var requirement = Requirement.Create(
-            PreQuoteId,
-            UserId,
-            CreatedAtUtc);
+        var requirement = Requirement.Create(PreQuoteId, UserId, RequirementCommercialLine.Essential, CreatedAtUtc);
 
         Assert.NotEqual(Guid.Empty, requirement.Id);
         Assert.Equal(PreQuoteId, requirement.PreQuoteId);
@@ -52,10 +49,7 @@ public sealed class RequirementTests
         string parameterName)
     {
         var exception = Assert.Throws<ArgumentException>(() =>
-            Requirement.Create(
-                parameterName == "preQuoteId" ? Guid.Empty : PreQuoteId,
-                parameterName == "createdByUserId" ? Guid.Empty : UserId,
-                CreatedAtUtc));
+            Requirement.Create(parameterName == "preQuoteId" ? Guid.Empty : PreQuoteId, parameterName == "createdByUserId" ? Guid.Empty : UserId, RequirementCommercialLine.Essential, CreatedAtUtc));
 
         Assert.Equal(parameterName, exception.ParamName);
     }
@@ -64,10 +58,7 @@ public sealed class RequirementTests
     public void Requirement_Create_WithNonUtcDate_ThrowsArgumentException()
     {
         var exception = Assert.Throws<ArgumentException>(() =>
-            Requirement.Create(
-                PreQuoteId,
-                UserId,
-                CreatedAtUtc.ToOffset(TimeSpan.FromHours(-5))));
+            Requirement.Create(PreQuoteId, UserId, RequirementCommercialLine.Essential, CreatedAtUtc.ToOffset(TimeSpan.FromHours(-5))));
 
         Assert.Equal("createdAtUtc", exception.ParamName);
     }

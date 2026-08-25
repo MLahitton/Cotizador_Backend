@@ -123,6 +123,14 @@ public sealed class ProcessRequirementService(
                 ProcessRequirementFailure.AlreadyProcessing);
         }
 
+        if (requirement.CommercialLine is null)
+        {
+            return ProcessRequirementResult.Failed(
+                ProcessRequirementFailure.InvalidRequest);
+        }
+
+        var commercialLine = requirement.CommercialLine.Value;
+
         PreQuote? preQuote;
         try
         {
@@ -335,6 +343,7 @@ public sealed class ProcessRequirementService(
                 preQuote,
                 attempt,
                 aiResult.Response,
+                commercialLine,
                 stages,
                 totalStopwatch,
                 files.Count,
@@ -374,6 +383,7 @@ public sealed class ProcessRequirementService(
         PreQuote preQuote,
         RequirementProcessingAttempt attempt,
         DocumentProcessingResponseData response,
+        RequirementCommercialLine commercialLine,
         List<NewPipePerfStage> stages,
         Stopwatch totalStopwatch,
         int fileCount,
@@ -419,6 +429,7 @@ public sealed class ProcessRequirementService(
             var buildProposal = Stopwatch.StartNew();
             var proposal = await technicalProposalService.BuildAsync(
                 requirement.Id,
+                commercialLine,
                 result,
                 extractedItems.Select(item => item.Item).ToArray(),
                 cancellationToken);

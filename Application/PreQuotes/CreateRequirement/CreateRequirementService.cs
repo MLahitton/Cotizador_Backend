@@ -56,6 +56,14 @@ public sealed class CreateRequirementService(
                 CreateRequirementFailure.InvalidRequest);
         }
 
+        if (!TryParseCommercialLine(
+                command.CommercialLine,
+                out var commercialLine))
+        {
+            return CreateRequirementResult.Failed(
+                CreateRequirementFailure.InvalidRequest);
+        }
+
         if (command.Files.Count == 0)
         {
             return CreateRequirementResult.Failed(
@@ -206,7 +214,11 @@ public sealed class CreateRequirementService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var requirement = Requirement.Create(preQuote.Id, userId, now);
+        var requirement = Requirement.Create(
+            preQuote.Id,
+            userId,
+            commercialLine,
+            now);
         var storedKeys = new List<string>(normalizedFiles.Count);
 
         try
@@ -252,9 +264,43 @@ public sealed class CreateRequirementService(
                 requirement.Id,
                 requirement.PreQuoteId,
                 normalizedFiles.Count,
+                ToContract(commercialLine),
                 "PENDING",
                 requirement.CreatedAtUtc));
     }
+
+    private static bool TryParseCommercialLine(
+        string? value,
+        out RequirementCommercialLine commercialLine)
+    {
+        commercialLine = default;
+        return value?.Trim() switch
+        {
+            "CLASSIC" => Set(out commercialLine, RequirementCommercialLine.Classic),
+            "ESSENTIAL" => Set(out commercialLine, RequirementCommercialLine.Essential),
+            "BIOCONFORT" => Set(out commercialLine, RequirementCommercialLine.Bioconfort),
+            "SIGNATURE" => Set(out commercialLine, RequirementCommercialLine.Signature),
+            _ => false
+        };
+    }
+
+    private static bool Set(
+        out RequirementCommercialLine target,
+        RequirementCommercialLine value)
+    {
+        target = value;
+        return true;
+    }
+
+    private static string ToContract(RequirementCommercialLine commercialLine) =>
+        commercialLine switch
+        {
+            RequirementCommercialLine.Classic => "CLASSIC",
+            RequirementCommercialLine.Essential => "ESSENTIAL",
+            RequirementCommercialLine.Bioconfort => "BIOCONFORT",
+            RequirementCommercialLine.Signature => "SIGNATURE",
+            _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
+        };
 
     private static NormalizedRequirementFile NormalizeFile(
         CreateRequirementFileInput file)

@@ -56,7 +56,8 @@ public sealed record SgTechnicalSelectionResult(
     int HistoricalSupportCount = 0,
     decimal? HistoricalBestSimilarity = null,
     decimal? HistoricalAverageSimilarity = null,
-    IReadOnlyList<SgHistoricalSystemExample>? HistoricalExamples = null);
+    IReadOnlyList<SgHistoricalSystemExample>? HistoricalExamples = null,
+    IReadOnlyList<string>? ResolutionReasons = null);
 
 public static class SgTechnicalSelectionRuleCodes
 {
@@ -75,6 +76,14 @@ public static class SgTechnicalSelectionRuleCodes
     public const string SystemSlidingWindowLowLago = "SYSTEM_SLIDING_WINDOW_LOW_LAGO";
     public const string SystemSlidingWindowMonza = "SYSTEM_SLIDING_WINDOW_MONZA";
     public const string SystemCandidateRanking = "SYSTEM_CANDIDATE_RANKING";
+    public const string CommercialLineClassicFilter = "COMMERCIAL_LINE_CLASSIC_FILTER";
+    public const string CommercialLineSignatureFilter = "COMMERCIAL_LINE_SIGNATURE_FILTER";
+    public const string ClassicWindowSlidingLago = "CLASSIC_WINDOW_SLIDING_LAGO";
+    public const string ClassicDoorSlidingLucca = "CLASSIC_DOOR_SLIDING_LUCCA";
+    public const string VeniceWindowMonza = "VENICE_WINDOW_MONZA";
+    public const string VenicePreferOverLsa = "VENICE_PREFER_OVER_LSA";
+    public const string WindowHeightOver2600AsDoor = "WINDOW_HEIGHT_OVER_2600_AS_DOOR";
+    public const string RuleNotDefinedRequiresReview = "RULE_NOT_DEFINED_REQUIRES_REVIEW";
 }
 
 public static class SgTechnicalSelectionReviewReasons
@@ -106,7 +115,10 @@ public sealed class DeterministicSgTechnicalSelector(
     private const int StrongHistoricalPriorScore = 60;
     private const int HistoricalSimilarityMaxBonus = 25;
     private const int CommercialLinePreferenceScore = 10;
+    private const int ConfirmedCommercialLineScore = 45;
+    private const int VeniceOverLsaScore = 15;
     private const int CatalogRequiresReviewPenalty = 20;
+    private const int LsaAutomaticPenalty = 15;
     private const int CloseCandidateScoreDelta = 10;
     private const int MaxAlternatives = 3;
 
@@ -122,21 +134,29 @@ public sealed class DeterministicSgTechnicalSelector(
         SgTechnicalSelectionInput input,
         CancellationToken cancellationToken)
     {
+        var resolutionReasons = FunctionalResolutionReasons(input);
         var systems = await productSystems
             .ListActiveSelectableAsync(cancellationToken);
         if (systems.Count == 0)
         {
             return NoMatch(
-                [SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMatchNotFound]);
+                [SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMatchNotFound],
+                resolutionReasons);
         }
 
         if (IsBathroomDivisionWithoutMaterial(input))
         {
             return NoMatch(
-                [SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown]);
+                [SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown],
+                resolutionReasons);
         }
 
-        var candidates = systems
+        var eligibleSystems = FilterByRequestedCommercialLine(
+            systems,
+            input,
+            out var commercialLineFilterRule);
+
+        var candidates = eligibleSystems
             .Select(system => BuildCandidate(system, input))
             .Where(candidate => candidate.CompatibilityState
                 != SgTechnicalCompatibilityState.Incompatible)
@@ -149,7 +169,8 @@ public sealed class DeterministicSgTechnicalSelector(
         if (candidates.Length == 0)
         {
             return NoMatch(
-                [SgTechnicalSelectionReviewReasons.TechnicalSelectionNoMatch]);
+                [SgTechnicalSelectionReviewReasons.TechnicalSelectionNoMatch],
+                resolutionReasons);
         }
 
         if (candidates.All(candidate => candidate.CompatibilityState
@@ -163,7 +184,8 @@ public sealed class DeterministicSgTechnicalSelector(
                 [SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMetadataIncomplete],
                 candidates.Take(MaxAlternatives)
                     .Select(candidate => candidate.ProductSystem.Code)
-                    .ToArray());
+                    .ToArray(),
+                ResolutionReasons: resolutionReasons);
         }
 
         var top = candidates[0];
@@ -178,7 +200,8 @@ public sealed class DeterministicSgTechnicalSelector(
                 [SgTechnicalSelectionReviewReasons.TechnicalSelectionAmbiguous],
                 candidates.Take(MaxAlternatives)
                     .Select(candidate => candidate.ProductSystem.Code)
-                    .ToArray());
+                    .ToArray(),
+                ResolutionReasons: resolutionReasons);
         }
 
         var reasons = top.ReviewReasons.ToList();
@@ -193,10 +216,19 @@ public sealed class DeterministicSgTechnicalSelector(
             reasons.Add(SgTechnicalSelectionReviewReasons.SpecialGeometryWithoutConstraints);
         }
 
+        if (EffectiveFunctionalType(input) == "SLIDING_DOOR"
+            && IsNapoles(top.ProductSystem)
+            && candidates.Any(candidate => IsMonaco(candidate.ProductSystem)))
+        {
+            reasons.Add(SgTechnicalSelectionRuleCodes.RuleNotDefinedRequiresReview);
+        }
+
         var confidence = Confidence(top, second, reasons);
         return new(
             top.ProductSystem.Code,
-            top.PrimaryRuleCode ?? SgTechnicalSelectionRuleCodes.SystemCandidateRanking,
+            top.PrimaryRuleCode
+                ?? commercialLineFilterRule
+                ?? SgTechnicalSelectionRuleCodes.SystemCandidateRanking,
             confidence,
             reasons.Count > 0,
             reasons.Distinct(StringComparer.Ordinal).ToArray(),
@@ -209,7 +241,8 @@ public sealed class DeterministicSgTechnicalSelector(
             top.HistoricalEvidence?.SupportCount ?? 0,
             top.HistoricalEvidence?.BestSimilarity,
             top.HistoricalEvidence?.AverageSimilarity,
-            top.HistoricalEvidence?.Examples ?? []);
+            top.HistoricalEvidence?.Examples ?? [],
+            resolutionReasons);
     }
 
     private SgTechnicalCandidate BuildCandidate(
@@ -217,7 +250,21 @@ public sealed class DeterministicSgTechnicalSelector(
         SgTechnicalSelectionInput input)
     {
         var candidate = new SgTechnicalCandidate(system);
+        ApplyAutomaticCatalogEligibility(candidate);
+        if (candidate.CompatibilityState
+            == SgTechnicalCompatibilityState.Incompatible)
+        {
+            return candidate;
+        }
+
         ApplyFunctionalCompatibility(candidate, input);
+        if (candidate.CompatibilityState
+            == SgTechnicalCompatibilityState.Incompatible)
+        {
+            return candidate;
+        }
+
+        ApplyConfirmedFamilyCompatibility(candidate, input);
         if (candidate.CompatibilityState
             == SgTechnicalCompatibilityState.Incompatible)
         {
@@ -239,6 +286,7 @@ public sealed class DeterministicSgTechnicalSelector(
         }
 
         ApplyPreferencePriors(candidate, input);
+        ApplyVeniceOverLsa(candidate, input);
         ApplyHistoricalSimilarity(candidate, input);
         ApplyCommercialLine(candidate, input);
         if (system.RequiresReview)
@@ -250,6 +298,62 @@ public sealed class DeterministicSgTechnicalSelector(
 
         candidate.Tier = Tier(candidate);
         return candidate;
+    }
+
+    private static IReadOnlyList<ProductSystemCatalogReadModel>
+        FilterByRequestedCommercialLine(
+            IReadOnlyList<ProductSystemCatalogReadModel> systems,
+            SgTechnicalSelectionInput input,
+            out string? ruleCode)
+    {
+        ruleCode = null;
+        var requested = Code(input.RequestedCommercialLine);
+        if (requested is null or "ESSENTIAL" or "BIOCONFORT")
+        {
+            return systems;
+        }
+
+        if (requested == "CLASSIC")
+        {
+            ruleCode = SgTechnicalSelectionRuleCodes.CommercialLineClassicFilter;
+            return systems
+                .Where(system => Code(system.CommercialLine) == "CLASSIC")
+                .ToArray();
+        }
+
+        if (requested == "SIGNATURE")
+        {
+            ruleCode = SgTechnicalSelectionRuleCodes.CommercialLineSignatureFilter;
+            return systems
+                .Where(system => Code(system.CommercialLine) == "SIGNATURE")
+                .ToArray();
+        }
+
+        return systems;
+    }
+
+    private static void ApplyAutomaticCatalogEligibility(
+        SgTechnicalCandidate candidate)
+    {
+        if (Code(candidate.ProductSystem.CommercialLine) == "TRADITIONAL")
+        {
+            candidate.CompatibilityState =
+                SgTechnicalCompatibilityState.Incompatible;
+            candidate.FailedRuleCodes.Add("TRADITIONAL_SYSTEM_NOT_AUTOMATIC");
+        }
+    }
+
+    private static void ApplyConfirmedFamilyCompatibility(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input)
+    {
+        if (EffectiveFunctionalType(input) == "SLIDING_DOOR"
+            && IsMonza(candidate.ProductSystem))
+        {
+            candidate.CompatibilityState =
+                SgTechnicalCompatibilityState.Incompatible;
+            candidate.FailedRuleCodes.Add("VENICE_MONZA_WINDOW_ONLY");
+        }
     }
 
     private static void ApplyFunctionalCompatibility(
@@ -343,7 +447,8 @@ public sealed class DeterministicSgTechnicalSelector(
         var operation = Code(input.Operation);
         var features = Features(input);
         var prior = PriorFor(candidate.ProductSystem, functionalType,
-            operation, features, input.HeightMillimeters);
+            operation, features, input.HeightMillimeters,
+            input.RequestedCommercialLine);
         if (prior is null)
         {
             return;
@@ -353,7 +458,8 @@ public sealed class DeterministicSgTechnicalSelector(
         candidate.PrimaryRuleCode ??= prior;
         candidate.MatchedRuleCodes.Add(prior);
         if (prior is SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago
-            or SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza)
+            or SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza
+            or SgTechnicalSelectionRuleCodes.VeniceWindowMonza)
         {
             candidate.ReviewReasons.Add(
                 SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview);
@@ -365,8 +471,25 @@ public sealed class DeterministicSgTechnicalSelector(
         string? functionalType,
         string? operation,
         IReadOnlySet<string> features,
-        int? heightMillimeters)
+        int? heightMillimeters,
+        string? requestedCommercialLine)
     {
+        if (Code(requestedCommercialLine) == "CLASSIC"
+            && Code(system.CommercialLine) == "CLASSIC"
+            && functionalType == "SLIDING_WINDOW"
+            && Matches(system.Family, "PRIMAVERA LAGO"))
+        {
+            return SgTechnicalSelectionRuleCodes.ClassicWindowSlidingLago;
+        }
+
+        if (Code(requestedCommercialLine) == "CLASSIC"
+            && Code(system.CommercialLine) == "CLASSIC"
+            && functionalType == "SLIDING_DOOR"
+            && Matches(system.Family, "PRIMAVERA LUCCA"))
+        {
+            return SgTechnicalSelectionRuleCodes.ClassicDoorSlidingLucca;
+        }
+
         if (functionalType == "FIXED" && Matches(system.Family, "VENECIA FERMO"))
         {
             return SgTechnicalSelectionRuleCodes.SystemFixedFermo;
@@ -416,7 +539,7 @@ public sealed class DeterministicSgTechnicalSelector(
             && heightMillimeters is null or > LowSlidingWindowHeightMillimeters
             && Matches(system.Family, "VENECIA MONZA"))
         {
-            return SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza;
+            return SgTechnicalSelectionRuleCodes.VeniceWindowMonza;
         }
 
         if (functionalType == "PERGOLA")
@@ -467,8 +590,37 @@ public sealed class DeterministicSgTechnicalSelector(
             return;
         }
 
+        if (requested is "ESSENTIAL" or "BIOCONFORT")
+        {
+            return;
+        }
+
         candidate.ReviewReasons.Add(
             SgTechnicalSelectionReviewReasons.CommercialLineMismatch);
+    }
+
+    private static void ApplyVeniceOverLsa(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input)
+    {
+        var functionalType = EffectiveFunctionalType(input);
+        if (functionalType is not ("SLIDING_DOOR" or "SLIDING_WINDOW"))
+        {
+            return;
+        }
+
+        if (IsLsa(candidate.ProductSystem))
+        {
+            candidate.Score -= LsaAutomaticPenalty;
+            return;
+        }
+
+        if (IsVenice(candidate.ProductSystem))
+        {
+            candidate.Score += VeniceOverLsaScore;
+            candidate.MatchedRuleCodes.Add(
+                SgTechnicalSelectionRuleCodes.VenicePreferOverLsa);
+        }
     }
 
     private static void ApplyHistoricalSimilarity(
@@ -581,6 +733,41 @@ public sealed class DeterministicSgTechnicalSelector(
         || Contains(system.TechnicalName, "INOX")
         || Contains(system.CommercialName, "INOX");
 
+    private static bool IsVenice(ProductSystemCatalogReadModel system) =>
+        Contains(system.Family, "VENECIA")
+        || Contains(system.TechnicalName, "VENECIA")
+        || Contains(system.CommercialName, "VENECIA")
+        || Contains(system.Name, "VENECIA");
+
+    private static bool IsMonza(ProductSystemCatalogReadModel system) =>
+        Contains(system.Family, "MONZA")
+        || Contains(system.TechnicalName, "MONZA")
+        || Contains(system.CommercialName, "MONZA")
+        || Contains(system.Name, "MONZA");
+
+    private static bool IsNapoles(ProductSystemCatalogReadModel system) =>
+        Contains(system.Family, "NAPOLES")
+        || Contains(system.TechnicalName, "NAPOLES")
+        || Contains(system.CommercialName, "NAPOLES")
+        || Contains(system.Name, "NAPOLES");
+
+    private static bool IsMonaco(ProductSystemCatalogReadModel system) =>
+        Contains(system.Family, "MONACO")
+        || Contains(system.Family, "MÓNACO")
+        || Contains(system.TechnicalName, "MONACO")
+        || Contains(system.TechnicalName, "MÓNACO")
+        || Contains(system.CommercialName, "MONACO")
+        || Contains(system.CommercialName, "MÓNACO")
+        || Contains(system.Name, "MONACO")
+        || Contains(system.Name, "MÓNACO");
+
+    private static bool IsLsa(ProductSystemCatalogReadModel system) =>
+        Contains(system.Family, "LSA")
+        || Contains(system.TechnicalName, "LSA")
+        || Contains(system.CommercialName, "LSA")
+        || Contains(system.Name, "LSA")
+        || system.Code.StartsWith("LSA", StringComparison.OrdinalIgnoreCase);
+
     private static IReadOnlySet<string> Features(SgTechnicalSelectionInput input) =>
         (input.SpecialFeatures ?? [])
         .Select(Code)
@@ -599,6 +786,23 @@ public sealed class DeterministicSgTechnicalSelector(
     {
         var functionalType = Code(input.FunctionalType);
         var operation = Code(input.Operation);
+        if (functionalType == "WINDOW"
+            && input.HeightMillimeters > 2600)
+        {
+            return operation switch
+            {
+                "SLIDING" => "SLIDING_DOOR",
+                "SWING" => "SWING_DOOR",
+                _ => "DOOR"
+            };
+        }
+
+        if (functionalType == "SLIDING_WINDOW"
+            && input.HeightMillimeters > 2600)
+        {
+            return "SLIDING_DOOR";
+        }
+
         if (functionalType == "WINDOW")
         {
             return operation switch
@@ -611,6 +815,13 @@ public sealed class DeterministicSgTechnicalSelector(
 
         return functionalType;
     }
+
+    private static IReadOnlyList<string> FunctionalResolutionReasons(
+        SgTechnicalSelectionInput input) =>
+        Code(input.FunctionalType) is "WINDOW" or "SLIDING_WINDOW"
+        && input.HeightMillimeters > 2600
+            ? [SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor]
+            : [];
 
     internal static string NormalizeTechnicalText(string? value)
     {
@@ -673,14 +884,16 @@ public sealed class DeterministicSgTechnicalSelector(
         Math.Max(0m, Math.Min(1m, value));
 
     private static SgTechnicalSelectionResult NoMatch(
-        IReadOnlyList<string> reasons) =>
+        IReadOnlyList<string> reasons,
+        IReadOnlyList<string>? resolutionReasons = null) =>
         new(
             null,
             SgTechnicalSelectionRuleCodes.SystemNoMatchRequiresReview,
             0m,
             true,
             reasons,
-            []);
+            [],
+            ResolutionReasons: resolutionReasons);
 
     private sealed class SgTechnicalCandidate(
         ProductSystemCatalogReadModel productSystem)

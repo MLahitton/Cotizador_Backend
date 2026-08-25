@@ -71,6 +71,15 @@ public static class GlassResolutionReasonCodes
     public const string ProductCodeMatched = "PRODUCT_CODE_MATCHED";
     public const string SecondaryAttributesMissing =
         "SECONDARY_ATTRIBUTES_MISSING";
+    public const string GlassLineTempered = "GLASS_LINE_TEMPERED";
+    public const string GlassLineLaminated = "GLASS_LINE_LAMINATED";
+    public const string JointGlassRule = "JOINT_GLASS_RULE";
+    public const string NarrowGlassHeightExtension =
+        "NARROW_GLASS_HEIGHT_EXTENSION";
+    public const string SpecialGlassShower8Mm = "SPECIAL_GLASS_SHOWER_8MM";
+    public const string SpecialGlassRailing10Mm = "SPECIAL_GLASS_RAILING_10MM";
+    public const string Laminated55JointAndHeight =
+        "LAMINATED_5_5_JOINT_AND_HEIGHT";
 }
 
 public sealed class GlassCandidateResolver : IGlassCandidateResolver

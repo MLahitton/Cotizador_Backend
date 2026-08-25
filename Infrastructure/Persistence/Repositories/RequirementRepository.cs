@@ -64,6 +64,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                     requirement.Id,
                     requirement.PreQuoteId,
                     requirement.Status,
+                    requirement.CommercialLine,
                     requirement.CreatedAtUtc,
                     dbContext.RequirementTechnicalProposals
                         .Any(proposal =>
@@ -108,6 +109,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                     candidate.RequirementId,
                     candidate.PreQuoteId,
                     candidate.Status,
+                    candidate.CommercialLine,
                     candidate.CreatedAtUtc,
                     candidate.HasTechnicalProposal,
                     candidate.TechnicalProposalId,
@@ -293,6 +295,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         {
             return await dbContext.RequirementTechnicalProposals
                 .AsNoTracking()
+                .Include(proposal => proposal.Requirement)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.ExtractedItem)
                         .ThenInclude(item => item.Evidence)
@@ -310,6 +313,27 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .ThenByDescending(proposal => proposal.CreatedAtUtc)
                 .ThenByDescending(proposal => proposal.Id)
                 .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementTechnicalProposal?>
+        FindTechnicalProposalForUpdateAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementTechnicalProposals
+                .Include(proposal => proposal.Requirement)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.ExtractedItem)
+                .SingleOrDefaultAsync(
+                    proposal => proposal.Id == technicalProposalId,
+                    cancellationToken);
         }
         catch (DbException exception)
         {
@@ -349,6 +373,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         Guid RequirementId,
         Guid PreQuoteId,
         RequirementStatus Status,
+        RequirementCommercialLine? CommercialLine,
         DateTimeOffset CreatedAtUtc,
         bool HasTechnicalProposal,
         Guid? TechnicalProposalId,

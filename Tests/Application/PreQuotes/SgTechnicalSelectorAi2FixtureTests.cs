@@ -22,7 +22,7 @@ public sealed class SgTechnicalSelectorAi2FixtureTests
         "V-25",
         "K50",
         "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA",
-        SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza)]
+        SgTechnicalSelectionRuleCodes.VeniceWindowMonza)]
     public async Task RealAi2Fixture_ResolvesSystemFromTechnicalSignals(
         string reference,
         string expectedCode,

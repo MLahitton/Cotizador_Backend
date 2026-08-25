@@ -12,9 +12,15 @@ public sealed class RequirementConfiguration
         builder.ToTable(
             "requirements",
             "core",
-            tableBuilder => tableBuilder.HasCheckConstraint(
-                "ck_requirements_status",
-                "\"status\" IN ('Pending', 'Processing', 'Processed', 'Failed')"));
+            tableBuilder =>
+            {
+                tableBuilder.HasCheckConstraint(
+                    "ck_requirements_status",
+                    "\"status\" IN ('Pending', 'Processing', 'Processed', 'Failed')");
+                tableBuilder.HasCheckConstraint(
+                    "ck_requirements_commercial_line",
+                    "\"commercial_line\" IS NULL OR \"commercial_line\" IN ('CLASSIC', 'ESSENTIAL', 'BIOCONFORT', 'SIGNATURE')");
+            });
 
         builder.HasKey(requirement => requirement.Id);
 
@@ -40,6 +46,20 @@ public sealed class RequirementConfiguration
             .HasColumnType("varchar(20)")
             .HasMaxLength(20)
             .IsRequired();
+
+        builder.Property(requirement => requirement.CommercialLine)
+            .HasColumnName("commercial_line")
+            .HasConversion(
+                value => value == null
+                    ? null
+                    : value.Value.ToString().ToUpperInvariant(),
+                value => value == null
+                    ? null
+                    : Enum.Parse<RequirementCommercialLine>(
+                        value,
+                        ignoreCase: true))
+            .HasColumnType("varchar(20)")
+            .HasMaxLength(20);
 
         builder.Property(requirement => requirement.CreatedAtUtc)
             .HasColumnName("created_at_utc")

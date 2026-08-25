@@ -3,6 +3,7 @@ using Application.PreQuotes.CreateRequirement;
 using Application.PreQuotes.GetCurrentRequirement;
 using Contracts.Common;
 using Contracts.PreQuotes;
+using Domain.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -54,6 +55,9 @@ public sealed class PreQuoteRequirementsController(
                 requirement.RequirementId,
                 requirement.PreQuoteId,
                 requirement.Status.ToString().ToUpperInvariant(),
+                requirement.CommercialLine is null
+                    ? null
+                    : ToContract(requirement.CommercialLine.Value),
                 requirement.CreatedAtUtc,
                 requirement.HasTechnicalProposal,
                 requirement.TechnicalProposalId,
@@ -124,7 +128,11 @@ public sealed class PreQuoteRequirementsController(
             return InvalidMultipartRequest();
         }
 
-        if (formCollection.Count != 0
+        if (formCollection.Keys.Any(key =>
+                !string.Equals(
+                    key,
+                    "commercialLine",
+                    StringComparison.Ordinal))
             || formCollection.Files.Count == 0
             || form.Files.Count != formCollection.Files.Count
             || formCollection.Files.Any(file =>
@@ -149,7 +157,10 @@ public sealed class PreQuoteRequirementsController(
                     streams[index])).ToArray();
 
             var result = await createRequirementService.ExecuteAsync(
-                new CreateRequirementCommand(preQuoteId, commandFiles),
+                new CreateRequirementCommand(
+                    preQuoteId,
+                    form.CommercialLine,
+                    commandFiles),
                 cancellationToken);
 
             if (result.IsSuccess && result.Requirement is { } requirement)
@@ -160,6 +171,7 @@ public sealed class PreQuoteRequirementsController(
                         requirement.RequirementId,
                         requirement.PreQuoteId,
                         requirement.FileCount,
+                        requirement.CommercialLine,
                         requirement.Status,
                         requirement.CreatedAtUtc));
             }
@@ -376,4 +388,14 @@ public sealed class PreQuoteRequirementsController(
                 : normalizedPath)
             .Trim();
     }
+
+    private static string ToContract(RequirementCommercialLine commercialLine) =>
+        commercialLine switch
+        {
+            RequirementCommercialLine.Classic => "CLASSIC",
+            RequirementCommercialLine.Essential => "ESSENTIAL",
+            RequirementCommercialLine.Bioconfort => "BIOCONFORT",
+            RequirementCommercialLine.Signature => "SIGNATURE",
+            _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
+        };
 }

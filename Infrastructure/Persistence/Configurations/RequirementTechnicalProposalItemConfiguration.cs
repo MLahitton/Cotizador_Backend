@@ -63,6 +63,31 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .HasColumnType("uuid")
             .IsRequired(false);
 
+        builder.Property(item => item.SelectedSystemId)
+            .HasColumnName("selected_system_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.SelectedGlassTypeId)
+            .HasColumnName("selected_glass_type_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.SelectedFinishTypeId)
+            .HasColumnName("selected_finish_type_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.SelectedAtUtc)
+            .HasColumnName("selected_at_utc")
+            .HasColumnType("timestamp with time zone")
+            .IsRequired(false);
+
+        builder.Property(item => item.SelectedByUserId)
+            .HasColumnName("selected_by_user_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
         builder.Property(item => item.OverallConfidence)
             .HasColumnName("overall_confidence")
             .HasColumnType("numeric(5,4)")
@@ -160,6 +185,26 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .HasForeignKey(item => item.SuggestedFinishTypeId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne<Domain.Catalogs.ProductSystem>()
+            .WithMany()
+            .HasForeignKey(item => item.SelectedSystemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Domain.Catalogs.GlassType>()
+            .WithMany()
+            .HasForeignKey(item => item.SelectedGlassTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Domain.Catalogs.FinishType>()
+            .WithMany()
+            .HasForeignKey(item => item.SelectedFinishTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Domain.Identity.User>()
+            .WithMany()
+            .HasForeignKey(item => item.SelectedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(item => item.SystemAlternatives)
             .WithOne(alternative => alternative.ProposalItem)
             .HasForeignKey(alternative => alternative.ProposalItemId)
@@ -197,5 +242,21 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .IsUnique()
             .HasDatabaseName(
                 "ux_requirement_technical_proposal_items_extracted_item_id");
+
+        builder.HasIndex(item => item.SelectedSystemId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposal_items_selected_system_id");
+
+        builder.HasIndex(item => item.SelectedGlassTypeId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposal_items_selected_glass_type_id");
+
+        builder.HasIndex(item => item.SelectedFinishTypeId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposal_items_selected_finish_type_id");
+
+        builder.HasIndex(item => item.SelectedByUserId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposal_items_selected_by_user_id");
     }
 }

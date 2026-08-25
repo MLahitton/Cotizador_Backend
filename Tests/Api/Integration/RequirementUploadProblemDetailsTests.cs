@@ -78,6 +78,10 @@ public sealed class RequirementUploadProblemDetailsTests
             files.GetProperty("items"));
         Assert.Equal("string", fileItem.GetProperty("type").GetString());
         Assert.Equal("binary", fileItem.GetProperty("format").GetString());
+        Assert.True(properties.TryGetProperty(
+            "commercialLine",
+            out var commercialLine));
+        Assert.Equal("string", commercialLine.GetProperty("type").GetString());
     }
 
     [Fact]
@@ -88,6 +92,7 @@ public sealed class RequirementUploadProblemDetailsTests
         AddFile(content, "requirement.pdf", PdfContentType);
         AddFile(content, "photo.jpg", JpegContentType);
         AddFile(content, "schedule.xlsx", XlsxContentType);
+        content.Add(new StringContent("ESSENTIAL"), "commercialLine");
 
         using var response = await host.Client.PostAsync(
             $"/api/v2/prequotes/{host.PreQuoteId}/requirements",
@@ -101,6 +106,7 @@ public sealed class RequirementUploadProblemDetailsTests
         Assert.NotNull(body);
         Assert.Equal(host.PreQuoteId, body!.PreQuoteId);
         Assert.Equal(3, body.FileCount);
+        Assert.Equal("ESSENTIAL", body.CommercialLine);
         Assert.Equal("PENDING", body.Status);
         await host.Storage.Received(3).SaveAsync(
             Arg.Is<string>(key =>
@@ -177,8 +183,14 @@ public sealed class RequirementUploadProblemDetailsTests
     private static MultipartFormDataContent CreateMultipart(string scenario)
     {
         var content = new MultipartFormDataContent();
+        if (scenario != "missing_files")
+        {
+            content.Add(new StringContent("ESSENTIAL"), "commercialLine");
+        }
+
         if (scenario == "missing_files")
         {
+            content.Add(new StringContent("ESSENTIAL"), "commercialLine");
             return content;
         }
 

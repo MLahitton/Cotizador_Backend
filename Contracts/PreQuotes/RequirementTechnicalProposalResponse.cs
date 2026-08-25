@@ -6,6 +6,7 @@ public sealed record RequirementTechnicalProposalResponse(
     Guid ProcessingAttemptId,
     Guid ExtractionResultId,
     string Status,
+    string? CommercialLine,
     DateTimeOffset CreatedAtUtc,
     int ItemCount,
     int ItemsRequiringReview,
@@ -28,6 +29,8 @@ public sealed record RequirementTechnicalProposalItemResponse(
     decimal? ExtractionConfidence,
     string ExtractionStatus,
     RequirementTechnicalProposalSuggestedResponse Suggested,
+    RequirementTechnicalProposalSelectedResponse? Selected,
+    string SelectionState,
     RequirementTechnicalProposalAlternativesResponse Alternatives,
     RequirementTechnicalProposalConfidenceResponse Confidence,
     bool RequiresReview,
@@ -45,6 +48,13 @@ public sealed record RequirementTechnicalProposalSuggestedResponse(
     RequirementTechnicalProposalSystemOptionResponse? System,
     RequirementTechnicalProposalGlassOptionResponse? Glass,
     RequirementTechnicalProposalFinishOptionResponse? Finish);
+
+public sealed record RequirementTechnicalProposalSelectedResponse(
+    RequirementTechnicalProposalSystemOptionResponse? System,
+    RequirementTechnicalProposalGlassOptionResponse? Glass,
+    RequirementTechnicalProposalFinishOptionResponse? Finish,
+    DateTimeOffset SelectedAtUtc,
+    Guid SelectedByUserId);
 
 public sealed record RequirementTechnicalProposalAlternativesResponse(
     IReadOnlyList<RequirementTechnicalProposalSystemAlternativeResponse> Systems,

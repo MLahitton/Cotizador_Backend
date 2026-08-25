@@ -23,10 +23,7 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var requirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
+        var requirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
 
         await using (var context = fixture.CreateDbContext())
         {
@@ -44,6 +41,7 @@ public sealed class RequirementRepositoryTests(
         Assert.Equal(seeded.PreQuoteId, result.PreQuoteId);
         Assert.Equal(seeded.UserId, result.CreatedByUserId);
         Assert.Equal(RequirementStatus.Pending, result.Status);
+        Assert.Equal(RequirementCommercialLine.Essential, result.CommercialLine);
         Assert.True(result.IsActive);
         Assert.Empty(result.Files);
         Assert.Empty(result.ProcessingAttempts);
@@ -54,14 +52,8 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var first = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
-        var second = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(2));
+        var first = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
+        var second = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(2));
 
         await using (var context = fixture.CreateDbContext())
         {
@@ -82,14 +74,8 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var firstRequirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
-        var secondRequirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(2));
+        var firstRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
+        var secondRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(2));
         var firstFile = RequirementFile.Create(
             firstRequirement.Id,
             "first.pdf",
@@ -148,10 +134,7 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var requirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
+        var requirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
         var file = RequirementFile.Create(
             requirement.Id,
             "source.pdf",
@@ -190,14 +173,8 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var firstRequirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
-        var secondRequirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(2));
+        var firstRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
+        var secondRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(2));
         var completed = RequirementProcessingAttempt.Create(
             firstRequirement.Id,
             seeded.UserId,
@@ -258,10 +235,7 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var requirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
+        var requirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
         var attempt = RequirementProcessingAttempt.Create(
             requirement.Id,
             seeded.UserId,
@@ -295,10 +269,7 @@ public sealed class RequirementRepositoryTests(
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var seeded = await SeedPreQuoteAsync();
-        var requirement = Requirement.Create(
-            seeded.PreQuoteId,
-            seeded.UserId,
-            At.AddMinutes(1));
+        var requirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
         var attempt = RequirementProcessingAttempt.Create(
             requirement.Id,
             seeded.UserId,
@@ -318,10 +289,7 @@ public sealed class RequirementRepositoryTests(
         await using (var dirtyContext = fixture.CreateDbContext())
         {
             var repository = new RequirementRepository(dirtyContext);
-            repository.Add(Requirement.Create(
-                Guid.NewGuid(),
-                seeded.UserId,
-                At.AddMinutes(4)));
+            repository.Add(Requirement.Create(Guid.NewGuid(), seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(4)));
 
             var finalization =
                 await repository.FinalizeProcessingFailureAsync(
@@ -372,10 +340,7 @@ public sealed class RequirementRepositoryTests(
         fixture.RequireAvailable();
         await using var context = fixture.CreateDbContext();
         var repository = new RequirementRepository(context);
-        var requirement = Requirement.Create(
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            At);
+        var requirement = Requirement.Create(Guid.NewGuid(), Guid.NewGuid(), RequirementCommercialLine.Essential, At);
         repository.Add(requirement);
 
         await Assert.ThrowsAsync<RequirementPersistenceException>(() =>

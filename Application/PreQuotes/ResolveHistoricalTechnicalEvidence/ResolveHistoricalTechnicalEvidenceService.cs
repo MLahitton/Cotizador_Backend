@@ -35,12 +35,14 @@ public sealed class ResolveHistoricalTechnicalEvidenceService
         var selection = await _selector.SelectAsync(
             input with { HistoricalSystemEvidence = evidence },
             cancellationToken);
+        var evidenceStatus = ResolveEvidenceStatus(similarity, selection);
 
         return new HistoricalTechnicalEvidenceSelectionResult(
             selection,
             similarity.Status,
             similarity.FailureCode,
-            evidence);
+            evidence,
+            evidenceStatus);
     }
 
     public async Task<IReadOnlyDictionary<Guid, HistoricalTechnicalEvidenceSelectionResult>>
@@ -81,15 +83,47 @@ public sealed class ResolveHistoricalTechnicalEvidenceService
             var selection = await _selector.SelectAsync(
                 request.Input with { HistoricalSystemEvidence = evidence },
                 cancellationToken);
+            var evidenceStatus = ResolveEvidenceStatus(similarity, selection);
 
             results[request.ItemId] = new HistoricalTechnicalEvidenceSelectionResult(
                 selection,
                 similarity.Status,
                 similarity.FailureCode,
-                evidence);
+                evidence,
+                evidenceStatus);
         }
 
         return results;
+    }
+
+    private static HistoricalTechnicalEvidenceStatusSummary ResolveEvidenceStatus(
+        HistoricalSimilarityEvaluationResult similarity,
+        SgTechnicalSelectionResult selection)
+    {
+        if (similarity.Status == HistoricalSimilarityStatus.TechnicalFailure)
+        {
+            return new HistoricalTechnicalEvidenceStatusSummary(
+                HistoricalTechnicalEvidenceStatuses.SimilarityUnavailable,
+                similarity.Candidates.Count,
+                null,
+                null);
+        }
+
+        if (selection.HistoricalSupportCount > 0
+            && selection.HistoricalBestSimilarity is not null)
+        {
+            return new HistoricalTechnicalEvidenceStatusSummary(
+                HistoricalTechnicalEvidenceStatuses.Available,
+                selection.HistoricalSupportCount,
+                selection.HistoricalBestSimilarity,
+                selection.HistoricalAverageSimilarity);
+        }
+
+        return new HistoricalTechnicalEvidenceStatusSummary(
+            HistoricalTechnicalEvidenceStatuses.NoComparables,
+            0,
+            null,
+            null);
     }
 
     private static IReadOnlyList<SgHistoricalSystemEvidence> BuildEvidence(
@@ -194,4 +228,18 @@ public sealed record HistoricalTechnicalEvidenceSelectionResult(
     SgTechnicalSelectionResult Selection,
     HistoricalSimilarityStatus SimilarityStatus,
     string? SimilarityFailureCode,
-    IReadOnlyList<SgHistoricalSystemEvidence> HistoricalEvidence);
+    IReadOnlyList<SgHistoricalSystemEvidence> HistoricalEvidence,
+    HistoricalTechnicalEvidenceStatusSummary EvidenceStatus);
+
+public sealed record HistoricalTechnicalEvidenceStatusSummary(
+    string Status,
+    int SupportCount,
+    decimal? BestSimilarity,
+    decimal? AverageSimilarity);
+
+public static class HistoricalTechnicalEvidenceStatuses
+{
+    public const string Available = "AVAILABLE";
+    public const string NoComparables = "NO_COMPARABLES";
+    public const string SimilarityUnavailable = "SIMILARITY_UNAVAILABLE";
+}

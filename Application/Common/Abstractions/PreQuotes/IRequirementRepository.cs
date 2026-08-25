@@ -50,6 +50,10 @@ public interface IRequirementRepository
         Guid requirementId,
         CancellationToken cancellationToken);
 
+    Task<RequirementTechnicalProposal?> FindTechnicalProposalForUpdateAsync(
+        Guid technicalProposalId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<RequirementExtractedItem>> GetExtractedItemsAsync(
         Guid extractionResultId,
         CancellationToken cancellationToken);
@@ -71,6 +75,7 @@ public sealed record CurrentRequirementReadModel(
     Guid RequirementId,
     Guid PreQuoteId,
     RequirementStatus Status,
+    RequirementCommercialLine? CommercialLine,
     DateTimeOffset CreatedAtUtc,
     bool HasTechnicalProposal,
     Guid? TechnicalProposalId,

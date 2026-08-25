@@ -163,21 +163,25 @@ public sealed class PriceRequirementTechnicalProposalService(
         ProductSystemCatalogReadModel? system = null;
         GlassTypeCatalogReadModel? glass = null;
         FinishTypeCatalogReadModel? finish = null;
+        var effective = EffectiveConfiguration(proposalItem);
         if (!proposalItem.IsTechnicallyComplete || !proposalItem.IsPriceable)
         {
             missing.Add("TECHNICAL_PROPOSAL_ITEM_NOT_PRICEABLE");
         }
-        if (proposalItem.SuggestedSystemId is not { } systemId || !systems.TryGetValue(systemId, out system))
+        if (effective.SystemId is not { } systemId
+            || !systems.TryGetValue(systemId, out system))
         {
-            missing.Add("SUGGESTED_SYSTEM_MISSING");
+            missing.Add(effective.MissingSystemCode);
         }
-        if (proposalItem.SuggestedGlassTypeId is not { } glassId || !glasses.TryGetValue(glassId, out glass))
+        if (effective.GlassTypeId is not { } glassId
+            || !glasses.TryGetValue(glassId, out glass))
         {
-            missing.Add("SUGGESTED_GLASS_MISSING");
+            missing.Add(effective.MissingGlassCode);
         }
-        if (proposalItem.SuggestedFinishTypeId is not { } finishId || !finishes.TryGetValue(finishId, out finish))
+        if (effective.FinishTypeId is not { } finishId
+            || !finishes.TryGetValue(finishId, out finish))
         {
-            missing.Add("SUGGESTED_FINISH_MISSING");
+            missing.Add(effective.MissingFinishCode);
         }
         if (item.Quantity is not > 0)
         {
@@ -186,18 +190,27 @@ public sealed class PriceRequirementTechnicalProposalService(
 
         if (missing.Count > 0 || system is null || glass is null || finish is null)
         {
-            return EmptyItem(proposalItem, "NOT_PRICEABLE", null, proposalItem.RequiresReview, [], missing);
+            return EmptyItem(
+                proposalItem,
+                "NOT_PRICEABLE",
+                effective.Source,
+                null,
+                proposalItem.RequiresReview,
+                [],
+                missing);
         }
 
         var mapping = mapper.Map(proposalItem, system, glass, finish);
         if (mapping.PricingArea is not > 0)
         {
-            return EmptyItem(proposalItem, "NOT_PRICEABLE", mapping.PricingArea,
+            return EmptyItem(proposalItem, "NOT_PRICEABLE", effective.Source,
+                mapping.PricingArea,
                 true, mapping.MappingWarnings, ["AREA_MISSING"]);
         }
         if (mapping.Quantity <= 0)
         {
-            return EmptyItem(proposalItem, "NOT_PRICEABLE", mapping.PricingArea,
+            return EmptyItem(proposalItem, "NOT_PRICEABLE", effective.Source,
+                mapping.PricingArea,
                 true, mapping.MappingWarnings, ["QUANTITY_MISSING"]);
         }
 
@@ -238,6 +251,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             item.Reference,
             item.Description,
             status,
+            effective.Source,
             mapping.Quantity,
             mapping.PricingArea,
             unit,
@@ -266,6 +280,7 @@ public sealed class PriceRequirementTechnicalProposalService(
     private static TechnicalProposalPricingItemReadModel EmptyItem(
         RequirementTechnicalProposalItem proposalItem,
         string status,
+        string configurationSource,
         decimal? pricingArea,
         bool requiresReview,
         IReadOnlyList<string> warnings,
@@ -280,6 +295,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             item.Reference,
             item.Description,
             status,
+            configurationSource,
             item.Quantity,
             pricingArea,
             new TechnicalProposalPricingMoneyRange(null, null, null),
@@ -291,6 +307,31 @@ public sealed class PriceRequirementTechnicalProposalService(
             [],
             missing,
             []);
+    }
+
+    private static EffectiveTechnicalConfiguration EffectiveConfiguration(
+        RequirementTechnicalProposalItem proposalItem)
+    {
+        var hasSelected = proposalItem.SelectedAtUtc is not null
+            && proposalItem.SelectedByUserId is not null;
+
+        return hasSelected
+            ? new EffectiveTechnicalConfiguration(
+                "SELECTED",
+                proposalItem.SelectedSystemId,
+                proposalItem.SelectedGlassTypeId,
+                proposalItem.SelectedFinishTypeId,
+                "SELECTED_SYSTEM_MISSING",
+                "SELECTED_GLASS_MISSING",
+                "SELECTED_FINISH_MISSING")
+            : new EffectiveTechnicalConfiguration(
+                "SUGGESTED",
+                proposalItem.SuggestedSystemId,
+                proposalItem.SuggestedGlassTypeId,
+                proposalItem.SuggestedFinishTypeId,
+                "SUGGESTED_SYSTEM_MISSING",
+                "SUGGESTED_GLASS_MISSING",
+                "SUGGESTED_FINISH_MISSING");
     }
 
     private async Task<PriceRequirementTechnicalProposalFailure> ValidateAccessAsync(
@@ -347,4 +388,13 @@ public sealed class PriceRequirementTechnicalProposalService(
 
     private static decimal? Multiply(decimal? value, decimal quantity) =>
         value is null ? null : value.Value * quantity;
+
+    private sealed record EffectiveTechnicalConfiguration(
+        string Source,
+        Guid? SystemId,
+        Guid? GlassTypeId,
+        Guid? FinishTypeId,
+        string MissingSystemCode,
+        string MissingGlassCode,
+        string MissingFinishCode);
 }
