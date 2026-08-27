@@ -320,8 +320,8 @@ public sealed class BuildRequirementTechnicalProposalService(
         RequirementExtractedItem item,
         IReadOnlyList<GlassTypeCatalogReadModel> glasses)
     {
-        if (item.WidthMillimeters is not { } width
-            || item.HeightMillimeters is not { } height)
+        var geometry = GlassPaneGeometry.Resolve(item);
+        if (geometry is null)
         {
             return null;
         }
@@ -330,39 +330,69 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             GlassResolutionReasonCodes.GlassLineTempered
         };
+        reasons.AddRange(geometry.ResolutionReasons);
+        var reviewReasons = new List<string>();
+        if (geometry.RequiresReview)
+        {
+            reviewReasons.Add(GlassResolutionReasonCodes
+                .GlassPaneGeometryUnresolved);
+        }
 
-        if (width > 1950)
+        var paneCodes = new List<string>();
+        var hasJoint = false;
+        foreach (var pane in geometry.Panes)
+        {
+            if (!geometry.RequiresReview && pane.WidthMm > 1950)
+            {
+                hasJoint = true;
+                paneCodes.Add("TEMP_10");
+                continue;
+            }
+
+            var narrow = pane.WidthMm <= 500;
+            paneCodes.Add(pane.HeightMm switch
+            {
+                <= 2400 => "TEMP_5",
+                <= 2600 when narrow => "TEMP_5",
+                <= 2600 => "TEMP_6",
+                <= 2800 when narrow => "TEMP_6",
+                <= 2800 => "TEMP_8",
+                <= 3000 when narrow => "TEMP_8",
+                _ => "TEMP_10"
+            });
+
+            if (narrow && pane.HeightMm > 2400 && pane.HeightMm <= 3000)
+            {
+                reasons.Add(GlassResolutionReasonCodes
+                    .NarrowGlassHeightExtension);
+            }
+        }
+
+        if (hasJoint)
         {
             reasons.Add(GlassResolutionReasonCodes.JointGlassRule);
-            return RuleGlass(glasses, "TEMP_10", reasons);
         }
 
-        var narrow = width <= 500;
-        var code = height switch
+        var code = paneCodes
+            .OrderByDescending(TemperedRank)
+            .First();
+        if (paneCodes.Distinct(StringComparer.Ordinal).Skip(1).Any())
         {
-            <= 2400 => "TEMP_5",
-            <= 2600 when narrow => "TEMP_5",
-            <= 2600 => "TEMP_6",
-            <= 2800 when narrow => "TEMP_6",
-            <= 2800 => "TEMP_8",
-            <= 3000 when narrow => "TEMP_8",
-            _ => "TEMP_10"
-        };
-
-        if (narrow && height > 2400 && height <= 3000)
-        {
-            reasons.Add(GlassResolutionReasonCodes.NarrowGlassHeightExtension);
+            reasons.Add(GlassResolutionReasonCodes
+                .GlassPaneHeterogeneousNeeds);
+            reviewReasons.Add(GlassResolutionReasonCodes
+                .GlassPaneHeterogeneousNeeds);
         }
 
-        return RuleGlass(glasses, code, reasons);
+        return RuleGlass(glasses, code, reasons, reviewReasons);
     }
 
     private static GlassCandidateResolutionResult? LaminatedRuleGlass(
         RequirementExtractedItem item,
         IReadOnlyList<GlassTypeCatalogReadModel> glasses)
     {
-        if (item.WidthMillimeters is not { } width
-            || item.HeightMillimeters is not { } height)
+        var geometry = GlassPaneGeometry.Resolve(item);
+        if (geometry is null)
         {
             return null;
         }
@@ -371,21 +401,32 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             GlassResolutionReasonCodes.GlassLineLaminated
         };
+        reasons.AddRange(geometry.ResolutionReasons);
+        var reviewReasons = new List<string>();
+        if (geometry.RequiresReview)
+        {
+            reviewReasons.Add(GlassResolutionReasonCodes
+                .GlassPaneGeometryUnresolved);
+        }
+
         var code = "LAM_4_4";
-        if (width > 1950 && height > 2800)
+        if (!geometry.RequiresReview
+            && geometry.Panes.Any(pane => pane.WidthMm > 1950
+                && pane.HeightMm > 2800))
         {
             code = "LAM_5_5";
             reasons.Add(GlassResolutionReasonCodes.JointGlassRule);
             reasons.Add(GlassResolutionReasonCodes.Laminated55JointAndHeight);
         }
 
-        return RuleGlass(glasses, code, reasons);
+        return RuleGlass(glasses, code, reasons, reviewReasons);
     }
 
     private static GlassCandidateResolutionResult? RuleGlass(
         IReadOnlyList<GlassTypeCatalogReadModel> glasses,
         string code,
-        IReadOnlyList<string> reasons)
+        IReadOnlyList<string> reasons,
+        IReadOnlyList<string>? reviewReasons = null)
     {
         var glass = glasses.FirstOrDefault(value =>
             value.IsActive
@@ -406,9 +447,161 @@ public sealed class BuildRequirementTechnicalProposalService(
             alternative,
             [alternative],
             1m,
-            false,
-            [],
-            reasons);
+            reviewReasons?.Count > 0,
+            reviewReasons ?? [],
+            reasons.Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    private static int TemperedRank(string code) => code switch
+    {
+        "TEMP_10" => 4,
+        "TEMP_8" => 3,
+        "TEMP_6" => 2,
+        _ => 1
+    };
+
+    private sealed record GlassPane(int WidthMm, int HeightMm);
+
+    private sealed record GlassPaneGeometry(
+        IReadOnlyList<GlassPane> Panes,
+        IReadOnlyList<string> ResolutionReasons,
+        bool RequiresReview)
+    {
+        public static GlassPaneGeometry? Resolve(RequirementExtractedItem item)
+        {
+            if (item.WidthMillimeters is not { } width
+                || item.HeightMillimeters is not { } height)
+            {
+                return TryResolveExplicitSegments(item);
+            }
+
+            var explicitSegments = TryResolveExplicitSegments(item);
+            if (explicitSegments is not null)
+            {
+                return explicitSegments;
+            }
+
+            var explicitHeights = TryResolveExplicitHorizontalPanes(
+                item,
+                width,
+                height);
+            if (explicitHeights is not null)
+            {
+                return explicitHeights;
+            }
+
+            var explicitWidths = TryResolveExplicitVerticalPanes(
+                item,
+                width,
+                height);
+            if (explicitWidths is not null)
+            {
+                return explicitWidths;
+            }
+
+            if (item.PanelCount == 1)
+            {
+                return new GlassPaneGeometry(
+                    [new GlassPane(width, height)],
+                    [GlassResolutionReasonCodes.GlassPaneDimensionsFromElement],
+                    false);
+            }
+
+            return new GlassPaneGeometry(
+                [new GlassPane(width, height)],
+                [GlassResolutionReasonCodes.GlassPaneGeometryUnresolved],
+                item.PanelCount is > 1 || width > 1950);
+        }
+
+        private static GlassPaneGeometry? TryResolveExplicitHorizontalPanes(
+            RequirementExtractedItem item,
+            int width,
+            int height)
+        {
+            var source = string.Join(
+                " ",
+                item.Modulation,
+                item.Arrangement);
+            if (!Contains(source, "HEIGHT")
+                && !Contains(source, "ALTO")
+                && !Contains(source, "HORIZONTAL"))
+            {
+                return null;
+            }
+
+            var heights = System.Text.RegularExpressions.Regex
+                .Matches(source, @"\d{2,5}")
+                .Select(match => int.Parse(
+                    match.Value,
+                    System.Globalization.CultureInfo.InvariantCulture))
+                .Where(value => value > 0)
+                .ToArray();
+            if (heights.Length < 2 || heights.Sum() != height)
+            {
+                return null;
+            }
+
+            return new GlassPaneGeometry(
+                heights.Select(value => new GlassPane(width, value)).ToArray(),
+                [GlassResolutionReasonCodes
+                    .GlassPaneDimensionsFromSubmodules],
+                false);
+        }
+
+        private static GlassPaneGeometry? TryResolveExplicitSegments(
+            RequirementExtractedItem item)
+        {
+            var panes = item.Segments
+                .Where(segment =>
+                    segment.WidthMillimeters is > 0
+                    && segment.HeightMillimeters is > 0)
+                .Select(segment => new GlassPane(
+                    segment.WidthMillimeters!.Value,
+                    segment.HeightMillimeters!.Value))
+                .ToArray();
+            return panes.Length == 0
+                ? null
+                : new GlassPaneGeometry(
+                    panes,
+                    [GlassResolutionReasonCodes
+                        .GlassPaneDimensionsFromSubmodules],
+                    false);
+        }
+
+        private static GlassPaneGeometry? TryResolveExplicitVerticalPanes(
+            RequirementExtractedItem item,
+            int width,
+            int height)
+        {
+            var source = string.Join(
+                " ",
+                item.Modulation,
+                item.Arrangement);
+            if (!Contains(source, "WIDTH")
+                && !Contains(source, "ANCHO")
+                && !Contains(source, "VERTICAL"))
+            {
+                return null;
+            }
+
+            var widths = System.Text.RegularExpressions.Regex
+                .Matches(source, @"\d{2,5}")
+                .Select(match => int.Parse(
+                    match.Value,
+                    System.Globalization.CultureInfo.InvariantCulture))
+                .Where(value => value > 0)
+                .ToArray();
+            if (widths.Length < 2 || widths.Sum() != width)
+            {
+                return null;
+            }
+
+            return new GlassPaneGeometry(
+                widths.Select(value => new GlassPane(value, height)).ToArray(),
+                [GlassResolutionReasonCodes
+                    .GlassPaneDimensionsFromSubmodules],
+                false);
+        }
     }
 
     private static FinishTypeCatalogReadModel? FindDefaultFinish(

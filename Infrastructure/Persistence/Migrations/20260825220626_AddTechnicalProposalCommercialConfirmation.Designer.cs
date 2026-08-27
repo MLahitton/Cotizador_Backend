@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825220626_AddTechnicalProposalCommercialConfirmation")]
+    partial class AddTechnicalProposalCommercialConfirmation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4922,11 +4925,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("arrangement");
 
-                    b.Property<string>("AssemblyType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("assembly_type");
-
                     b.Property<decimal?>("Confidence")
                         .HasColumnType("numeric(5,4)")
                         .HasColumnName("confidence");
@@ -5211,102 +5209,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("requirement_extracted_item_evidence", "core", t =>
                         {
                             t.HasCheckConstraint("ck_requirement_extracted_item_evidence_location", "((\"source_type\" IN ('Native','Ocr') AND \"page_number\" IS NOT NULL AND \"page_number\" > 0 AND \"sheet_name\" IS NULL AND \"cell_range\" IS NULL) OR (\"source_type\" = 'Xlsx' AND \"page_number\" IS NULL AND \"sheet_name\" IS NOT NULL AND \"cell_range\" IS NOT NULL AND btrim(\"sheet_name\") <> '' AND btrim(\"cell_range\") <> '')) AND (\"confidence\" IS NULL OR (\"confidence\" >= 0 AND \"confidence\" <= 1))");
-                        });
-                });
-
-            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItemSegment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("CellRange")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("cell_range");
-
-                    b.Property<decimal?>("Confidence")
-                        .HasColumnType("numeric(5,4)")
-                        .HasColumnName("confidence");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("EvidenceText")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("evidence_text");
-
-                    b.Property<string>("ExtractionStatus")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)")
-                        .HasColumnName("extraction_status");
-
-                    b.Property<string>("GeometryType")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("geometry_type");
-
-                    b.Property<int?>("HeightMillimeters")
-                        .HasColumnType("integer")
-                        .HasColumnName("height_millimeters");
-
-                    b.Property<string>("Operation")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("operation");
-
-                    b.Property<int?>("PageNumber")
-                        .HasColumnType("integer")
-                        .HasColumnName("page_number");
-
-                    b.Property<int?>("Quantity")
-                        .HasColumnType("integer")
-                        .HasColumnName("quantity");
-
-                    b.Property<Guid>("RequirementExtractedItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("requirement_extracted_item_id");
-
-                    b.Property<string>("Role")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("role");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer")
-                        .HasColumnName("sequence");
-
-                    b.Property<string>("SheetName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("sheet_name");
-
-                    b.Property<string>("SourceId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("source_id");
-
-                    b.Property<string>("SourceType")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("source_type");
-
-                    b.Property<int?>("WidthMillimeters")
-                        .HasColumnType("integer")
-                        .HasColumnName("width_millimeters");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RequirementExtractedItemId", "Sequence")
-                        .IsUnique()
-                        .HasDatabaseName("ux_requirement_extracted_item_segments_item_sequence");
-
-                    b.ToTable("requirement_extracted_item_segments", "core", t =>
-                        {
-                            t.HasCheckConstraint("ck_requirement_extracted_item_segments_positive_values", "\"sequence\" > 0 AND (\"quantity\" IS NULL OR \"quantity\" > 0) AND (\"width_millimeters\" IS NULL OR \"width_millimeters\" > 0) AND (\"height_millimeters\" IS NULL OR \"height_millimeters\" > 0) AND (\"confidence\" IS NULL OR (\"confidence\" >= 0 AND \"confidence\" <= 1))");
                         });
                 });
 
@@ -7142,17 +7044,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("Item");
                 });
 
-            modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItemSegment", b =>
-                {
-                    b.HasOne("Domain.PreQuotes.RequirementExtractedItem", "Item")
-                        .WithMany("Segments")
-                        .HasForeignKey("RequirementExtractedItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Item");
-                });
-
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractionResult", b =>
                 {
                     b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", "ProcessingAttempt")
@@ -7592,8 +7483,6 @@ namespace Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
                 {
                     b.Navigation("Evidence");
-
-                    b.Navigation("Segments");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractionResult", b =>

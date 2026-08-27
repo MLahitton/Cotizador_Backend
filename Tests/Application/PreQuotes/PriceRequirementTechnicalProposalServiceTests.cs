@@ -73,6 +73,27 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithPendingCommercialConfirmation_ReturnsNotConfirmed()
+    {
+        var context = CreateContext(
+            [ProposalItem(Item())],
+            TechnicalEstimate(100m, 200m, 300m),
+            confirmProposal: false);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            PriceRequirementTechnicalProposalFailure.TechnicalProposalNotConfirmed,
+            result.Failure);
+        await context.TechnicalEstimator.DidNotReceive().EstimateAsync(
+            Arg.Any<HistoricalCandidateQuery>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_WithQuantityFour_MultipliesLineOnceAndDoesNotReapplyAiu()
     {
         HistoricalCandidateQuery? captured = null;
@@ -88,7 +109,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         Assert.True(result.IsSuccess);
         var item = Assert.Single(result.Pricing!.Items);
         Assert.Equal("PRICEABLE", item.Status);
-        Assert.Equal("SUGGESTED", item.ConfigurationSource);
+        Assert.Equal("SELECTED", item.ConfigurationSource);
         Assert.Equal(200m, item.Unit.Expected);
         Assert.Equal(800m, item.Line.Expected);
         Assert.Equal(800m, result.Pricing.EstimatedSubtotal.Expected);
@@ -333,7 +354,8 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     private static Context CreateContext(
         IReadOnlyList<RequirementTechnicalProposalItem> items,
         HistoricalTechnicalPriceEstimate technicalEstimate,
-        Action<HistoricalCandidateQuery>? captureQuery = null)
+        Action<HistoricalCandidateQuery>? captureQuery = null,
+        bool confirmProposal = true)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -356,6 +378,10 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         {
             SetPrivateProperty(item, "TechnicalProposalId", proposal.Id);
             proposal.AddItem(item);
+        }
+        if (confirmProposal)
+        {
+            proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(2));
         }
 
         currentUser.IsAuthenticated.Returns(true);

@@ -37,6 +37,10 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal(context.Requirement.Id, proposal.RequirementId);
         Assert.Equal(1, proposal.ItemCount);
         Assert.Equal("ESSENTIAL", proposal.CommercialLine);
+        Assert.Equal(
+            "PENDING_CONFIRMATION",
+            proposal.CommercialConfirmation.State);
+        Assert.Null(proposal.CommercialConfirmation.ConfirmedAtUtc);
         Assert.Equal(0, proposal.ItemsRequiringReview);
         Assert.Equal(1, proposal.TechnicallyCompleteItems);
         Assert.Equal(1, proposal.PriceableItems);

@@ -7,12 +7,19 @@ public sealed record RequirementTechnicalProposalResponse(
     Guid ExtractionResultId,
     string Status,
     string? CommercialLine,
+    RequirementTechnicalProposalCommercialConfirmationResponse
+        CommercialConfirmation,
     DateTimeOffset CreatedAtUtc,
     int ItemCount,
     int ItemsRequiringReview,
     int TechnicallyCompleteItems,
     int PriceableItems,
     IReadOnlyList<RequirementTechnicalProposalItemResponse> Items);
+
+public sealed record RequirementTechnicalProposalCommercialConfirmationResponse(
+    string State,
+    DateTimeOffset? ConfirmedAtUtc,
+    Guid? ConfirmedByUserId);
 
 public sealed record RequirementTechnicalProposalItemResponse(
     Guid ItemId,

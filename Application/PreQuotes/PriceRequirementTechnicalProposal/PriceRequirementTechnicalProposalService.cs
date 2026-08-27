@@ -23,6 +23,7 @@ public enum PriceRequirementTechnicalProposalFailure
     ClientNotFound,
     InactiveClient,
     TechnicalProposalNotFound,
+    TechnicalProposalNotConfirmed,
     QueryError
 }
 
@@ -91,6 +92,12 @@ public sealed class PriceRequirementTechnicalProposalService(
             {
                 return PriceRequirementTechnicalProposalResult.Failed(
                     PriceRequirementTechnicalProposalFailure.TechnicalProposalNotFound);
+            }
+
+            if (!proposal.IsCommerciallyConfirmed)
+            {
+                return PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.TechnicalProposalNotConfirmed);
             }
 
             var systems = (await productSystemCatalog.ListActiveAsync(cancellationToken))
@@ -312,26 +319,14 @@ public sealed class PriceRequirementTechnicalProposalService(
     private static EffectiveTechnicalConfiguration EffectiveConfiguration(
         RequirementTechnicalProposalItem proposalItem)
     {
-        var hasSelected = proposalItem.SelectedAtUtc is not null
-            && proposalItem.SelectedByUserId is not null;
-
-        return hasSelected
-            ? new EffectiveTechnicalConfiguration(
-                "SELECTED",
-                proposalItem.SelectedSystemId,
-                proposalItem.SelectedGlassTypeId,
-                proposalItem.SelectedFinishTypeId,
-                "SELECTED_SYSTEM_MISSING",
-                "SELECTED_GLASS_MISSING",
-                "SELECTED_FINISH_MISSING")
-            : new EffectiveTechnicalConfiguration(
-                "SUGGESTED",
-                proposalItem.SuggestedSystemId,
-                proposalItem.SuggestedGlassTypeId,
-                proposalItem.SuggestedFinishTypeId,
-                "SUGGESTED_SYSTEM_MISSING",
-                "SUGGESTED_GLASS_MISSING",
-                "SUGGESTED_FINISH_MISSING");
+        return new EffectiveTechnicalConfiguration(
+            "SELECTED",
+            proposalItem.SelectedSystemId,
+            proposalItem.SelectedGlassTypeId,
+            proposalItem.SelectedFinishTypeId,
+            "SELECTED_SYSTEM_MISSING",
+            "SELECTED_GLASS_MISSING",
+            "SELECTED_FINISH_MISSING");
     }
 
     private async Task<PriceRequirementTechnicalProposalFailure> ValidateAccessAsync(

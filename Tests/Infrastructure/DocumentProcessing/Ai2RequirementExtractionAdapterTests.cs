@@ -103,6 +103,89 @@ public sealed class Ai2RequirementExtractionAdapterTests
     }
 
     [Fact]
+    public void Adapt_WithAssemblyComponents_MapsSegmentsAndAssemblyType()
+    {
+        const string payload =
+            """
+            {
+              "requirement": {},
+              "sources": [{"id":"s1","file_name":"plano.pdf","media_type":"application/pdf"}],
+              "elements": [{
+                "id":"corner-1",
+                "reference":{"value":"V-25","status":"explicit","confidence":0.98,"evidence_ids":["ev-item"]},
+                "name":{"value":"Ventana en esquina","status":"explicit","confidence":0.97,"evidence_ids":["ev-item"]},
+                "category":{"normalized":"WINDOW","raw":"Ventana","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                "measurements":[
+                  {"type":"width","value":4.12,"unit":"m","status":"explicit","evidence_ids":["ev-item"]},
+                  {"type":"height","value":2.8,"unit":"m","status":"explicit","evidence_ids":["ev-item"]},
+                  {"type":"area","value":11.54,"unit":"m2","status":"explicit","evidence_ids":["ev-item"]}
+                ],
+                "quantity":{"value":1,"status":"explicit","evidence_ids":["ev-item"]},
+                "functional_type":{"normalized":"FIXED","raw":"Ventana fija","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                "assembly_type":"CORNER",
+                "components":[
+                  {
+                    "role":{"normalized":"FIXED","raw":"Tramo izquierdo","status":"explicit","confidence":0.92,"evidence_ids":["ev-left"]},
+                    "quantity":{"value":1,"status":"explicit","evidence_ids":["ev-left"]},
+                    "measurements":[
+                      {"type":"width","value":1.79,"unit":"m","status":"explicit","evidence_ids":["ev-left"]},
+                      {"type":"height","value":2.8,"unit":"m","status":"explicit","evidence_ids":["ev-left"]}
+                    ],
+                    "geometry":{"normalized_type":"RECTANGULAR","status":"explicit","confidence":0.90,"evidence_ids":["ev-left"]},
+                    "evidence_ids":["ev-left"]
+                  },
+                  {
+                    "role":{"normalized":"FIXED","raw":"Tramo derecho","status":"explicit","confidence":0.92,"evidence_ids":["ev-right"]},
+                    "quantity":{"value":1,"status":"explicit","evidence_ids":["ev-right"]},
+                    "measurements":[
+                      {"type":"width","value":2.33,"unit":"m","status":"explicit","evidence_ids":["ev-right"]},
+                      {"type":"height","value":2.8,"unit":"m","status":"explicit","evidence_ids":["ev-right"]}
+                    ],
+                    "geometry":{"normalized_type":"RECTANGULAR","status":"explicit","confidence":0.90,"evidence_ids":["ev-right"]},
+                    "evidence_ids":["ev-right"]
+                  }
+                ],
+                "glass":[{"type":{"normalized":"templado","raw":"Templado 10 mm","status":"explicit","evidence_ids":["ev-glass"]},"status":"explicit","confidence":0.95,"evidence_ids":["ev-glass"]}],
+                "evidence_ids":["ev-item"],
+                "missing_fields":[],
+                "confidence":0.90
+              }],
+              "evidence":[
+                {"id":"ev-item","source_id":"s1","type":"range","page_number":4,"extracted_text":"V-25 Ventana en esquina","status":"explicit","confidence":0.95},
+                {"id":"ev-left","source_id":"s1","type":"range","page_number":4,"extracted_text":"Tramo izquierdo 1.79 x 2.80","status":"explicit","confidence":0.92},
+                {"id":"ev-right","source_id":"s1","type":"range","page_number":4,"extracted_text":"Tramo derecho 2.33 x 2.80","status":"explicit","confidence":0.92},
+                {"id":"ev-glass","source_id":"s1","type":"range","page_number":4,"extracted_text":"Templado 10 mm","status":"explicit","confidence":0.95}
+              ],
+              "relationships":[],
+              "conflicts":[],
+              "warnings":[],
+              "extraction_metadata":{"schema_version":"1.0","source_count":1,"element_count":1,"partial":false,"status":"completed","processing_time_ms":125,"pipeline_version":"ai2-v1"}
+            }
+            """;
+        var request = CreatePdfRequest();
+
+        var result = new Ai2RequirementExtractionAdapter().Adapt(
+            payload,
+            request);
+
+        var item = Assert.Single(result.StructuredExtraction!.Items);
+        Assert.Equal("CORNER", item.AssemblyType);
+        Assert.Equal(2, item.Segments.Count);
+        Assert.Equal([1790, 2330], item.Segments.Select(segment =>
+            segment.WidthMillimeters));
+        Assert.Equal([2800, 2800], item.Segments.Select(segment =>
+            segment.HeightMillimeters));
+        Assert.All(item.Segments, segment =>
+            Assert.Equal("FIXED", segment.Role));
+        Assert.Contains(item.Segments[0].Evidence, evidence =>
+            evidence.Text == "Tramo izquierdo 1.79 x 2.80"
+            && evidence.PageNumber == 4);
+        Assert.Contains(item.Segments[1].Evidence, evidence =>
+            evidence.Text == "Tramo derecho 2.33 x 2.80"
+            && evidence.PageNumber == 4);
+    }
+
+    [Fact]
     public void Adapt_WithRealAi2PdfShape_UsesRawFallbacksAndPreservesReviewableArea()
     {
         var file = new DocumentProcessingFile(

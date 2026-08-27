@@ -51,6 +51,8 @@ public sealed class ApplicationDbContext(
         RequirementExtractedItems => Set<RequirementExtractedItem>();
     public DbSet<RequirementExtractedItemEvidence>
         RequirementExtractedItemEvidence => Set<RequirementExtractedItemEvidence>();
+    public DbSet<RequirementExtractedItemSegment>
+        RequirementExtractedItemSegments => Set<RequirementExtractedItemSegment>();
     public DbSet<RequirementTechnicalProposal>
         RequirementTechnicalProposals => Set<RequirementTechnicalProposal>();
     public DbSet<RequirementTechnicalProposalItem>

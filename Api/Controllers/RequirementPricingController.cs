@@ -94,6 +94,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.TechnicalProposalNotFound,
                     "Propuesta tecnica no encontrada",
                     "El requerimiento todavia no tiene una propuesta tecnica vigente."),
+            PriceRequirementTechnicalProposalFailure.TechnicalProposalNotConfirmed =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalNotConfirmed,
+                    "Propuesta tecnica pendiente de confirmacion",
+                    "Confirma las configuraciones antes de calcular el precio."),
             _ => RequirementProblem(StatusCodes.Status500InternalServerError,
                 RequirementErrorCodes.PersistenceError,
                 "Error de consulta",

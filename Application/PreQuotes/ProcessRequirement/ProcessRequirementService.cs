@@ -454,6 +454,10 @@ public sealed class ProcessRequirementService(
                 {
                     requirementRepository.AddExtractedItemEvidence(evidence);
                 }
+                foreach (var segment in item.Segments)
+                {
+                    requirementRepository.AddExtractedItemSegment(segment);
+                }
             }
             RecordPerfStage(
                 stages,
@@ -599,7 +603,8 @@ public sealed class ProcessRequirementService(
                 item.FinishTextureNormalized,
                 item.FinishExplicitCode,
                 item.FinishRequiresReview,
-                createdAtUtc);
+                createdAtUtc,
+                item.AssemblyType);
             foreach (var invalidEvidence in invalidEvidenceSources)
             {
                 LogInvalidEvidence(
@@ -623,7 +628,33 @@ public sealed class ProcessRequirementService(
                     MapExtractionStatus(value.Status),
                     createdAtUtc)).ToArray();
 
-            return new ExtractedItemWithEvidence(extracted, persistableEvidence);
+            var segments = item.Segments?.Select((segment, index) =>
+                RequirementExtractedItemSegment.Create(
+                    extracted.Id,
+                    segment.Sequence > 0 ? segment.Sequence : index + 1,
+                    segment.Role,
+                    segment.WidthMillimeters,
+                    segment.HeightMillimeters,
+                    segment.Quantity,
+                    segment.Operation,
+                    segment.GeometryType,
+                    segment.Evidence.FirstOrDefault()?.Text,
+                    segment.Evidence.FirstOrDefault()?.SourceId,
+                    segment.Evidence.FirstOrDefault()?.SourceType,
+                    segment.Evidence.FirstOrDefault()?.PageNumber,
+                    segment.Evidence.FirstOrDefault()?.SheetName,
+                    segment.Evidence.FirstOrDefault()?.CellRange,
+                    segment.Evidence.FirstOrDefault()?.Confidence,
+                    MapExtractionStatus(segment.Evidence.FirstOrDefault()?.Status
+                        ?? CanonicalExtractionValueStatus.Explicit),
+                    createdAtUtc)).ToArray() ?? [];
+
+            foreach (var segment in segments)
+            {
+                extracted.AddSegment(segment);
+            }
+
+            return new ExtractedItemWithEvidence(extracted, persistableEvidence, segments);
         }).ToArray();
     }
 
@@ -913,5 +944,6 @@ public sealed class ProcessRequirementService(
 
     private sealed record ExtractedItemWithEvidence(
         RequirementExtractedItem Item,
-        IReadOnlyList<RequirementExtractedItemEvidence> Evidence);
+        IReadOnlyList<RequirementExtractedItemEvidence> Evidence,
+        IReadOnlyList<RequirementExtractedItemSegment> Segments);
 }

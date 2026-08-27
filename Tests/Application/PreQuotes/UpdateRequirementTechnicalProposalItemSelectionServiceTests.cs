@@ -28,6 +28,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
     public async Task Execute_WithConfirmSuggested_PersistsSuggestedAsSelected()
     {
         var context = CreateContext();
+        context.Proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(-5));
 
         var result = await context.Service.ExecuteAsync(
             new UpdateRequirementTechnicalProposalItemSelectionCommand(
@@ -56,6 +57,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         Assert.Equal(context.SuggestedFinish.Id, context.Item.SelectedFinishTypeId);
         Assert.Equal(At, context.Item.SelectedAtUtc);
         Assert.Equal(UserId, context.Item.SelectedByUserId);
+        Assert.False(context.Proposal.IsCommerciallyConfirmed);
         await context.Requirements.Received(1)
             .SaveChangesAsync(Arg.Any<CancellationToken>());
     }

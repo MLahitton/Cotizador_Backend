@@ -230,6 +230,11 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementExtractedItemEvidence.Add(evidence);
     }
 
+    public void AddExtractedItemSegment(RequirementExtractedItemSegment segment)
+    {
+        dbContext.RequirementExtractedItemSegments.Add(segment);
+    }
+
     public void AddTechnicalProposal(RequirementTechnicalProposal proposal)
     {
         dbContext.RequirementTechnicalProposals.Add(proposal);
@@ -246,6 +251,8 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .AsNoTracking()
                 .Include(result => result.Items)
                     .ThenInclude(item => item.Evidence)
+                .Include(result => result.Items)
+                    .ThenInclude(item => item.Segments)
                 .Where(result =>
                     result.ProcessingAttempt.RequirementId == requirementId
                     && result.ProcessingAttempt.ProcessingState
@@ -274,6 +281,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             return await dbContext.RequirementExtractedItems
                 .AsNoTracking()
                 .Include(item => item.Evidence)
+                .Include(item => item.Segments)
                 .Where(item => item.RequirementExtractionResultId
                     == extractionResultId)
                 .OrderBy(item => item.Sequence)
@@ -299,6 +307,9 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.ExtractedItem)
                         .ThenInclude(item => item.Evidence)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.ExtractedItem)
+                        .ThenInclude(item => item.Segments)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.SystemAlternatives)
                 .Include(proposal => proposal.Items)

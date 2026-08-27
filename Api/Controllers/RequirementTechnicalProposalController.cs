@@ -136,6 +136,10 @@ public sealed class RequirementTechnicalProposalController(
             proposal.ExtractionResultId,
             proposal.Status,
             proposal.CommercialLine,
+            new RequirementTechnicalProposalCommercialConfirmationResponse(
+                proposal.CommercialConfirmation.State,
+                proposal.CommercialConfirmation.ConfirmedAtUtc,
+                proposal.CommercialConfirmation.ConfirmedByUserId),
             proposal.CreatedAtUtc,
             proposal.ItemCount,
             proposal.ItemsRequiringReview,

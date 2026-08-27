@@ -98,6 +98,7 @@ public sealed class RequirementExtractedItemConfiguration
             .HasColumnType("text[]")
             .IsRequired();
         MapOptionalString(builder, item => item.GeometryType, "geometry_type");
+        MapOptionalString(builder, item => item.AssemblyType, "assembly_type");
         MapOptionalString(builder, item => item.RequestedSystemRaw, "requested_system_raw", 200);
         MapOptionalString(builder, item => item.RequestedProfileRaw, "requested_profile_raw", 200);
         MapOptionalString(builder, item => item.GlassRawSpecification, "glass_raw_specification", 500);
@@ -140,7 +141,15 @@ public sealed class RequirementExtractedItemConfiguration
             .HasForeignKey(evidence => evidence.RequirementExtractedItemId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasMany(item => item.Segments)
+            .WithOne(segment => segment.Item)
+            .HasForeignKey(segment => segment.RequirementExtractedItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Navigation(item => item.Evidence)
+            .UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.Navigation(item => item.Segments)
             .UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.HasIndex(item => new

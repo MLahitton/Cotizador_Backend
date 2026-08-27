@@ -184,6 +184,16 @@ public sealed record StructuredRequirementData(
     string Value,
     IReadOnlyList<SourceEvidenceData> Evidence);
 
+public sealed record StructuredItemSegmentData(
+    int Sequence,
+    string? Role,
+    int? WidthMillimeters,
+    int? HeightMillimeters,
+    int? Quantity,
+    string? Operation,
+    string? GeometryType,
+    IReadOnlyList<SourceEvidenceData> Evidence);
+
 public sealed record StructuredItemData(
     int Sequence,
     string? Reference,
@@ -234,7 +244,9 @@ public sealed record StructuredItemData(
     string? FinishTextureRaw = null,
     string? FinishTextureNormalized = null,
     string? FinishExplicitCode = null,
-    bool? FinishRequiresReview = null);
+    bool? FinishRequiresReview = null,
+    string? AssemblyType = null,
+    IReadOnlyList<StructuredItemSegmentData>? Segments = null);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,

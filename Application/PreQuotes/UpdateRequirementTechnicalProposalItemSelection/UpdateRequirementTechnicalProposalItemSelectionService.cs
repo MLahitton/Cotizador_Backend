@@ -212,6 +212,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                 selectedFinishId,
                 userId,
                 timeProvider.GetUtcNow());
+            proposal.InvalidateCommercialConfirmation();
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
 

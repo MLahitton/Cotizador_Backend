@@ -28,6 +28,7 @@ using Application.PreQuotes.GetPreQuoteDraft;
 using Application.PreQuotes.UpdatePreQuoteDraft;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.BuildRequirementTechnicalProposal;
+using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.GetCurrentRequirement;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
@@ -77,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<IHistoricalDocumentEstimatePipeline, HistoricalDocumentEstimatePipeline>();
         services.AddScoped<ResolveHistoricalTechnicalEvidenceService>();
         services.AddScoped<BuildRequirementTechnicalProposalService>();
+        services.AddScoped<ConfirmRequirementTechnicalProposalSelectionService>();
         services.AddScoped<GetRequirementTechnicalProposalService>();
         services.AddScoped<GetCurrentRequirementService>();
         services.AddScoped<

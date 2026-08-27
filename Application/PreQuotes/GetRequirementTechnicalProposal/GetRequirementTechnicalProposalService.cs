@@ -233,6 +233,10 @@ public sealed class GetRequirementTechnicalProposalService(
             proposal.Requirement.CommercialLine is null
                 ? null
                 : ToContract(proposal.Requirement.CommercialLine.Value),
+            new RequirementTechnicalProposalCommercialConfirmationReadModel(
+                ToContract(proposal.CommercialConfirmationState),
+                proposal.CommercialConfirmedAtUtc,
+                proposal.CommercialConfirmedByUserId),
             proposal.CreatedAtUtc,
             items.Length,
             items.Count(item => item.RequiresReview),
@@ -493,6 +497,17 @@ public sealed class GetRequirementTechnicalProposalService(
             _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
         };
 
+    private static string ToContract(
+        RequirementTechnicalProposalCommercialConfirmationState state) =>
+        state switch
+        {
+            RequirementTechnicalProposalCommercialConfirmationState
+                .PendingConfirmation => "PENDING_CONFIRMATION",
+            RequirementTechnicalProposalCommercialConfirmationState.Confirmed =>
+                "CONFIRMED",
+            _ => throw new ArgumentOutOfRangeException(nameof(state))
+        };
+
     private static IReadOnlyDictionary<string, SourceMetadata> SourceMetadataById(
         IReadOnlyList<RequirementFile> files) =>
         files
@@ -559,12 +574,19 @@ public sealed record RequirementTechnicalProposalReadModel(
     Guid ExtractionResultId,
     string Status,
     string? CommercialLine,
+    RequirementTechnicalProposalCommercialConfirmationReadModel
+        CommercialConfirmation,
     DateTimeOffset CreatedAtUtc,
     int ItemCount,
     int ItemsRequiringReview,
     int TechnicallyCompleteItems,
     int PriceableItems,
     IReadOnlyList<RequirementTechnicalProposalItemReadModel> Items);
+
+public sealed record RequirementTechnicalProposalCommercialConfirmationReadModel(
+    string State,
+    DateTimeOffset? ConfirmedAtUtc,
+    Guid? ConfirmedByUserId);
 
 public sealed record RequirementTechnicalProposalItemReadModel(
     Guid ItemId,

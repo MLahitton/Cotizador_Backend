@@ -131,6 +131,44 @@ public sealed class ProcessRequirementServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithExplicitSegments_PersistsSegmentsAndUsesThemForGlass()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var persistedSegments = new List<RequirementExtractedItemSegment>();
+        var context = CreateContext(
+            "tempered_segments_4100",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddExtractedItemSegment(
+                Arg.Any<RequirementExtractedItemSegment>()))
+            .Do(call => persistedSegments.Add(
+                call.Arg<RequirementExtractedItemSegment>()));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2, persistedSegments.Count);
+        Assert.Equal([2050, 2050], persistedSegments.Select(segment =>
+            segment.WidthMillimeters));
+        Assert.Equal([2800, 2800], persistedSegments.Select(segment =>
+            segment.HeightMillimeters));
+        Assert.All(persistedSegments, segment =>
+            Assert.Equal("FIXED", segment.Role));
+        var proposalItem = Assert.Single(proposal!.Items);
+        Assert.Equal("TEMP_10", SuggestedGlassCode(context, proposalItem));
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneDimensionsFromSubmodules,
+            proposalItem.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.JointGlassRule,
+            proposalItem.GlassResolutionReasons);
+    }
+
+    [Fact]
     public async Task Execute_WithAi2RequiresReview_CompletesAttemptAndMarksRequirementProcessed()
     {
         var context = CreateContext("requires_review", File("source.pdf", PdfContentType));
@@ -216,6 +254,18 @@ public sealed class ProcessRequirementServiceTests
     [InlineData("tempered_narrow_2700", "TEMP_6")]
     [InlineData("tempered_joint_1951", "TEMP_10")]
     [InlineData("tempered_joint_5000", "TEMP_10")]
+    [InlineData("tempered_three_panel_4000", "TEMP_6")]
+    [InlineData("tempered_two_panel_3000", "TEMP_6")]
+    [InlineData("tempered_three_panel_5000", "TEMP_6")]
+    [InlineData("tempered_single_pane_3000", "TEMP_10")]
+    [InlineData("tempered_pane_1950", "TEMP_6")]
+    [InlineData("tempered_pane_1951", "TEMP_10")]
+    [InlineData("tempered_horizontal_split_2780", "TEMP_5")]
+    [InlineData("tempered_explicit_widths_4000", "TEMP_10")]
+    [InlineData("tempered_explicit_uniform_widths_3000", "TEMP_6")]
+    [InlineData("tempered_explicit_narrow_width_500", "TEMP_6")]
+    [InlineData("tempered_single_2780", "TEMP_8")]
+    [InlineData("tempered_unknown_3000", "TEMP_6")]
     public async Task Execute_WithTemperedLine_AppliesConfirmedThicknessRules(
         string scenario,
         string expectedGlassCode)
@@ -239,8 +289,154 @@ public sealed class ProcessRequirementServiceTests
     }
 
     [Theory]
+    [InlineData("tempered_three_panel_4000")]
+    [InlineData("tempered_two_panel_3000")]
+    [InlineData("tempered_three_panel_5000")]
+    public async Task Execute_WithMultiPanelTemperedWidth_DoesNotApplyJointFromTotalWidth(
+        string scenario)
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(scenario, File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.DoesNotContain(
+            GlassResolutionReasonCodes.JointGlassRule,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithExplicitUniformPaneWidths_UsesKnownDistribution()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "tempered_explicit_uniform_widths_3000",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("TEMP_6", SuggestedGlassCode(context, item));
+        Assert.False(item.RequiresReview);
+        Assert.DoesNotContain(
+            GlassResolutionReasonCodes.JointGlassRule,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneDimensionsFromSubmodules,
+            item.GlassResolutionReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithUnknownPaneGeometry_DoesNotInventPanelsAndRequiresReview()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "tempered_unknown_3000",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("TEMP_6", SuggestedGlassCode(context, item));
+        Assert.True(item.RequiresReview);
+        Assert.DoesNotContain(
+            GlassResolutionReasonCodes.JointGlassRule,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithExplicitPaneWidths_AppliesJointFromPaneWidth()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "tempered_explicit_widths_4000",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("TEMP_10", SuggestedGlassCode(context, item));
+        Assert.True(item.RequiresReview);
+        Assert.Contains(
+            GlassResolutionReasonCodes.JointGlassRule,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneDimensionsFromSubmodules,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneHeterogeneousNeeds,
+            item.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithExplicitNarrowPaneWidth_AppliesNarrowRule()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "tempered_explicit_narrow_width_500",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("TEMP_6", SuggestedGlassCode(context, item));
+        Assert.False(item.RequiresReview);
+        Assert.Contains(
+            GlassResolutionReasonCodes.NarrowGlassHeightExtension,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneDimensionsFromSubmodules,
+            item.GlassResolutionReasons);
+    }
+
+    [Theory]
     [InlineData("signature_laminated_normal", "LAM_4_4")]
     [InlineData("signature_laminated_5_5", "LAM_5_5")]
+    [InlineData("signature_laminated_three_panel_5000", "LAM_4_4")]
+    [InlineData("signature_laminated_explicit_widths_5000", "LAM_5_5")]
     public async Task Execute_WithLaminatedLine_AppliesConfirmedLaminatedRules(
         string scenario,
         string expectedGlassCode)
@@ -261,6 +457,35 @@ public sealed class ProcessRequirementServiceTests
         Assert.Contains(
             GlassResolutionReasonCodes.GlassLineLaminated,
             item.GlassResolutionReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithMultiPanelLaminatedWidth_DoesNotApplyJointFromTotalWidth()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "signature_laminated_three_panel_5000",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("LAM_4_4", SuggestedGlassCode(context, item));
+        Assert.DoesNotContain(
+            GlassResolutionReasonCodes.JointGlassRule,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.GlassResolutionReasons);
+        Assert.Contains(
+            GlassResolutionReasonCodes.GlassPaneGeometryUnresolved,
+            item.ReviewReasons);
     }
 
     [Theory]
@@ -743,9 +968,24 @@ public sealed class ProcessRequirementServiceTests
             "tempered_2401" => 1200,
             "tempered_2601" => 1200,
             "tempered_2801" => 1200,
+            "tempered_single_2780" => 1200,
+            "tempered_horizontal_split_2780" => 1200,
             "tempered_joint_1951" => 1951,
             "tempered_joint_5000" => 5000,
+            "tempered_three_panel_4000" => 4000,
+            "tempered_two_panel_3000" => 3000,
+            "tempered_three_panel_5000" => 5000,
+            "tempered_single_pane_3000" => 3000,
+            "tempered_pane_1950" => 1950,
+            "tempered_pane_1951" => 1951,
+            "tempered_explicit_widths_4000" => 4000,
+            "tempered_explicit_uniform_widths_3000" => 3000,
+            "tempered_explicit_narrow_width_500" => 1000,
+            "tempered_segments_4100" => 4100,
+            "tempered_unknown_3000" => 3000,
             "signature_laminated_5_5" => 5000,
+            "signature_laminated_three_panel_5000" => 5000,
+            "signature_laminated_explicit_widths_5000" => 5000,
             _ => 3740
         };
         var height = scenario switch
@@ -755,7 +995,13 @@ public sealed class ProcessRequirementServiceTests
             "tempered_2601" => 2601,
             "tempered_2801" => 2801,
             "tempered_narrow_2700" => 2700,
+            "tempered_single_2780" => 2780,
+            "tempered_horizontal_split_2780" => 2780,
+            "tempered_explicit_narrow_width_500" => 2700,
+            "tempered_segments_4100" => 2800,
             "signature_laminated_5_5" => 3000,
+            "signature_laminated_three_panel_5000" => 3000,
+            "signature_laminated_explicit_widths_5000" => 3000,
             _ => 2500
         };
         if (scenario == "tempered_narrow_2700")
@@ -775,9 +1021,86 @@ public sealed class ProcessRequirementServiceTests
             "special_railing" => "RAILING",
             _ => "SLIDING_DOOR"
         };
+        int? panelCount = scenario switch
+        {
+            "tempered_joint_1951" => 1,
+            "tempered_joint_5000" => 1,
+            "tempered_single_pane_3000" => 1,
+            "tempered_pane_1950" => 1,
+            "tempered_pane_1951" => 1,
+            "tempered_single_2780" => 1,
+            "signature_laminated_5_5" => 1,
+            "tempered_three_panel_4000" => 3,
+            "tempered_two_panel_3000" => 2,
+            "tempered_three_panel_5000" => 3,
+            "signature_laminated_three_panel_5000" => 3,
+            "tempered_explicit_widths_4000" => 3,
+            "tempered_explicit_uniform_widths_3000" => 3,
+            "tempered_explicit_narrow_width_500" => 2,
+            "tempered_segments_4100" => 2,
+            "signature_laminated_explicit_widths_5000" => 3,
+            "tempered_unknown_3000" => null,
+            "tempered_horizontal_split_2780" => null,
+            _ => 1
+        };
+        var modulation = scenario switch
+        {
+            "tempered_horizontal_split_2780" =>
+                "HORIZONTAL_HEIGHTS_700_2080",
+            "tempered_explicit_widths_4000" =>
+                "VERTICAL_WIDTHS_1000_2000_1000",
+            "tempered_explicit_uniform_widths_3000" =>
+                "VERTICAL_WIDTHS_1000_1000_1000",
+            "tempered_explicit_narrow_width_500" =>
+                "VERTICAL_WIDTHS_500_500",
+            "signature_laminated_explicit_widths_5000" =>
+                "VERTICAL_WIDTHS_2000_1500_1500",
+            _ => "TWO_PANELS"
+        };
+        var segments = scenario == "tempered_segments_4100"
+            ? new[]
+            {
+                new StructuredItemSegmentData(
+                    1,
+                    "FIXED",
+                    2050,
+                    2800,
+                    1,
+                    "FIXED",
+                    "RECTANGULAR",
+                    [
+                        new SourceEvidenceData(
+                            null,
+                            EvidenceSourceType.Xlsx,
+                            "Modulo izquierdo 2050 x 2800",
+                            "Cotizacion",
+                            "B12:D12")
+                    ]),
+                new StructuredItemSegmentData(
+                    2,
+                    "FIXED",
+                    2050,
+                    2800,
+                    1,
+                    "FIXED",
+                    "RECTANGULAR",
+                    [
+                        new SourceEvidenceData(
+                            null,
+                            EvidenceSourceType.Xlsx,
+                            "Modulo derecho 2050 x 2800",
+                            "Cotizacion",
+                            "E12:G12")
+                    ])
+            }
+            : null;
         var status = outcome == DocumentProcessingOutcome.RequiresReview
             ? StructuredExtractionStatus.RequiresReview
             : StructuredExtractionStatus.Completed;
+        var glassRaw = scenario == "tempered_segments_4100"
+            ? "templado 10 mm"
+            : "templado 6 mm";
+        var glassThickness = scenario == "tempered_segments_4100" ? 10m : 6m;
         var item = new StructuredItemData(
             1,
             "PV-06",
@@ -792,7 +1115,7 @@ public sealed class ProcessRequirementServiceTests
             [],
             [],
             new StructuredItemGlassData(
-                omitGlassSignal ? null : "templado 6 mm",
+                omitGlassSignal ? null : glassRaw,
                 omitGlassSignal ? null : "templado",
                 GlassAssignmentScope.Item,
                 false,
@@ -817,10 +1140,10 @@ public sealed class ProcessRequirementServiceTests
             CanonicalExtractionValueStatus.Explicit,
             functionalType,
             "SLIDING",
+            panelCount,
             null,
             null,
-            null,
-            null,
+            modulation,
             null,
             [],
             null,
@@ -830,7 +1153,7 @@ public sealed class ProcessRequirementServiceTests
             "3831",
             omitGlassSignal ? null : "templado",
             omitGlassSignal ? null : "templado",
-            omitGlassSignal ? null : 6m,
+            omitGlassSignal ? null : glassThickness,
             null,
             null,
             null,
@@ -845,7 +1168,9 @@ public sealed class ProcessRequirementServiceTests
             null,
             omitFinishSignal ? null : "MATTE",
             null,
-            false);
+            false,
+            scenario == "tempered_segments_4100" ? "MULTI_MODULE" : null,
+            segments);
         var structuredExtraction = new StructuredExtractionData(
             status,
             "Proyecto",

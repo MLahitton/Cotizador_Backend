@@ -40,6 +40,8 @@ public interface IRequirementRepository
 
     void AddExtractedItemEvidence(RequirementExtractedItemEvidence evidence);
 
+    void AddExtractedItemSegment(RequirementExtractedItemSegment segment);
+
     void AddTechnicalProposal(RequirementTechnicalProposal proposal);
 
     Task<RequirementExtractionResult?> GetLatestSuccessfulExtractionAsync(

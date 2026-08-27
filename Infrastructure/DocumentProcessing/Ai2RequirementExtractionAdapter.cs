@@ -349,6 +349,18 @@ public sealed class Ai2RequirementExtractionAdapter
                     openingDirection = item.OpeningDirection,
                     specialFeatures = item.SpecialFeatures,
                     geometryType = item.GeometryType,
+                    assemblyType = item.AssemblyType,
+                    segments = (item.Segments ?? []).Select(segment => new
+                    {
+                        sequence = segment.Sequence,
+                        role = segment.Role,
+                        widthMillimeters = segment.WidthMillimeters,
+                        heightMillimeters = segment.HeightMillimeters,
+                        quantity = segment.Quantity,
+                        operation = segment.Operation,
+                        geometryType = segment.GeometryType,
+                        evidence = segment.Evidence.Select(Evidence).ToArray()
+                    }).ToArray(),
                     requiresReview = item.RequiresReview,
                     reviewReasons = item.ReviewReasons.Select(IssueCode).ToArray(),
                     sourcePages = item.SourcePages,
@@ -443,6 +455,7 @@ public sealed class Ai2RequirementExtractionAdapter
         var category = NormalizedOrRawString(element, "category");
         var itemEvidence = MapEvidence(EvidenceIds(element), evidenceById);
         var glass = MapGlass(element, evidenceById);
+        var segments = MapSegments(element, evidenceById);
         var technical = MapTechnicalClassification(element);
         var status = ItemStatus(element);
         var configuration = Object(element, "configuration");
@@ -625,7 +638,60 @@ public sealed class Ai2RequirementExtractionAdapter
             finish is { } reviewFinish
                 ? Status(reviewFinish) is CanonicalExtractionValueStatus.Ambiguous
                     or CanonicalExtractionValueStatus.Unknown
-                : null);
+                : null,
+            FlexibleString(element, "assembly_type"),
+            segments);
+    }
+
+
+    private static IReadOnlyList<StructuredItemSegmentData> MapSegments(
+        JsonElement element,
+        IReadOnlyDictionary<string, JsonElement> evidenceById)
+    {
+        var components = Array(element, "components");
+        if (components.GetArrayLength() == 0)
+        {
+            return [];
+        }
+
+        var result = new List<StructuredItemSegmentData>();
+        foreach (var component in components.EnumerateArray())
+        {
+            if (component.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var sequence = result.Count + 1;
+            var measurements = Array(component, "measurements");
+            var evidence = MapEvidence(EvidenceIds(component), evidenceById);
+            if (evidence.Count == 0)
+            {
+                evidence = MapEvidence(EvidenceIds(element), evidenceById);
+            }
+            var configuration = Object(component, "configuration");
+            var geometry = Object(component, "geometry");
+            result.Add(new StructuredItemSegmentData(
+                sequence,
+                FirstNonEmpty(
+                    FlexibleString(component, "role"),
+                    FlexibleString(component, "type")),
+                MeasurementMillimeters(measurements, "width"),
+                MeasurementMillimeters(measurements, "height"),
+                TraceableInt(component, "quantity") ?? Int(component, "quantity"),
+                configuration is { } configurationValue
+                    ? FlexibleString(configurationValue, "operation")
+                    : FlexibleString(component, "configuration"),
+                geometry is { } geometryValue
+                    ? FirstNonEmpty(
+                        FlexibleString(geometryValue, "normalized_type"),
+                        FlexibleString(geometryValue, "type"),
+                        FlexibleString(geometryValue, "raw_type"))
+                    : FlexibleString(component, "geometry"),
+                evidence));
+        }
+
+        return result;
     }
 
     private static StructuredItemGlassData? MapGlass(

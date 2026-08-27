@@ -12,6 +12,10 @@ public static class RequirementErrorCodes
     public const string RequirementNotFound = "REQUIREMENT_NOT_FOUND";
     public const string TechnicalProposalNotFound =
         "REQUIREMENT_TECHNICAL_PROPOSAL_NOT_FOUND";
+    public const string TechnicalProposalIncomplete =
+        "REQUIREMENT_TECHNICAL_PROPOSAL_INCOMPLETE";
+    public const string TechnicalProposalNotConfirmed =
+        "REQUIREMENT_TECHNICAL_PROPOSAL_NOT_CONFIRMED";
     public const string ProjectInactive = "REQUIREMENT_PROJECT_INACTIVE";
     public const string ClientInactive = "REQUIREMENT_CLIENT_INACTIVE";
     public const string ProcessingAlreadyActive =

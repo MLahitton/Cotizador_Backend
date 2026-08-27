@@ -76,6 +76,16 @@ public static class GlassResolutionReasonCodes
     public const string JointGlassRule = "JOINT_GLASS_RULE";
     public const string NarrowGlassHeightExtension =
         "NARROW_GLASS_HEIGHT_EXTENSION";
+    public const string GlassPaneDimensionsFromElement =
+        "GLASS_PANE_DIMENSIONS_FROM_ELEMENT";
+    public const string GlassPaneDimensionsFromModulation =
+        "GLASS_PANE_DIMENSIONS_FROM_MODULATION";
+    public const string GlassPaneDimensionsFromSubmodules =
+        "GLASS_PANE_DIMENSIONS_FROM_SUBMODULES";
+    public const string GlassPaneGeometryUnresolved =
+        "GLASS_PANE_GEOMETRY_UNRESOLVED";
+    public const string GlassPaneHeterogeneousNeeds =
+        "GLASS_PANE_HETEROGENEOUS_NEEDS";
     public const string SpecialGlassShower8Mm = "SPECIAL_GLASS_SHOWER_8MM";
     public const string SpecialGlassRailing10Mm = "SPECIAL_GLASS_RAILING_10MM";
     public const string Laminated55JointAndHeight =

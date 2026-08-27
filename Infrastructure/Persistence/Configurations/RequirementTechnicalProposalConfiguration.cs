@@ -51,6 +51,16 @@ public sealed class RequirementTechnicalProposalConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(proposal => proposal.CommercialConfirmedAtUtc)
+            .HasColumnName("commercial_confirmed_at_utc")
+            .HasColumnType("timestamp with time zone")
+            .IsRequired(false);
+
+        builder.Property(proposal => proposal.CommercialConfirmedByUserId)
+            .HasColumnName("commercial_confirmed_by_user_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
         builder.HasOne(proposal => proposal.Requirement)
             .WithMany()
             .HasForeignKey(proposal => proposal.RequirementId)
@@ -64,6 +74,11 @@ public sealed class RequirementTechnicalProposalConfiguration
         builder.HasOne(proposal => proposal.ProcessingAttempt)
             .WithMany()
             .HasForeignKey(proposal => proposal.RequirementProcessingAttemptId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<Domain.Identity.User>()
+            .WithMany()
+            .HasForeignKey(proposal => proposal.CommercialConfirmedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(proposal => proposal.Items)
@@ -86,6 +101,10 @@ public sealed class RequirementTechnicalProposalConfiguration
             .IsUnique()
             .HasDatabaseName(
                 "ux_requirement_technical_proposals_processing_attempt_id");
+
+        builder.HasIndex(proposal => proposal.CommercialConfirmedByUserId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposals_commercial_confirmed_by_user_id");
 
         builder.HasIndex(proposal => new
             {
