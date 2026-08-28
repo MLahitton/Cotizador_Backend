@@ -16,7 +16,7 @@ public sealed class RequirementConfiguration
             {
                 tableBuilder.HasCheckConstraint(
                     "ck_requirements_status",
-                    "\"status\" IN ('Pending', 'Processing', 'Processed', 'Failed')");
+                    "\"status\" IN ('Pending', 'Processing', 'Processed', 'Failed', 'Cancelled', 'Superseded')");
                 tableBuilder.HasCheckConstraint(
                     "ck_requirements_commercial_line",
                     "\"commercial_line\" IS NULL OR \"commercial_line\" IN ('CLASSIC', 'ESSENTIAL', 'BIOCONFORT', 'SIGNATURE')");
@@ -61,6 +61,16 @@ public sealed class RequirementConfiguration
             .HasColumnType("varchar(20)")
             .HasMaxLength(20);
 
+        builder.Property(requirement => requirement.SupersedesRequirementId)
+            .HasColumnName("supersedes_requirement_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(requirement => requirement.SupersededByRequirementId)
+            .HasColumnName("superseded_by_requirement_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
         builder.Property(requirement => requirement.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .HasColumnType("timestamp with time zone")
@@ -85,6 +95,12 @@ public sealed class RequirementConfiguration
             .HasForeignKey(requirement => requirement.CreatedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(requirement => requirement.SupersedesRequirement)
+            .WithOne(requirement => requirement.SupersededByRequirement)
+            .HasForeignKey<Requirement>(requirement =>
+                requirement.SupersedesRequirementId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(requirement => requirement.Files)
             .WithOne(file => file.Requirement)
             .HasForeignKey(file => file.RequirementId)
@@ -107,11 +123,20 @@ public sealed class RequirementConfiguration
         builder.HasIndex(requirement => requirement.CreatedByUserId)
             .HasDatabaseName("ix_requirements_created_by_user_id");
 
+        builder.HasIndex(requirement => requirement.SupersedesRequirementId)
+            .HasDatabaseName("ix_requirements_supersedes_requirement_id");
+
+        builder.HasIndex(requirement => requirement.SupersededByRequirementId)
+            .IsUnique()
+            .HasDatabaseName("ux_requirements_superseded_by_requirement_id");
+
         builder.HasIndex(requirement => new
             {
                 requirement.PreQuoteId,
                 requirement.IsActive
             })
+            .IsUnique()
+            .HasFilter("\"is_active\" = TRUE")
             .HasDatabaseName("ix_requirements_pre_quote_id_is_active");
     }
 }

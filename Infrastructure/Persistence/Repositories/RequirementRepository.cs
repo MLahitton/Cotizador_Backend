@@ -49,6 +49,69 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<IReadOnlyList<RequirementDocumentReadModel>>
+        ListDocumentReadModelsByRequirementIdAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementFiles
+                .AsNoTracking()
+                .Where(file => file.RequirementId == requirementId)
+                .OrderBy(file => file.CreatedAtUtc)
+                .ThenBy(file => file.Id)
+                .Select(file => new RequirementDocumentReadModel(
+                    file.Id,
+                    file.OriginalFileName,
+                    file.ContentType,
+                    file.SizeBytes,
+                    file.CreatedAtUtc))
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<Requirement?> FindByIdForUpdateAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.Requirements
+                .Include(requirement => requirement.Files)
+                .Include(requirement => requirement.ProcessingAttempts)
+                .SingleOrDefaultAsync(
+                    requirement => requirement.Id == requirementId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementFile?> FindFileForUpdateAsync(
+        Guid requirementFileId,
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementFiles.SingleOrDefaultAsync(
+                file => file.Id == requirementFileId
+                    && file.RequirementId == requirementId,
+                cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
     public async Task<CurrentRequirementReadModel?> GetCurrentByPreQuoteIdAsync(
         Guid preQuoteId,
         CancellationToken cancellationToken)
@@ -65,6 +128,8 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                     requirement.PreQuoteId,
                     requirement.Status,
                     requirement.CommercialLine,
+                    requirement.SupersedesRequirementId,
+                    requirement.SupersededByRequirementId,
                     requirement.CreatedAtUtc,
                     dbContext.RequirementTechnicalProposals
                         .Any(proposal =>
@@ -102,21 +167,38 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                         .FirstOrDefault()))
                 .ToListAsync(cancellationToken);
 
-            return candidates
+            var selected = candidates
                 .OrderBy(candidate => candidate.Rank)
                 .ThenByDescending(candidate => candidate.CreatedAtUtc)
-                .Select(candidate => new CurrentRequirementReadModel(
-                    candidate.RequirementId,
-                    candidate.PreQuoteId,
-                    candidate.Status,
-                    candidate.CommercialLine,
-                    candidate.CreatedAtUtc,
-                    candidate.HasTechnicalProposal,
-                    candidate.TechnicalProposalId,
-                    candidate.LatestAttemptState,
-                    candidate.LatestAttemptOutcome,
-                    candidate.LatestAttemptErrorCode))
                 .FirstOrDefault();
+
+            if (selected is null)
+            {
+                return null;
+            }
+
+            var documents = await ListDocumentReadModelsByRequirementIdAsync(
+                selected.RequirementId,
+                cancellationToken);
+
+            return new CurrentRequirementReadModel(
+                selected.RequirementId,
+                selected.PreQuoteId,
+                selected.Status,
+                selected.CommercialLine,
+                selected.CreatedAtUtc,
+                selected.HasTechnicalProposal,
+                selected.TechnicalProposalId,
+                selected.LatestAttemptState,
+                selected.LatestAttemptOutcome,
+                selected.LatestAttemptErrorCode,
+                selected.CanEditDocuments,
+                selected.CanCancel,
+                selected.CanReplace,
+                selected.IsCurrent,
+                selected.SupersedesRequirementId,
+                selected.SupersededByRequirementId,
+                documents);
         }
         catch (DbException exception)
         {
@@ -208,6 +290,11 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
     public void AddFile(RequirementFile file)
     {
         dbContext.RequirementFiles.Add(file);
+    }
+
+    public void RemoveFile(RequirementFile file)
+    {
+        dbContext.RequirementFiles.Remove(file);
     }
 
     public void AddProcessingAttempt(RequirementProcessingAttempt attempt)
@@ -454,6 +541,8 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         Guid PreQuoteId,
         RequirementStatus Status,
         RequirementCommercialLine? CommercialLine,
+        Guid? SupersedesRequirementId,
+        Guid? SupersededByRequirementId,
         DateTimeOffset CreatedAtUtc,
         bool HasTechnicalProposal,
         Guid? TechnicalProposalId,
@@ -461,7 +550,24 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         DocumentProcessingOutcome? LatestAttemptOutcome,
         string? LatestAttemptErrorCode)
     {
+        public bool IsCurrent =>
+            Status is not RequirementStatus.Cancelled
+            && Status is not RequirementStatus.Superseded
+            && SupersededByRequirementId is null;
+
+        public bool CanEditDocuments =>
+            IsCurrent
+            && Status == RequirementStatus.Pending
+            && LatestAttemptState is null;
+
+        public bool CanCancel => CanEditDocuments;
+
+        public bool CanReplace =>
+            IsCurrent
+            && Status is RequirementStatus.Processed or RequirementStatus.Failed;
+
         public int Rank =>
+            !IsCurrent ? 5 :
             HasTechnicalProposal ? 1 :
             Status == RequirementStatus.Processing
                 || LatestAttemptState == DocumentProcessingState.Processing ? 2 :

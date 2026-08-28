@@ -12,6 +12,20 @@ public interface IRequirementRepository
         Guid requirementId,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<RequirementDocumentReadModel>>
+        ListDocumentReadModelsByRequirementIdAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken);
+
+    Task<Requirement?> FindByIdForUpdateAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
+    Task<RequirementFile?> FindFileForUpdateAsync(
+        Guid requirementFileId,
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
     Task<CurrentRequirementReadModel?> GetCurrentByPreQuoteIdAsync(
         Guid preQuoteId,
         CancellationToken cancellationToken);
@@ -31,6 +45,8 @@ public interface IRequirementRepository
     void Add(Requirement requirement);
 
     void AddFile(RequirementFile file);
+
+    void RemoveFile(RequirementFile file);
 
     void AddProcessingAttempt(RequirementProcessingAttempt attempt);
 
@@ -97,7 +113,36 @@ public sealed record CurrentRequirementReadModel(
     Guid? TechnicalProposalId,
     DocumentProcessingState? LatestAttemptState,
     DocumentProcessingOutcome? LatestAttemptOutcome,
-    string? LatestAttemptErrorCode);
+    string? LatestAttemptErrorCode,
+    bool CanEditDocuments,
+    bool CanCancel,
+    bool CanReplace,
+    bool IsCurrent,
+    Guid? SupersedesRequirementId,
+    Guid? SupersededByRequirementId,
+    IReadOnlyList<RequirementDocumentReadModel> Documents);
+
+public sealed record RequirementDocumentReadModel(
+    Guid RequirementFileId,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    DateTimeOffset CreatedAtUtc);
+
+public sealed record RequirementDetailsReadModel(
+    Guid RequirementId,
+    Guid PreQuoteId,
+    RequirementStatus Status,
+    RequirementCommercialLine? CommercialLine,
+    bool CanEditDocuments,
+    bool CanCancel,
+    bool CanReplace,
+    bool IsCurrent,
+    Guid? SupersedesRequirementId,
+    Guid? SupersededByRequirementId,
+    DateTimeOffset CreatedAtUtc,
+    DateTimeOffset UpdatedAtUtc,
+    IReadOnlyList<RequirementDocumentReadModel> Documents);
 
 public sealed class RequirementQueryException : Exception
 {

@@ -64,6 +64,116 @@ public sealed class RequirementTests
     }
 
     [Fact]
+    public void Requirement_Create_IsMutableBeforeProcessingStarts()
+    {
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+
+        Assert.True(requirement.CanEditDocuments);
+        Assert.True(requirement.CanCancel);
+        Assert.False(requirement.CanReplace);
+        Assert.True(requirement.IsCurrent);
+        Assert.False(requirement.HasProcessingStarted());
+    }
+
+    [Fact]
+    public void Requirement_StartProcessing_MakesDocumentsImmutable()
+    {
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+
+        requirement.StartProcessing(StartedAtUtc);
+
+        Assert.False(requirement.CanEditDocuments);
+        Assert.False(requirement.CanCancel);
+        Assert.False(requirement.CanReplace);
+        Assert.True(requirement.IsCurrent);
+        Assert.Throws<InvalidOperationException>(() =>
+            requirement.EnsureDocumentsMutable());
+    }
+
+    [Fact]
+    public void Requirement_MarkProcessed_AllowsReplacementButNotDocumentMutation()
+    {
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+
+        requirement.StartProcessing(StartedAtUtc);
+        requirement.MarkProcessed(CompletedAtUtc);
+
+        Assert.False(requirement.CanEditDocuments);
+        Assert.False(requirement.CanCancel);
+        Assert.True(requirement.CanReplace);
+        Assert.True(requirement.IsCurrent);
+    }
+
+    [Fact]
+    public void Requirement_Cancel_MarksRequirementAsInactiveAndNotCurrent()
+    {
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+
+        requirement.Cancel(StartedAtUtc);
+
+        Assert.Equal(RequirementStatus.Cancelled, requirement.Status);
+        Assert.False(requirement.IsActive);
+        Assert.False(requirement.IsCurrent);
+        Assert.False(requirement.CanEditDocuments);
+        Assert.False(requirement.CanCancel);
+    }
+
+    [Fact]
+    public void Requirement_SupersedeBy_LinksReplacementAndMarksInactive()
+    {
+        var replacementId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+        requirement.StartProcessing(StartedAtUtc);
+        requirement.MarkProcessed(CompletedAtUtc);
+
+        requirement.SupersedeBy(replacementId, CompletedAtUtc.AddSeconds(1));
+
+        Assert.Equal(RequirementStatus.Superseded, requirement.Status);
+        Assert.False(requirement.IsActive);
+        Assert.False(requirement.IsCurrent);
+        Assert.Equal(replacementId, requirement.SupersededByRequirementId);
+        Assert.False(requirement.CanReplace);
+    }
+
+    [Fact]
+    public void Requirement_MarkAsReplacementOf_StoresSupersededRequirement()
+    {
+        var supersededRequirementId =
+            Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var requirement = Requirement.Create(
+            PreQuoteId,
+            UserId,
+            RequirementCommercialLine.Essential,
+            CreatedAtUtc);
+
+        requirement.MarkAsReplacementOf(supersededRequirementId);
+
+        Assert.Equal(supersededRequirementId, requirement.SupersedesRequirementId);
+        Assert.True(requirement.IsCurrent);
+        Assert.True(requirement.CanEditDocuments);
+    }
+
+    [Fact]
     public void RequirementFile_Create_WithValidData_CreatesFile()
     {
         var file = RequirementFile.Create(

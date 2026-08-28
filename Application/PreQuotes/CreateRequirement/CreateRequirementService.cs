@@ -21,26 +21,11 @@ public sealed class CreateRequirementService(
     TimeProvider timeProvider,
     ILogger<CreateRequirementService> logger)
 {
-    public const int MaximumFileCount = 10;
-    public const long MaximumFileSizeBytes = 20 * 1024 * 1024;
-    public const long MaximumTotalSizeBytes = 100 * 1024 * 1024;
-
-    private const string PdfContentType = "application/pdf";
-    private const string XlsxContentType =
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    private const string JpegContentType = "image/jpeg";
-    private const string PngContentType = "image/png";
-
-    private static readonly Dictionary<string, string>
-        SupportedExtensionsByContentType =
-            new(StringComparer.OrdinalIgnoreCase)
-            {
-                [".pdf"] = PdfContentType,
-                [".xlsx"] = XlsxContentType,
-                [".jpg"] = JpegContentType,
-                [".jpeg"] = JpegContentType,
-                [".png"] = PngContentType
-            };
+    public const int MaximumFileCount = RequirementFileValidation.MaximumFileCount;
+    public const long MaximumFileSizeBytes =
+        RequirementFileValidation.MaximumFileSizeBytes;
+    public const long MaximumTotalSizeBytes =
+        RequirementFileValidation.MaximumTotalSizeBytes;
 
     public async Task<CreateRequirementResult> ExecuteAsync(
         CreateRequirementCommand command,
@@ -82,7 +67,7 @@ public sealed class CreateRequirementService(
 
         foreach (var file in command.Files)
         {
-            var normalizedFile = NormalizeFile(file);
+            var normalizedFile = RequirementFileValidation.NormalizeFile(file);
             if (normalizedFile.Failure is { } failure)
             {
                 return CreateRequirementResult.Failed(failure);
@@ -220,6 +205,7 @@ public sealed class CreateRequirementService(
             commercialLine,
             now);
         var storedKeys = new List<string>(normalizedFiles.Count);
+        var persistedFiles = new List<RequirementFile>(normalizedFiles.Count);
 
         try
         {
@@ -227,7 +213,7 @@ public sealed class CreateRequirementService(
 
             foreach (var file in normalizedFiles)
             {
-                var storageKey = CreateStorageKey(
+                var storageKey = RequirementFileValidation.CreateStorageKey(
                     requirement.Id,
                     file.StorageExtension);
                 await fileStorage.SaveAsync(
@@ -236,13 +222,15 @@ public sealed class CreateRequirementService(
                     cancellationToken);
                 storedKeys.Add(storageKey);
 
-                requirementRepository.AddFile(RequirementFile.Create(
+                var requirementFile = RequirementFile.Create(
                     requirement.Id,
                     file.OriginalFileName,
                     file.ContentType,
                     file.SizeBytes,
                     storageKey,
-                    now));
+                    now);
+                persistedFiles.Add(requirementFile);
+                requirementRepository.AddFile(requirementFile);
             }
 
             preQuote.RegisterActivity(now);
@@ -266,7 +254,17 @@ public sealed class CreateRequirementService(
                 normalizedFiles.Count,
                 ToContract(commercialLine),
                 "PENDING",
-                requirement.CreatedAtUtc));
+                requirement.CreatedAtUtc,
+                persistedFiles
+                    .OrderBy(file => file.CreatedAtUtc)
+                    .ThenBy(file => file.Id)
+                    .Select(file => new CreatedRequirementDocumentResult(
+                        file.Id,
+                        file.OriginalFileName,
+                        file.ContentType,
+                        file.SizeBytes,
+                        file.CreatedAtUtc))
+                    .ToArray()));
     }
 
     private static bool TryParseCommercialLine(
@@ -301,78 +299,6 @@ public sealed class CreateRequirementService(
             RequirementCommercialLine.Signature => "SIGNATURE",
             _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
         };
-
-    private static NormalizedRequirementFile NormalizeFile(
-        CreateRequirementFileInput file)
-    {
-        var originalFileName = file.OriginalFileName?.Trim();
-        if (string.IsNullOrWhiteSpace(originalFileName)
-            || originalFileName.Length > 255)
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.InvalidFileName);
-        }
-
-        var contentType = file.ContentType?.Trim();
-        if (string.IsNullOrWhiteSpace(contentType))
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.UnsupportedFileType);
-        }
-
-        var extension = Path.GetExtension(originalFileName);
-        if (string.IsNullOrWhiteSpace(extension)
-            || !SupportedExtensionsByContentType.TryGetValue(
-                extension,
-                out var requiredContentType)
-            || !string.Equals(
-                requiredContentType,
-                contentType,
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.UnsupportedFileType);
-        }
-
-        if (file.SizeBytes < 0)
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.InvalidRequest);
-        }
-
-        if (file.SizeBytes == 0)
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.EmptyFile);
-        }
-
-        if (file.SizeBytes > MaximumFileSizeBytes)
-        {
-            return NormalizedRequirementFile.Failed(
-                CreateRequirementFailure.FileTooLarge);
-        }
-
-        var storageExtension = string.Equals(
-            extension,
-            ".jpeg",
-            StringComparison.OrdinalIgnoreCase)
-            ? ".jpeg"
-            : extension.ToLowerInvariant();
-
-        return NormalizedRequirementFile.Success(
-            originalFileName,
-            requiredContentType,
-            file.SizeBytes,
-            storageExtension,
-            file.Content!);
-    }
-
-    private static string CreateStorageKey(
-        Guid requirementId,
-        string extension)
-    {
-        return $"requirements/{requirementId:D}/{Guid.NewGuid():D}/original{extension}";
-    }
 
     private async Task CompensateAsync(IReadOnlyList<string> storageKeys)
     {
@@ -411,40 +337,4 @@ public sealed class CreateRequirementService(
             exception.GetType().Name);
     }
 
-    private sealed record NormalizedRequirementFile(
-        string OriginalFileName,
-        string ContentType,
-        long SizeBytes,
-        string StorageExtension,
-        Stream? Content,
-        CreateRequirementFailure? Failure)
-    {
-        public static NormalizedRequirementFile Success(
-            string originalFileName,
-            string contentType,
-            long sizeBytes,
-            string storageExtension,
-            Stream content)
-        {
-            return new NormalizedRequirementFile(
-                originalFileName,
-                contentType,
-                sizeBytes,
-                storageExtension,
-                content,
-                null);
-        }
-
-        public static NormalizedRequirementFile Failed(
-            CreateRequirementFailure failure)
-        {
-            return new NormalizedRequirementFile(
-                string.Empty,
-                string.Empty,
-                0,
-                string.Empty,
-                null,
-                failure);
-        }
-    }
 }

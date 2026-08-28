@@ -27,6 +27,14 @@ public sealed record CreatedRequirementResult(
     int FileCount,
     string CommercialLine,
     string Status,
+    DateTimeOffset CreatedAtUtc,
+    IReadOnlyList<CreatedRequirementDocumentResult> Documents);
+
+public sealed record CreatedRequirementDocumentResult(
+    Guid RequirementFileId,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
     DateTimeOffset CreatedAtUtc);
 
 public sealed record CreateRequirementResult(

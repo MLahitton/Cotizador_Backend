@@ -7,7 +7,9 @@ public enum RequirementStatus
     Pending = 1,
     Processing,
     Processed,
-    Failed
+    Failed,
+    Cancelled,
+    Superseded
 }
 
 public enum RequirementExtractionValueStatus
@@ -51,11 +53,15 @@ public sealed class Requirement
     public Guid CreatedByUserId { get; private set; }
     public RequirementStatus Status { get; private set; }
     public RequirementCommercialLine? CommercialLine { get; private set; }
+    public Guid? SupersedesRequirementId { get; private set; }
+    public Guid? SupersededByRequirementId { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public DateTimeOffset UpdatedAtUtc { get; private set; }
     public bool IsActive { get; private set; }
     public PreQuote PreQuote { get; private set; } = null!;
     public User CreatedByUser { get; private set; } = null!;
+    public Requirement? SupersedesRequirement { get; private set; }
+    public Requirement? SupersededByRequirement { get; private set; }
     public IReadOnlyCollection<RequirementFile> Files => _files;
     public IReadOnlyCollection<RequirementProcessingAttempt> ProcessingAttempts =>
         _processingAttempts;
@@ -97,6 +103,12 @@ public sealed class Requirement
 
     public void StartProcessing(DateTimeOffset updatedAtUtc)
     {
+        if (!IsCurrent)
+        {
+            throw new InvalidOperationException(
+                "Solo el requerimiento vigente puede iniciar procesamiento.");
+        }
+
         if (Status == RequirementStatus.Processing)
         {
             throw new InvalidOperationException(
@@ -107,6 +119,88 @@ public sealed class Requirement
 
         Status = RequirementStatus.Processing;
         UpdatedAtUtc = updatedAtUtc;
+    }
+
+    public bool HasProcessingStarted() => _processingAttempts.Count > 0;
+
+    public bool CanEditDocuments => Status == RequirementStatus.Pending
+        && IsCurrent
+        && !HasProcessingStarted();
+
+    public bool CanCancel => IsCurrent
+        && Status == RequirementStatus.Pending
+        && !HasProcessingStarted();
+
+    public bool CanReplace => IsCurrent
+        && Status is RequirementStatus.Processed or RequirementStatus.Failed;
+
+    public bool IsCurrent => IsActive
+        && Status is not RequirementStatus.Cancelled
+        && Status is not RequirementStatus.Superseded
+        && SupersededByRequirementId is null;
+
+    public void EnsureDocumentsMutable()
+    {
+        if (!CanEditDocuments)
+        {
+            throw new InvalidOperationException(
+                "Los documentos del requerimiento ya no son editables.");
+        }
+    }
+
+    public void Cancel(DateTimeOffset updatedAtUtc)
+    {
+        if (!CanCancel)
+        {
+            throw new InvalidOperationException(
+                "El requerimiento no puede cancelarse.");
+        }
+
+        EnsureValidUpdateDate(updatedAtUtc);
+        Status = RequirementStatus.Cancelled;
+        IsActive = false;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    public void SupersedeBy(Guid replacementRequirementId, DateTimeOffset updatedAtUtc)
+    {
+        if (replacementRequirementId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El requerimiento reemplazo es obligatorio.",
+                nameof(replacementRequirementId));
+        }
+
+        if (!CanReplace)
+        {
+            throw new InvalidOperationException(
+                "El requerimiento no puede ser reemplazado.");
+        }
+
+        EnsureValidUpdateDate(updatedAtUtc);
+        Status = RequirementStatus.Superseded;
+        IsActive = false;
+        SupersededByRequirementId = replacementRequirementId;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    public void MarkAsReplacementOf(Guid replacedRequirementId)
+    {
+        if (replacedRequirementId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El requerimiento reemplazado es obligatorio.",
+                nameof(replacedRequirementId));
+        }
+
+        if (replacedRequirementId == Id)
+        {
+            throw new ArgumentException(
+                "Un requerimiento no puede reemplazarse a si mismo.",
+                nameof(replacedRequirementId));
+        }
+
+        SupersedesRequirementId = replacedRequirementId;
     }
 
     public void MarkProcessed(DateTimeOffset updatedAtUtc)

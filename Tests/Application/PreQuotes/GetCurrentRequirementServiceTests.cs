@@ -33,7 +33,14 @@ public sealed class GetCurrentRequirementServiceTests
             Guid.NewGuid(),
             DocumentProcessingState.Finished,
             DocumentProcessingOutcome.Completed,
-            null);
+            null,
+            CanEditDocuments: false,
+            CanCancel: false,
+            CanReplace: true,
+            IsCurrent: true,
+            SupersedesRequirementId: null,
+            SupersededByRequirementId: null,
+            Documents: []);
         context.Requirements.GetCurrentByPreQuoteIdAsync(
                 context.PreQuote.Id,
                 Arg.Any<CancellationToken>())

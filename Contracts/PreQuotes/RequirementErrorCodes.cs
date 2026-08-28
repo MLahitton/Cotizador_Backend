@@ -10,6 +10,9 @@ public static class RequirementErrorCodes
     public const string TooManyFiles = "REQUIREMENT_TOO_MANY_FILES";
     public const string PreQuoteNotFound = "REQUIREMENT_PREQUOTE_NOT_FOUND";
     public const string RequirementNotFound = "REQUIREMENT_NOT_FOUND";
+    public const string RequirementNotMutable = "REQUIREMENT_NOT_MUTABLE";
+    public const string RequirementNotReplaceable =
+        "REQUIREMENT_NOT_REPLACEABLE";
     public const string TechnicalProposalNotFound =
         "REQUIREMENT_TECHNICAL_PROPOSAL_NOT_FOUND";
     public const string TechnicalProposalIncomplete =
