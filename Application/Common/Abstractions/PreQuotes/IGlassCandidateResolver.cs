@@ -82,6 +82,12 @@ public static class GlassResolutionReasonCodes
         "GLASS_PANE_DIMENSIONS_FROM_MODULATION";
     public const string GlassPaneDimensionsFromSubmodules =
         "GLASS_PANE_DIMENSIONS_FROM_SUBMODULES";
+    public const string GlassPaneDimensionsFromEvidence =
+        "GLASS_PANE_DIMENSIONS_FROM_EVIDENCE";
+    public const string GlassPaneDimensionsFromRoofGeometry =
+        "GLASS_PANE_DIMENSIONS_FROM_ROOF_GEOMETRY";
+    public const string GlassPaneDimensionsFromPocketLeaf =
+        "GLASS_PANE_DIMENSIONS_FROM_POCKET_LEAF";
     public const string GlassPaneGeometryUnresolved =
         "GLASS_PANE_GEOMETRY_UNRESOLVED";
     public const string GlassPaneHeterogeneousNeeds =

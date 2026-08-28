@@ -140,7 +140,7 @@ public sealed class SgTechnicalSelectorGoldenTests
     }
 
     [Fact]
-    public async Task G10_LowSlidingWindow_SuggestsLagoWithReview()
+    public async Task G10_LowSlidingWindow_SuggestsLagoWithoutThresholdReview()
     {
         var result = await Selector().SelectAsync(
             Input(functionalType: "SLIDING_WINDOW", height: 1000),
@@ -150,14 +150,14 @@ public sealed class SgTechnicalSelectorGoldenTests
         Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago,
             result.AppliedRuleCode);
         Assert.Contains("K50", result.Alternatives);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+        Assert.False(result.RequiresReview);
+        Assert.DoesNotContain(SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
             result.ReviewReasons);
-        Assert.True(result.Confidence <= 0.70m);
+        Assert.True(result.Confidence >= 0.85m);
     }
 
     [Fact]
-    public async Task G11_HigherSlidingWindow_SuggestsMonzaWithReview()
+    public async Task G11_HigherSlidingWindow_SuggestsMonzaWithoutThresholdReview()
     {
         var result = await Selector().SelectAsync(
             Input(functionalType: "SLIDING_WINDOW", height: 1001),
@@ -167,8 +167,8 @@ public sealed class SgTechnicalSelectorGoldenTests
         Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
             result.AppliedRuleCode);
         Assert.Contains("S50", result.Alternatives);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+        Assert.False(result.RequiresReview);
+        Assert.DoesNotContain(SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
             result.ReviewReasons);
     }
 
@@ -235,15 +235,16 @@ public sealed class SgTechnicalSelectorGoldenTests
     }
 
     [Fact]
-    public async Task G18_BathroomDivisionWithoutInox_RequiresReviewWithoutSuggestion()
+    public async Task G18_BathroomDivisionWithoutExplicitMaterial_SelectsInox()
     {
         var result = await Selector().SelectAsync(
             Input(functionalType: "BATHROOM_DIVISION"),
             TestContext.Current.CancellationToken);
 
-        Assert.Null(result.SuggestedSystemCode);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown,
+        Assert.Equal("SG_BATH_DIV_INOX", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSpecialBathroomDivisionInox,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain(SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown,
             result.ReviewReasons);
     }
 

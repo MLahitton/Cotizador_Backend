@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260828052119_AddRequirementPricingSnapshots")]
+    partial class AddRequirementPricingSnapshots
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -5945,18 +5948,6 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_technically_complete");
 
-                    b.Property<int?>("ManualHeightMillimetersOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("manual_height_millimeters_override");
-
-                    b.Property<int?>("ManualQuantityOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("manual_quantity_override");
-
-                    b.Property<int?>("ManualWidthMillimetersOverride")
-                        .HasColumnType("integer")
-                        .HasColumnName("manual_width_millimeters_override");
-
                     b.Property<decimal>("OverallConfidence")
                         .HasColumnType("numeric(5,4)")
                         .HasColumnName("overall_confidence");
@@ -6048,7 +6039,7 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.ToTable("requirement_technical_proposal_items", "core", t =>
                         {
-                            t.HasCheckConstraint("ck_requirement_technical_proposal_items_confidence", "\"overall_confidence\" >= 0 AND \"overall_confidence\" <= 1 AND \"system_confidence\" >= 0 AND \"system_confidence\" <= 1 AND \"glass_confidence\" >= 0 AND \"glass_confidence\" <= 1 AND \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1 AND (\"historical_best_similarity\" IS NULL OR (\"historical_best_similarity\" >= 0 AND \"historical_best_similarity\" <= 1)) AND (\"historical_average_similarity\" IS NULL OR (\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1)) AND (\"manual_quantity_override\" IS NULL OR \"manual_quantity_override\" > 0) AND (\"manual_width_millimeters_override\" IS NULL OR \"manual_width_millimeters_override\" > 0) AND (\"manual_height_millimeters_override\" IS NULL OR \"manual_height_millimeters_override\" > 0)");
+                            t.HasCheckConstraint("ck_requirement_technical_proposal_items_confidence", "\"overall_confidence\" >= 0 AND \"overall_confidence\" <= 1 AND \"system_confidence\" >= 0 AND \"system_confidence\" <= 1 AND \"glass_confidence\" >= 0 AND \"glass_confidence\" <= 1 AND \"finish_confidence\" >= 0 AND \"finish_confidence\" <= 1 AND (\"historical_best_similarity\" IS NULL OR (\"historical_best_similarity\" >= 0 AND \"historical_best_similarity\" <= 1)) AND (\"historical_average_similarity\" IS NULL OR (\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1))");
 
                             t.HasCheckConstraint("ck_requirement_technical_proposal_items_historical_support", "\"historical_support_count\" >= 0");
                         });

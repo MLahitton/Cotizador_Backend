@@ -31,6 +31,27 @@ public sealed class HistoricalTechnicalPriceEstimatorTests
     }
 
     [Fact]
+    public async Task EstimateAsync_SystemMatchRequiredWithoutCandidates_ReportsExplicitReason()
+    {
+        var similarity = Substitute.For<IHistoricalSimilarityEvaluationService>();
+        similarity.EvaluateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new HistoricalSimilarityEvaluationResult(
+                HistoricalSimilarityStatus.Completed, [], null));
+
+        var estimate = await new HistoricalTechnicalPriceEstimator(similarity)
+            .EstimateAsync(
+                Query with { RequireSystemMatchedComparable = true },
+                TestContext.Current.CancellationToken);
+
+        Assert.Null(estimate.Expected);
+        Assert.Contains(
+            "SYSTEM_MATCH_REQUIRED_NO_COMPARABLES",
+            estimate.MissingData);
+    }
+
+    [Fact]
     public async Task EstimateAsync_WithOneCandidate_ExpandsRangeAndNeverHigh()
     {
         var estimate = await Estimate([Evaluated(Candidate("one", 100m, 10m), 0.9m, "HIGH")]);

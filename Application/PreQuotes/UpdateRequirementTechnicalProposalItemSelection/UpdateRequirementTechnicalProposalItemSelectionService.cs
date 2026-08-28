@@ -15,7 +15,10 @@ public sealed record UpdateRequirementTechnicalProposalItemSelectionCommand(
     bool? ConfirmSuggested,
     Guid? SystemId,
     Guid? GlassId,
-    Guid? FinishId);
+    Guid? FinishId,
+    int? Quantity = null,
+    int? WidthMillimeters = null,
+    int? HeightMillimeters = null);
 
 public sealed class UpdateRequirementTechnicalProposalItemSelectionCommandValidator
     : AbstractValidator<UpdateRequirementTechnicalProposalItemSelectionCommand>
@@ -30,6 +33,12 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionCommandValida
             .Must(value => value is null || value != Guid.Empty);
         RuleFor(command => command.FinishId)
             .Must(value => value is null || value != Guid.Empty);
+        RuleFor(command => command.Quantity)
+            .Must(value => value is null || value > 0);
+        RuleFor(command => command.WidthMillimeters)
+            .Must(value => value is null || value > 0);
+        RuleFor(command => command.HeightMillimeters)
+            .Must(value => value is null || value > 0);
         RuleFor(command => command)
             .Must(command => command.ConfirmSuggested != true
                 || (command.SystemId is null
@@ -205,6 +214,11 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
             var selectedSystemId = command.SystemId ?? baseSystemId;
             var selectedGlassId = command.GlassId ?? baseGlassId;
             var selectedFinishId = command.FinishId ?? baseFinishId;
+
+            item.ApplyManualDataOverride(
+                command.Quantity,
+                command.WidthMillimeters,
+                command.HeightMillimeters);
 
             item.Select(
                 selectedSystemId,

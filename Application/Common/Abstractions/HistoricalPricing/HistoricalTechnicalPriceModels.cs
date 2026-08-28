@@ -26,7 +26,13 @@ public sealed record HistoricalTechnicalPriceComparable(
     decimal HistoricalUnitArea,
     decimal ProjectedPrice,
     bool IsStrong,
-    bool HasAreaMismatch);
+    bool HasAreaMismatch,
+    string MatchingTier = "UNSPECIFIED",
+    bool MatchedSystem = false,
+    bool MatchedGlass = false,
+    bool MatchedFinish = false,
+    bool MatchedCommercialLine = false,
+    IReadOnlyList<string>? FallbackReasons = null);
 
 public sealed record HistoricalTechnicalPriceEstimate(
     string Currency,

@@ -14,7 +14,10 @@ public sealed record RequirementPricingResponse(
     bool RequiresReview,
     IReadOnlyList<string> Assumptions,
     IReadOnlyList<string> MissingData,
-    IReadOnlyList<RequirementPricingItemResponse> Items);
+    IReadOnlyList<RequirementPricingItemResponse> Items,
+    decimal? OriginalGrandTotal,
+    decimal? CurrentGrandTotal,
+    decimal? DeltaGrandTotal);
 
 public sealed record RequirementPricingRangeResponse(
     decimal? Minimum,
@@ -40,7 +43,13 @@ public sealed record RequirementPricingItemResponse(
     IReadOnlyList<string> MappingWarnings,
     IReadOnlyList<string> Assumptions,
     IReadOnlyList<string> MissingData,
-    IReadOnlyList<RequirementPricingComparableResponse> Comparables);
+    IReadOnlyList<RequirementPricingComparableResponse> Comparables,
+    RequirementPricingRangeResponse? OriginalUnit,
+    RequirementPricingRangeResponse? CurrentUnit,
+    RequirementPricingRangeResponse? DeltaUnit,
+    RequirementPricingRangeResponse? OriginalLine,
+    RequirementPricingRangeResponse? CurrentLine,
+    RequirementPricingRangeResponse? DeltaLine);
 
 public sealed record RequirementPricingComparableResponse(
     string CandidateId,
@@ -50,4 +59,46 @@ public sealed record RequirementPricingComparableResponse(
     decimal BackendScore,
     decimal? Ai2Similarity,
     string? SimilarityLevel,
-    decimal FinalWeight);
+    decimal FinalWeight,
+    string MatchingTier,
+    bool MatchedSystem,
+    bool MatchedGlass,
+    bool MatchedFinish,
+    bool MatchedCommercialLine,
+    IReadOnlyList<string> FallbackReasons);
+
+public sealed record RepriceRequirementPricingItemRequest(
+    Guid? SystemId,
+    Guid? GlassTypeId,
+    Guid? FinishTypeId,
+    int? Quantity = null,
+    int? WidthMm = null,
+    int? HeightMm = null);
+
+public sealed record RepriceRequirementPricingItemResponse(
+    Guid RequirementId,
+    Guid TechnicalProposalId,
+    Guid TechnicalProposalItemId,
+    RequirementPricingItemConfigurationResponse Configuration,
+    RepriceRequirementPricingItemPriceResponse Pricing,
+    RepriceRequirementPricingSummaryResponse Summary,
+    IReadOnlyList<RequirementPricingComparableResponse> Comparables);
+
+public sealed record RequirementPricingItemConfigurationResponse(
+    Guid? SystemId,
+    Guid? GlassTypeId,
+    Guid? FinishTypeId);
+
+public sealed record RepriceRequirementPricingItemPriceResponse(
+    decimal? OriginalUnitPrice,
+    decimal? CurrentUnitPrice,
+    decimal? DeltaUnitPrice,
+    decimal? OriginalLineTotal,
+    decimal? CurrentLineTotal,
+    decimal? DeltaLineTotal,
+    string State);
+
+public sealed record RepriceRequirementPricingSummaryResponse(
+    decimal? OriginalGrandTotal,
+    decimal? CurrentGrandTotal,
+    decimal? DeltaGrandTotal);

@@ -69,6 +69,10 @@ public sealed class ApplicationDbContext(
     public DbSet<RequirementTechnicalProposalHistoricalExample>
         RequirementTechnicalProposalHistoricalExamples =>
             Set<RequirementTechnicalProposalHistoricalExample>();
+    public DbSet<RequirementPricingSnapshot> RequirementPricingSnapshots =>
+        Set<RequirementPricingSnapshot>();
+    public DbSet<RequirementPricingItemSnapshot> RequirementPricingItemSnapshots =>
+        Set<RequirementPricingItemSnapshot>();
 
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();

@@ -32,7 +32,13 @@ public sealed record HistoricalTechnicalPriceComparableResponse(
     decimal FinalWeight,
     decimal PublicUnitPrice,
     decimal HistoricalUnitArea,
-    decimal ProjectedPrice);
+    decimal ProjectedPrice,
+    string MatchingTier,
+    bool MatchedSystem,
+    bool MatchedGlass,
+    bool MatchedFinish,
+    bool MatchedCommercialLine,
+    IReadOnlyList<string> FallbackReasons);
 
 public sealed record HistoricalTechnicalPriceEstimateResponse(
     string Status,

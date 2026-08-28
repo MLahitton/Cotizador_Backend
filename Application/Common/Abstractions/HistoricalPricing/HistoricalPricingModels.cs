@@ -1,4 +1,62 @@
+using System.Globalization;
+using System.Text;
+
 namespace Application.Common.Abstractions.HistoricalPricing;
+
+public static class HistoricalSystemIdentity
+{
+    public static string? Canonicalize(string? value)
+    {
+        var text = Normalize(value);
+        if (text is null) return null;
+        var variant = ContainsAny(text, "POCKET", "POKET") ? "POCKET"
+            : text.Contains("INOX", StringComparison.Ordinal) ? "INOX"
+            : ContainsAny(text, "DOUBLE", "DOBLE") ? "DOUBLE"
+            : "STANDARD";
+        var family = ContainsAny(text, "VENECIA FERMO", "SERIE 40") ? "FERMO"
+            : ContainsAny(text, "VENECIA MONZA", "SERIE 50") ? "MONZA"
+            : ContainsAny(text, "VENECIA NAPOLES", "SERIE 70") ? "NAPOLES"
+            : ContainsAny(text, "VENECIA MONACO", "SERIE 100") ? "MONACO"
+            : ContainsAny(text, "PRIMAVERA SIENA", "SG 4", "SG4") ? "SIENA"
+            : ContainsAny(text, "PRIMAVERA LAGO", "SG 5", "SG5") ? "LAGO"
+            : ContainsAny(text, "PRIMAVERA LUCCA", "SG 8", "SG8") ? "LUCCA"
+            : null;
+        return family is null ? null : $"{family}:{variant}";
+    }
+
+    public static bool Matches(string? left, string? right)
+    {
+        var leftIdentity = Canonicalize(left);
+        var rightIdentity = Canonicalize(right);
+        return leftIdentity is not null && rightIdentity is not null
+            ? leftIdentity == rightIdentity
+            : !string.IsNullOrWhiteSpace(left)
+                && !string.IsNullOrWhiteSpace(right)
+                && string.Equals(
+                    Normalize(left),
+                    Normalize(right),
+                    StringComparison.Ordinal);
+    }
+
+    private static string? Normalize(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var builder = new StringBuilder();
+        foreach (var character in value.Trim().Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character)
+                != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(char.ToUpperInvariant(character));
+            }
+        }
+        return string.Join(' ', builder.ToString().Normalize(NormalizationForm.FormC)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static bool ContainsAny(string value, params string[] tokens) =>
+        tokens.Any(token => value.Contains(token, StringComparison.Ordinal));
+}
 
 public enum HistoricalWorkbookContainerType { Empty, Ooxml, OleCdfV2, Unknown }
 
@@ -61,7 +119,9 @@ public sealed record HistoricalCandidateQuery(
     string? Finish, decimal? Quantity, int? Top = null,
     IReadOnlyCollection<string>? ExcludedCandidateIds = null,
     IReadOnlyCollection<string>? ExcludedQuoteIds = null,
-    string? GlassComposition = null);
+    string? GlassComposition = null,
+    string? CommercialLine = null,
+    bool RequireSystemMatchedComparable = false);
 
 public sealed record HistoricalComparableCandidate(
     string HistoricalQuoteId, string HistoricalItemId,
@@ -73,7 +133,13 @@ public sealed record HistoricalComparableCandidate(
     string? Finish,
     decimal PreliminaryScore, IReadOnlyList<string> MatchedSignals,
     IReadOnlyList<string> MissingSignals,
-    bool HasAreaMismatch);
+    bool HasAreaMismatch,
+    string MatchingTier = "UNSPECIFIED",
+    IReadOnlyList<string>? FallbackReasons = null,
+    bool MatchedSystem = false,
+    bool MatchedGlass = false,
+    bool MatchedFinish = false,
+    bool MatchedCommercialLine = false);
 
 public interface IHistoricalQuoteCorpus
 {

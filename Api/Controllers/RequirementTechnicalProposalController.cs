@@ -1,5 +1,6 @@
 using Api.ErrorHandling;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
+using Application.PreQuotes.TechnicalProposalReadiness;
 using Contracts.Common;
 using Contracts.PreQuotes;
 using Microsoft.AspNetCore.Authorization;
@@ -145,6 +146,7 @@ public sealed class RequirementTechnicalProposalController(
             proposal.ItemsRequiringReview,
             proposal.TechnicallyCompleteItems,
             proposal.PriceableItems,
+            Map(proposal.Readiness),
             proposal.Items.Select(MapItem).ToArray());
 
     private static RequirementTechnicalProposalItemResponse MapItem(
@@ -160,6 +162,12 @@ public sealed class RequirementTechnicalProposalController(
             item.Quantity,
             item.WidthMm,
             item.HeightMm,
+            item.ManualQuantityOverride,
+            item.ManualWidthMmOverride,
+            item.ManualHeightMmOverride,
+            item.EffectiveQuantity,
+            item.EffectiveWidthMm,
+            item.EffectiveHeightMm,
             item.AreaM2,
             item.ExtractionConfidence,
             item.ExtractionStatus,
@@ -213,6 +221,7 @@ public sealed class RequirementTechnicalProposalController(
             item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
+            Map(item.Readiness),
             new RequirementTechnicalProposalHistoricalEvidenceResponse(
                 item.HistoricalEvidence.Status,
                 item.HistoricalEvidence.SupportCount,
@@ -254,6 +263,43 @@ public sealed class RequirementTechnicalProposalController(
                     evidence.ContextLabel,
                     evidence.Confidence,
                     evidence.Status)).ToArray());
+
+    private static RequirementTechnicalProposalReadinessResponse Map(
+        RequirementTechnicalProposalReadinessReadModel readiness) =>
+        new(
+            readiness.State,
+            readiness.IsReadyForConfirmation,
+            readiness.IsReadyForPricing,
+            readiness.BlockingItems,
+            readiness.WarningItems,
+            readiness.BlockingDefinitions,
+            readiness.WarningDefinitions,
+            readiness.PricingBlockingItems,
+            readiness.PricingBlockingDefinitions,
+            readiness.Categories);
+
+    private static RequirementTechnicalProposalItemReadinessResponse Map(
+        RequirementTechnicalProposalItemReadinessReadModel readiness) =>
+        new(
+            readiness.State,
+            readiness.BlockingCount,
+            readiness.WarningCount,
+            readiness.PendingDefinitions.Select(Map).ToArray());
+
+    private static TechnicalProposalPendingDefinitionResponse Map(
+        TechnicalProposalPendingDefinitionReadModel definition) =>
+        new(
+            definition.Code,
+            definition.Category,
+            definition.Severity,
+            definition.Field,
+            definition.Title,
+            definition.Message,
+            definition.CurrentValue,
+            definition.RequiredAction,
+            definition.BlocksConfirmation,
+            definition.BlocksPricing,
+            definition.RelatedReasonCodes);
 
     private static RequirementTechnicalProposalSystemOptionResponse? Map(
         RequirementTechnicalProposalSystemOptionReadModel? option) =>

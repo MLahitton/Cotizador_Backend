@@ -73,7 +73,7 @@ public sealed class HistoricalPricingTests : IDisposable
     }
 
     [Fact]
-    public async Task CandidateSearch_DoesNotRequireExactRequestedSystem()
+    public async Task CandidateSearch_WithKnownSystemMismatch_ReturnsNoComparables()
     {
         CreateWorkbook("quote.xlsx", true);
         var options = new HistoricalPricingOptions(_directory, 20);
@@ -85,12 +85,179 @@ public sealed class HistoricalPricingTests : IDisposable
             "VENTANA", "XYZ", "LAMINADO 4+4", 4m, "CORREDIZA",
             3m, 2m, 6m, "NEGRO MATE", 2m));
 
+        Assert.Empty(candidates);
+    }
+
+    [Fact]
+    public void CandidateSearch_SystemCompatibilityBeatsPerfectGeometry()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(
+                Item("fermo-perfect", system: "FERMO", glass: "TEMPLADO", thickness: 6m, finish: "PP13", area: 9.35m),
+                Item("monza-close", system: "MONZA", glass: "TEMPLADO", thickness: 6m, finish: "PP13", area: 9.00m)),
+            options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "MONZA", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10));
+
         var candidate = Assert.Single(candidates);
-        Assert.Contains("category", candidate.MatchedSignals);
-        Assert.Contains("glass", candidate.MatchedSignals);
-        Assert.Contains("area", candidate.MatchedSignals);
-        Assert.Contains("system", candidate.MissingSignals);
-        Assert.DoesNotContain("system", candidate.MatchedSignals);
+        Assert.Equal("monza-close", candidate.HistoricalItemId);
+        Assert.Equal("TIER_1_EXACT_ECONOMIC_MATCH", candidate.MatchingTier);
+        Assert.True(candidate.MatchedSystem);
+    }
+
+    [Fact]
+    public void CandidateSearch_GlassMaterialCompatibilityBeatsPerfectGeometry()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(
+                Item("temp5-perfect", system: "MONZA", glass: "TEMPLADO", thickness: 5m, finish: "PP13", area: 9.35m),
+                Item("temp8-close", system: "MONZA", glass: "TEMPLADO", thickness: 8m, finish: "PP13", area: 9.00m)),
+            options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "MONZA", "TEMPLADO", 8m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10));
+
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("temp8-close", candidate.HistoricalItemId);
+        Assert.Equal("TIER_1_EXACT_ECONOMIC_MATCH", candidate.MatchingTier);
+        Assert.True(candidate.MatchedGlass);
+    }
+
+    [Fact]
+    public void CandidateSearch_GlassCompositionCompatibilityBeatsFamilyOnlyMatch()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(
+                Item("lam44-perfect", system: "MONZA", glass: "LAMINADO", thickness: 4m, composition: "4+4", finish: "PP13", area: 9.35m),
+                Item("lam55-close", system: "MONZA", glass: "LAMINADO", thickness: 5m, composition: "5+5", finish: "PP13", area: 9.00m)),
+            options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "MONZA", "LAMINADO", 5m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10,
+            GlassComposition: "5+5"));
+
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("lam55-close", candidate.HistoricalItemId);
+        Assert.Equal("TIER_1_EXACT_ECONOMIC_MATCH", candidate.MatchingTier);
+    }
+
+    [Fact]
+    public void CandidateSearch_FinishCompatibilityChangesComparableSet()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(
+                Item("finish-a", system: "MONZA", glass: "TEMPLADO", thickness: 6m, finish: "PP13", area: 9.35m),
+                Item("finish-b", system: "MONZA", glass: "TEMPLADO", thickness: 6m, finish: "WHITE", area: 9.35m)),
+            options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "MONZA", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "WHITE", 1m, 10));
+
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("finish-b", candidate.HistoricalItemId);
+        Assert.True(candidate.MatchedFinish);
+    }
+
+    [Fact]
+    public void CandidateSearch_MissingHistoricalFinishIsWeakerTier()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(
+                Item("missing-finish", system: "MONZA", glass: "TEMPLADO", thickness: 6m, finish: null, area: 9.35m),
+                Item("exact-finish", system: "MONZA", glass: "TEMPLADO", thickness: 6m, finish: "PP13", area: 9.00m)),
+            options);
+
+        var candidates = service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "MONZA", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10));
+
+        var candidate = Assert.Single(candidates);
+        Assert.Equal("exact-finish", candidate.HistoricalItemId);
+        Assert.Equal("TIER_1_EXACT_ECONOMIC_MATCH", candidate.MatchingTier);
+    }
+
+    [Theory]
+    [InlineData("VENECIA FERMO", "SISTEMA VENECIA SERIE 40")]
+    [InlineData("VENECIA MONZA", "SISTEMA VENECIA SERIE 50")]
+    [InlineData("VENECIA NAPOLES", "SISTEMA VENECIA SERIE 70")]
+    [InlineData("VENECIA MONACO", "SISTEMA VENECIA SERIE 100")]
+    [InlineData("PRIMAVERA SIENA", "SISTEMA SG4")]
+    [InlineData("PRIMAVERA LAGO", "SISTEMA SG5")]
+    [InlineData("PRIMAVERA LUCCA", "SISTEMA SG8")]
+    public void CandidateSearch_KnownSystemAliasesShareCanonicalIdentity(
+        string querySystem,
+        string historicalSystem)
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(Item("alias", historicalSystem, "TEMPLADO", 6m, "PP13", 9.35m)),
+            options);
+
+        var candidate = Assert.Single(service.Find(new HistoricalCandidateQuery(
+            "VENTANA", querySystem, "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10,
+            RequireSystemMatchedComparable: true)));
+
+        Assert.True(candidate.MatchedSystem);
+    }
+
+    [Fact]
+    public void CandidateSearch_SystemRequired_RejectsSystemMissingFallback()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(Item("missing", null, null, null, "PP13", 9.35m)),
+            options);
+        var legacyQuery = new HistoricalCandidateQuery(
+            "VENTANA", "VENECIA MONACO", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10);
+
+        Assert.Single(service.Find(legacyQuery));
+        Assert.Empty(service.Find(legacyQuery with
+        {
+            RequireSystemMatchedComparable = true
+        }));
+    }
+
+    [Fact]
+    public void CandidateSearch_SystemRequired_DoesNotRelaxGlassMismatch()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(Item("monaco-laminated", "SISTEMA VENECIA SERIE 100",
+                "LAMINADO", 5m, "PP13", 9.35m, "5+5")),
+            options);
+
+        Assert.Empty(service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "VENECIA MONACO", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10,
+            GlassComposition: "MONOLITICO",
+            RequireSystemMatchedComparable: true)));
+    }
+
+    [Fact]
+    public void CandidateSearch_DoesNotCollapsePocketIntoStandard()
+    {
+        var options = new HistoricalPricingOptions(_directory, 20);
+        var service = new HistoricalComparableCandidateService(
+            Corpus(Item("pocket", "SISTEMA VENECIA SERIE 70 TIPO POCKET",
+                "TEMPLADO", 6m, "PP13", 9.35m)),
+            options);
+
+        Assert.Empty(service.Find(new HistoricalCandidateQuery(
+            "VENTANA", "VENECIA NAPOLES", "TEMPLADO", 6m, "CORREDIZA",
+            null, null, 9.35m, "PP13", 1m, 10,
+            RequireSystemMatchedComparable: true)));
     }
 
     [Fact]
@@ -184,6 +351,77 @@ public sealed class HistoricalPricingTests : IDisposable
         var entry = archive.CreateEntry(name);
         using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
         writer.Write(content);
+    }
+
+    private static IHistoricalQuoteCorpus Corpus(params HistoricalQuoteItem[] items) =>
+        new StaticHistoricalQuoteCorpus(new HistoricalCorpusSnapshot(
+            true,
+            "test",
+            DateTimeOffset.UtcNow,
+            [],
+            [new HistoricalQuote(
+                "quote",
+                "quote",
+                null,
+                null,
+                null,
+                null,
+                "COP",
+                null,
+                new HistoricalQuoteSource("quote.xlsx", "quote.xlsx", "quote", "COTIZACION", []),
+                items,
+                [])]));
+
+    private static HistoricalQuoteItem Item(
+        string id,
+        string? system,
+        string? glass,
+        decimal? thickness,
+        string? finish,
+        decimal area,
+        string? composition = null) =>
+        new(
+            id,
+            id,
+            "VENTANA CORREDIZA",
+            null,
+            "CORREDIZA",
+            "CORREDIZA",
+            null,
+            null,
+            null,
+            null,
+            area,
+            area,
+            1m,
+            "1",
+            "VENTANA",
+            system,
+            system,
+            glass,
+            glass,
+            thickness,
+            composition,
+            finish,
+            finish,
+            1_000_000m,
+            1_000_000m,
+            null,
+            "COTIZACION",
+            [],
+            []);
+
+    private sealed class StaticHistoricalQuoteCorpus(
+        HistoricalCorpusSnapshot snapshot) : IHistoricalQuoteCorpus
+    {
+        public HistoricalCorpusSnapshot Current => snapshot;
+        public Task<HistoricalCorpusSnapshot> ReloadAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(snapshot);
+
+        public HistoricalCorpusAudit Audit() =>
+            new("test", 1, 1, 0, 0, 0, 1, 1, snapshot.Quotes.Sum(quote => quote.Items.Count),
+                snapshot.Quotes.Sum(quote => quote.Items.Count), 0, 0, 0, 0, 0);
     }
 
     public void Dispose() { if (Directory.Exists(_directory)) Directory.Delete(_directory, true); }

@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Application.PreQuotes.TechnicalProposalReadiness;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.GetRequirementTechnicalProposal;
@@ -223,6 +224,8 @@ public sealed class GetRequirementTechnicalProposalService(
                 finishById,
                 sourcesById))
             .ToArray();
+        var readiness = TechnicalProposalReadinessEvaluator.EvaluateProposal(
+            items.Select(item => item.Readiness).ToArray());
 
         return new RequirementTechnicalProposalReadModel(
             proposal.RequirementId,
@@ -242,6 +245,7 @@ public sealed class GetRequirementTechnicalProposalService(
             items.Count(item => item.RequiresReview),
             items.Count(item => item.IsTechnicallyComplete),
             items.Count(item => item.IsPriceable),
+            readiness,
             items);
     }
 
@@ -253,6 +257,7 @@ public sealed class GetRequirementTechnicalProposalService(
         IReadOnlyDictionary<string, SourceMetadata> sourcesById)
     {
         var extracted = item.ExtractedItem;
+        var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item);
         return new RequirementTechnicalProposalItemReadModel(
             item.Id,
             item.RequirementExtractedItemId,
@@ -264,6 +269,12 @@ public sealed class GetRequirementTechnicalProposalService(
             extracted.Quantity,
             extracted.WidthMillimeters,
             extracted.HeightMillimeters,
+            item.ManualQuantityOverride,
+            item.ManualWidthMillimetersOverride,
+            item.ManualHeightMillimetersOverride,
+            item.EffectiveQuantity,
+            item.EffectiveWidthMillimeters,
+            item.EffectiveHeightMillimeters,
             extracted.AreaSquareMeters,
             extracted.Confidence,
             extracted.ExtractionStatus.ToString(),
@@ -304,6 +315,7 @@ public sealed class GetRequirementTechnicalProposalService(
             item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
+            readiness,
             new RequirementTechnicalProposalHistoricalEvidenceReadModel(
                 item.HistoricalSimilarityStatus,
                 item.HistoricalSupportCount,
@@ -581,6 +593,7 @@ public sealed record RequirementTechnicalProposalReadModel(
     int ItemsRequiringReview,
     int TechnicallyCompleteItems,
     int PriceableItems,
+    RequirementTechnicalProposalReadinessReadModel Readiness,
     IReadOnlyList<RequirementTechnicalProposalItemReadModel> Items);
 
 public sealed record RequirementTechnicalProposalCommercialConfirmationReadModel(
@@ -599,6 +612,12 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     int? Quantity,
     int? WidthMm,
     int? HeightMm,
+    int? ManualQuantityOverride,
+    int? ManualWidthMmOverride,
+    int? ManualHeightMmOverride,
+    int? EffectiveQuantity,
+    int? EffectiveWidthMm,
+    int? EffectiveHeightMm,
     decimal? AreaM2,
     decimal? ExtractionConfidence,
     string ExtractionStatus,
@@ -614,6 +633,7 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
+    RequirementTechnicalProposalItemReadinessReadModel Readiness,
     RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
     RequirementTechnicalProposalTraceReadModel Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence);

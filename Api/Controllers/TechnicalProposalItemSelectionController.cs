@@ -52,7 +52,10 @@ public sealed class TechnicalProposalItemSelectionController(
                 request.ConfirmSuggested,
                 request.SystemId,
                 request.GlassId,
-                request.FinishId),
+                request.FinishId,
+                request.Quantity,
+                request.WidthMm,
+                request.HeightMm),
             cancellationToken);
 
         if (result.IsSuccess && result.Selection is { } selection)

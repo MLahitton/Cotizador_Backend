@@ -22,6 +22,7 @@ public sealed class BuildRequirementTechnicalProposalService(
 {
     private readonly ILogger<BuildRequirementTechnicalProposalService> _logger =
         logger ?? NullLogger<BuildRequirementTechnicalProposalService>.Instance;
+    private const int GlassPaneSegmentationToleranceMillimeters = 10;
     private const string SystemAlternativeReason = "SYSTEM_ALTERNATIVE";
     private const string SystemNotResolvedReason = "SYSTEM_NOT_RESOLVED";
     private const string GlassNotResolvedReason = "GLASS_NOT_RESOLVED";
@@ -149,6 +150,8 @@ public sealed class BuildRequirementTechnicalProposalService(
     {
         var glass = glassResolver.Resolve(item, glasses);
         var finish = finishResolver.Resolve(item, finishes);
+        var systemContext = ResolveSystemSelectionContext(item, commercialLine);
+        var primaryComponent = systemContext.PrimaryComponent;
 
         var systemSelection = historical.Selection;
         var suggestedSystem = systems.FirstOrDefault(system =>
@@ -174,6 +177,8 @@ public sealed class BuildRequirementTechnicalProposalService(
 
         var reviewReasons = new HashSet<string>(StringComparer.Ordinal);
         Add(reviewReasons, item.ReviewReasons);
+        Add(reviewReasons, primaryComponent.ReviewReasons);
+        Add(reviewReasons, systemContext.ReviewReasons);
         Add(reviewReasons, systemSelection.ReviewReasons);
         if (defaultGlass is null)
         {
@@ -342,7 +347,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         var hasJoint = false;
         foreach (var pane in geometry.Panes)
         {
-            if (!geometry.RequiresReview && pane.WidthMm > 1950)
+            if (geometry.CanEvaluateJoint && pane.WidthMm > 1950)
             {
                 hasJoint = true;
                 paneCodes.Add("TEMP_10");
@@ -410,7 +415,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         }
 
         var code = "LAM_4_4";
-        if (!geometry.RequiresReview
+        if (geometry.CanEvaluateJoint
             && geometry.Panes.Any(pane => pane.WidthMm > 1950
                 && pane.HeightMm > 2800))
         {
@@ -465,14 +470,21 @@ public sealed class BuildRequirementTechnicalProposalService(
     private sealed record GlassPaneGeometry(
         IReadOnlyList<GlassPane> Panes,
         IReadOnlyList<string> ResolutionReasons,
-        bool RequiresReview)
+        bool RequiresReview,
+        bool CanEvaluateJoint)
     {
         public static GlassPaneGeometry? Resolve(RequirementExtractedItem item)
         {
+            var isRoofGlass = IsRoofGlassDomain(item);
+            var isPocket = IsPocketDomain(item);
             if (item.WidthMillimeters is not { } width
                 || item.HeightMillimeters is not { } height)
             {
-                return TryResolveExplicitSegments(item);
+                return TryResolveExplicitSegments(item)
+                    ?? TryResolvePocketLeafGeometry(
+                        item,
+                        item.HeightMillimeters)
+                    ?? TryResolveRoofGeometry(item);
             }
 
             var explicitSegments = TryResolveExplicitSegments(item);
@@ -499,18 +511,253 @@ public sealed class BuildRequirementTechnicalProposalService(
                 return explicitWidths;
             }
 
+            var pocketLeafGeometry = TryResolvePocketLeafGeometry(
+                item,
+                height);
+            if (pocketLeafGeometry is not null)
+            {
+                return pocketLeafGeometry;
+            }
+
+            var evidencePanes = TryResolveEvidencePanes(
+                item,
+                width,
+                height);
+            if (evidencePanes is not null)
+            {
+                return evidencePanes;
+            }
+
+            var roofGeometry = TryResolveRoofGeometry(item);
+            if (roofGeometry is not null)
+            {
+                return roofGeometry;
+            }
+
+            if (isRoofGlass)
+            {
+                return new GlassPaneGeometry(
+                    [new GlassPane(width, height)],
+                    [GlassResolutionReasonCodes.GlassPaneGeometryUnresolved],
+                    true,
+                    false);
+            }
+
+            if (isPocket)
+            {
+                return new GlassPaneGeometry(
+                    [new GlassPane(width, height)],
+                    [GlassResolutionReasonCodes.GlassPaneGeometryUnresolved],
+                    true,
+                    false);
+            }
+
             if (item.PanelCount == 1)
             {
                 return new GlassPaneGeometry(
                     [new GlassPane(width, height)],
                     [GlassResolutionReasonCodes.GlassPaneDimensionsFromElement],
-                    false);
+                    false,
+                    true);
             }
 
             return new GlassPaneGeometry(
                 [new GlassPane(width, height)],
                 [GlassResolutionReasonCodes.GlassPaneGeometryUnresolved],
-                item.PanelCount is > 1 || width > 1950);
+                item.PanelCount is > 1 || width > 1950,
+                false);
+        }
+
+        private static GlassPaneGeometry? TryResolveRoofGeometry(
+            RequirementExtractedItem item)
+        {
+            if (!IsRoofGlassDomain(item)
+                || item.PanelCount is > 1)
+            {
+                return null;
+            }
+
+            foreach (var text in AssociatedEvidenceTexts(item))
+            {
+                if (TryExtractRoofLengthWidth(text) is not { } dimensions)
+                {
+                    continue;
+                }
+
+                var paneWidth = Math.Min(
+                    dimensions.LengthMm,
+                    dimensions.WidthMm);
+                var paneHeight = Math.Max(
+                    dimensions.LengthMm,
+                    dimensions.WidthMm);
+                return new GlassPaneGeometry(
+                    [new GlassPane(paneWidth, paneHeight)],
+                    [GlassResolutionReasonCodes
+                        .GlassPaneDimensionsFromRoofGeometry],
+                    false,
+                    true);
+            }
+
+            return null;
+        }
+
+        private static GlassPaneGeometry? TryResolvePocketLeafGeometry(
+            RequirementExtractedItem item,
+            int? height)
+        {
+            if (!IsPocketDomain(item)
+                || height is not { } paneHeight)
+            {
+                return null;
+            }
+
+            foreach (var text in AssociatedEvidenceTexts(item))
+            {
+                var repeatedLeafPanes = TryExtractRepeatedPocketLeafPanes(
+                    text,
+                    paneHeight);
+                if (repeatedLeafPanes is not null)
+                {
+                    return repeatedLeafPanes;
+                }
+
+                if (TryExtractPocketLeafWidth(text) is not { } leafWidth)
+                {
+                    continue;
+                }
+
+                return new GlassPaneGeometry(
+                    [new GlassPane(leafWidth, paneHeight)],
+                    [GlassResolutionReasonCodes
+                        .GlassPaneDimensionsFromPocketLeaf],
+                    false,
+                    true);
+            }
+
+            return null;
+        }
+
+        private static GlassPaneGeometry? TryExtractRepeatedPocketLeafPanes(
+            string text,
+            int height)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                text,
+                @"\b(?<count>\d{1,2})\s*(?:hojas|leafs|leaves|naves|panel(?:es)?\s+m[oÃ³]vil(?:es)?)\s*(?:de|=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!match.Success)
+            {
+                return null;
+            }
+
+            var count = int.Parse(
+                match.Groups["count"].Value,
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (count is <= 1 or > 20)
+            {
+                return null;
+            }
+
+            var width = ToMillimeters(
+                match.Groups["value"].Value,
+                match.Groups["unit"].Value);
+            return new GlassPaneGeometry(
+                Enumerable.Repeat(new GlassPane(width, height), count).ToArray(),
+                [GlassResolutionReasonCodes.GlassPaneDimensionsFromPocketLeaf],
+                false,
+                true);
+        }
+
+        private static int? TryExtractPocketLeafWidth(string text)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                text,
+                @"\b(?:(?:ancho|width)\s+(?:de\s+)?(?:hoja|leaf|nave|panel\s+m[oÃ³]vil|abertura|opening|vano\s+[uÃº]til|luz)|(?:hoja|leaf|nave|panel\s+m[oÃ³]vil|abertura|opening|vano\s+[uÃº]til|luz)\s+(?:width|ancho))\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success
+                ? ToMillimeters(
+                    match.Groups["value"].Value,
+                    match.Groups["unit"].Value)
+                : null;
+        }
+
+        private static bool IsPocketDomain(RequirementExtractedItem item) =>
+            AssociatedPocketContextTexts(item)
+                .Any(text =>
+                    Contains(text, "POCKET")
+                    || Contains(text, "BOLSILLO"));
+
+        private static IEnumerable<string?> AssociatedPocketContextTexts(
+            RequirementExtractedItem item)
+        {
+            yield return item.Description;
+            yield return item.FunctionalType;
+            yield return item.Operation;
+            yield return item.Arrangement;
+            yield return item.Modulation;
+            yield return item.OpeningDirection;
+            yield return item.GeometryType;
+            yield return item.AssemblyType;
+            foreach (var feature in item.SpecialFeatures)
+            {
+                yield return feature;
+            }
+
+            foreach (var text in item.Evidence.Select(evidence => evidence.Text))
+            {
+                yield return text;
+            }
+
+            foreach (var segment in item.Segments)
+            {
+                yield return segment.Role;
+                yield return segment.Operation;
+                yield return segment.GeometryType;
+                yield return segment.EvidenceText;
+            }
+        }
+
+        private static bool IsRoofGlassDomain(RequirementExtractedItem item) =>
+            item.ElementType == StructuredElementType.Skylight
+            || Contains(item.FunctionalType, "SKYLIGHT")
+            || Contains(item.FunctionalType, "CLARABOYA")
+            || Contains(item.FunctionalType, "TECHO EN VIDRIO")
+            || Contains(item.FunctionalType, "CUBIERTA EN VIDRIO")
+            || Contains(item.FunctionalType, "ROOF GLASS")
+            || Contains(item.FunctionalType, "GLASS ROOF")
+            || Contains(item.Description, "CLARABOYA")
+            || Contains(item.Description, "TECHO EN VIDRIO")
+            || Contains(item.Description, "CUBIERTA EN VIDRIO")
+            || Contains(item.Description, "ROOF GLASS")
+            || Contains(item.Description, "GLASS ROOF");
+
+        private static RoofGlassDimensions? TryExtractRoofLengthWidth(
+            string text)
+        {
+            var length = TryExtractLabeledDimension(
+                text,
+                "(?:largo|length)");
+            var width = TryExtractLabeledDimension(
+                text,
+                "(?:ancho|width)");
+            return length is { } lengthMm && width is { } widthMm
+                ? new RoofGlassDimensions(lengthMm, widthMm)
+                : null;
+        }
+
+        private static int? TryExtractLabeledDimension(
+            string text,
+            string labelPattern)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                text,
+                $@"\b{labelPattern}\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success
+                ? ToMillimeters(
+                    match.Groups["value"].Value,
+                    match.Groups["unit"].Value)
+                : null;
         }
 
         private static GlassPaneGeometry? TryResolveExplicitHorizontalPanes(
@@ -545,7 +792,8 @@ public sealed class BuildRequirementTechnicalProposalService(
                 heights.Select(value => new GlassPane(width, value)).ToArray(),
                 [GlassResolutionReasonCodes
                     .GlassPaneDimensionsFromSubmodules],
-                false);
+                false,
+                true);
         }
 
         private static GlassPaneGeometry? TryResolveExplicitSegments(
@@ -565,7 +813,8 @@ public sealed class BuildRequirementTechnicalProposalService(
                     panes,
                     [GlassResolutionReasonCodes
                         .GlassPaneDimensionsFromSubmodules],
-                    false);
+                    false,
+                    true);
         }
 
         private static GlassPaneGeometry? TryResolveExplicitVerticalPanes(
@@ -600,8 +849,204 @@ public sealed class BuildRequirementTechnicalProposalService(
                 widths.Select(value => new GlassPane(value, height)).ToArray(),
                 [GlassResolutionReasonCodes
                     .GlassPaneDimensionsFromSubmodules],
-                false);
+                false,
+                    true);
         }
+
+        private static GlassPaneGeometry? TryResolveEvidencePanes(
+            RequirementExtractedItem item,
+            int width,
+            int height)
+        {
+            foreach (var text in AssociatedEvidenceTexts(item))
+            {
+                var panes = TryResolveEvidencePanes(text, width, height);
+                if (panes is not null)
+                {
+                    return panes;
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> AssociatedEvidenceTexts(
+            RequirementExtractedItem item)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Modulation))
+            {
+                yield return item.Modulation;
+            }
+
+            if (!string.IsNullOrWhiteSpace(item.Arrangement))
+            {
+                yield return item.Arrangement;
+            }
+
+            foreach (var evidence in item.Evidence)
+            {
+                if (!string.IsNullOrWhiteSpace(evidence.Text))
+                {
+                    yield return evidence.Text;
+                }
+            }
+
+            foreach (var segment in item.Segments)
+            {
+                if (!string.IsNullOrWhiteSpace(segment.EvidenceText))
+                {
+                    yield return segment.EvidenceText;
+                }
+            }
+        }
+
+        private static GlassPaneGeometry? TryResolveEvidencePanes(
+            string text,
+            int width,
+            int height)
+        {
+            var dimensions = ExtractExplicitDimensions(text);
+            if (dimensions.Length == 0)
+            {
+                return null;
+            }
+
+            var expanded = ExpandRepeatedDimensions(text, dimensions);
+            var orientation = ResolveSegmentationOrientation(text, expanded, width, height);
+            return orientation switch
+            {
+                PaneSegmentationOrientation.Vertical => new GlassPaneGeometry(
+                    expanded.Select(value => new GlassPane(width, value)).ToArray(),
+                    [GlassResolutionReasonCodes.GlassPaneDimensionsFromEvidence],
+                    false,
+                    true),
+                PaneSegmentationOrientation.Horizontal => new GlassPaneGeometry(
+                    expanded.Select(value => new GlassPane(value, height)).ToArray(),
+                    [GlassResolutionReasonCodes.GlassPaneDimensionsFromEvidence],
+                    false,
+                    true),
+                _ => null
+            };
+        }
+
+        private static int[] ExtractExplicitDimensions(string text) =>
+            System.Text.RegularExpressions.Regex
+                .Matches(
+                    text,
+                    @"(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Select(match => ToMillimeters(
+                    match.Groups["value"].Value,
+                    match.Groups["unit"].Value))
+                .Where(value => value > 0)
+                .ToArray();
+
+        private static int[] ExpandRepeatedDimensions(
+            string text,
+            int[] dimensions)
+        {
+            if (dimensions.Length != 1
+                || !Contains(text, "CADA UNO"))
+            {
+                if (dimensions.Length < 2
+                    || !Contains(text, "CADA UNO"))
+                {
+                    return dimensions;
+                }
+            }
+
+            var count = System.Text.RegularExpressions.Regex
+                .Match(
+                    text,
+                    @"(?<count>\d{1,2})\s*(tramos|panos|paÃ±os|paños|cuerpos|segmentos)",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (!count.Success)
+            {
+                return dimensions;
+            }
+
+            var value = int.Parse(
+                count.Groups["count"].Value,
+                System.Globalization.CultureInfo.InvariantCulture);
+            return value is > 1 and <= 20
+                ? Enumerable.Repeat(dimensions[^1], value).ToArray()
+                : dimensions;
+        }
+
+        private static PaneSegmentationOrientation ResolveSegmentationOrientation(
+            string text,
+            int[] dimensions,
+            int width,
+            int height)
+        {
+            if (dimensions.Length < 2)
+            {
+                return PaneSegmentationOrientation.Unknown;
+            }
+
+            var verticalHint = Contains(text, "TRAMO SUPERIOR")
+                || Contains(text, "SUPERIOR")
+                || Contains(text, "CENTRAL")
+                || Contains(text, "INFERIOR")
+                || Contains(text, "ALTURA")
+                || Contains(text, "ALTO")
+                || Contains(text, "VERTICAL");
+            var horizontalHint = Contains(text, "ANCHO")
+                || Contains(text, "WIDTH")
+                || Contains(text, "HORIZONTAL");
+
+            var verticalMatches = SumMatches(dimensions, height);
+            var horizontalMatches = SumMatches(dimensions, width);
+            if (verticalHint && verticalMatches)
+            {
+                return PaneSegmentationOrientation.Vertical;
+            }
+
+            if (horizontalHint && horizontalMatches)
+            {
+                return PaneSegmentationOrientation.Horizontal;
+            }
+
+            if (verticalMatches && !horizontalMatches)
+            {
+                return PaneSegmentationOrientation.Vertical;
+            }
+
+            if (horizontalMatches && !verticalMatches)
+            {
+                return PaneSegmentationOrientation.Horizontal;
+            }
+
+            return PaneSegmentationOrientation.Unknown;
+        }
+
+        private static bool SumMatches(int[] values, int expected) =>
+            Math.Abs(values.Sum() - expected)
+            <= GlassPaneSegmentationToleranceMillimeters;
+
+        private static int ToMillimeters(string value, string unit)
+        {
+            var number = decimal.Parse(
+                value.Replace(',', '.'),
+                System.Globalization.CultureInfo.InvariantCulture);
+            var multiplier = unit.Trim().ToUpperInvariant() switch
+            {
+                "M" => 1000m,
+                "CM" => 10m,
+                _ => 1m
+            };
+
+            return (int)Math.Round(number * multiplier, MidpointRounding.AwayFromZero);
+        }
+
+        private enum PaneSegmentationOrientation
+        {
+            Unknown,
+            Vertical,
+            Horizontal
+        }
+
+        private sealed record RoofGlassDimensions(int LengthMm, int WidthMm);
     }
 
     private static FinishTypeCatalogReadModel? FindDefaultFinish(
@@ -689,12 +1134,38 @@ public sealed class BuildRequirementTechnicalProposalService(
 
     private static SgTechnicalSelectionInput MapSystemInput(
         RequirementExtractedItem item,
-        RequirementCommercialLine commercialLine) =>
-        new(
-            item.FunctionalType,
-            item.Operation,
-            item.WidthMillimeters,
-            item.HeightMillimeters,
+        RequirementCommercialLine commercialLine)
+        => ResolveSystemSelectionContext(item, commercialLine).Input;
+
+    private static SystemSelectionContext ResolveSystemSelectionContext(
+        RequirementExtractedItem item,
+        RequirementCommercialLine commercialLine)
+    {
+        var primary = ResolvePrimaryComponent(item);
+        var functionalType = primary.OverridesItem
+            ? primary.FunctionalType
+            : item.FunctionalType;
+        var operation = primary.OverridesItem
+            ? primary.Operation
+            : item.Operation;
+
+        var geometry = ResolvePrimaryComponentGeometry(item, primary);
+        var widthMillimeters = geometry.WidthMillimeters ?? item.WidthMillimeters;
+        var heightMillimeters = geometry.HeightMillimeters ?? item.HeightMillimeters;
+        var reviewReasons = new List<string>();
+        if (geometry.IsUnresolved
+            && IsDimensionDependentFunctionalClassification(functionalType, operation))
+        {
+            widthMillimeters = null;
+            heightMillimeters = null;
+            reviewReasons.Add(SgTechnicalSelectionReviewReasons.PrimaryComponentGeometryUnresolved);
+        }
+
+        var input = new SgTechnicalSelectionInput(
+            functionalType,
+            operation,
+            widthMillimeters,
+            heightMillimeters,
             item.AreaSquareMeters,
             item.PanelCount,
             item.MovablePanelCount,
@@ -705,7 +1176,304 @@ public sealed class BuildRequirementTechnicalProposalService(
             item.GeometryType,
             ToSelectorLine(commercialLine),
             item.RequestedSystemRaw ?? item.RequestedProfileRaw,
-            item.Arrangement);
+            item.Arrangement,
+            null,
+            item.Description,
+            primary.OverridesItem && !geometry.IsUnresolved
+                ? geometry.HeightMillimeters
+                : null,
+            item.Segments.Count > 1 || geometry.IsUnresolved,
+            AssociatedSystemContextTexts(item));
+
+        return new(input, primary, geometry, reviewReasons);
+    }
+
+    private static IReadOnlyList<string> AssociatedSystemContextTexts(
+        RequirementExtractedItem item)
+    {
+        var values = new List<string?>
+        {
+            item.Description,
+            item.FunctionalType,
+            item.Operation,
+            item.Arrangement,
+            item.Modulation,
+            item.OpeningDirection,
+            item.GeometryType,
+            item.AssemblyType,
+            item.RequestedSystemRaw,
+            item.RequestedProfileRaw
+        };
+
+        values.AddRange(item.SpecialFeatures);
+        values.AddRange(item.Evidence.Select(evidence => evidence.Text));
+        values.AddRange(item.Segments.Select(segment => segment.EvidenceText));
+        values.AddRange(item.Segments.Select(segment => segment.Role));
+        values.AddRange(item.Segments.Select(segment => segment.Operation));
+        values.AddRange(item.Segments.Select(segment => segment.GeometryType));
+
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static AssemblyPrimaryComponentResolution ResolvePrimaryComponent(
+        RequirementExtractedItem item)
+    {
+        var roles = item.Segments
+            .Select(segment => ComponentRole(segment.Role ?? segment.Operation))
+            .Where(role => role is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (roles.Length == 0)
+        {
+            return AssemblyPrimaryComponentResolution.NoOverride();
+        }
+
+        var movable = roles
+            .Select(role => MovableFunctionalType(role, item))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (movable.Length == 1)
+        {
+            var primaryRole = roles.First(role => MovableFunctionalType(role, item) == movable[0]);
+            return AssemblyPrimaryComponentResolution.Override(
+                movable[0],
+                primaryRole,
+                OperationFromFunctionalType(movable[0]));
+        }
+
+        if (movable.Length > 1)
+        {
+            return AssemblyPrimaryComponentResolution.RequiresReview(
+                [SgTechnicalSelectionReviewReasons
+                    .AssemblyMultipleMovableTypesRequiresReview]);
+        }
+
+        var specialDomain = PreservedSpecialFunctionalDomain(item);
+        if (specialDomain is not null)
+        {
+            return AssemblyPrimaryComponentResolution.Override(
+                specialDomain,
+                null,
+                item.Operation);
+        }
+
+        if (roles.Contains("FIXED", StringComparer.Ordinal))
+        {
+            return AssemblyPrimaryComponentResolution.Override("FIXED", "FIXED", "FIXED");
+        }
+
+        if (roles.Any(role => role is "GRILLE" or "LOUVER"))
+        {
+            return AssemblyPrimaryComponentResolution.Override("GRILLE", "GRILLE", null);
+        }
+
+        return AssemblyPrimaryComponentResolution.RequiresReview(
+            [SgTechnicalSelectionReviewReasons
+                .TechnicalSelectionCatalogMetadataIncomplete]);
+    }
+
+    private static string? PreservedFunctionalType(
+        RequirementExtractedItem item,
+        string primaryRole)
+    {
+        var functionalType = NormalizedFunctionalType(item.FunctionalType);
+        if (functionalType is null)
+        {
+            return null;
+        }
+
+        if (IsSpecialFunctionalDomain(functionalType))
+        {
+            return functionalType;
+        }
+
+        return primaryRole switch
+        {
+            "SLIDING" when functionalType is "SLIDING_WINDOW" or "SLIDING_DOOR" =>
+                functionalType,
+            "PROJECTING" when functionalType == "PROJECTING" => functionalType,
+            "SWING" when functionalType == "SWING_DOOR" => functionalType,
+            "CASEMENT" when functionalType == "CASEMENT" => functionalType,
+            "FOLDING" when functionalType is "FOLDING_WINDOW" or "FOLDING_DOOR" =>
+                functionalType,
+            "FIXED" when functionalType == "FIXED" => functionalType,
+            "GRILLE" when functionalType is "GRILLE" or "LOUVER" => functionalType,
+            _ => null
+        };
+    }
+
+    private static bool IsSpecialFunctionalDomain(string functionalType) =>
+        functionalType is "SHOWER_DIVISION"
+            or "SKYLIGHT"
+            or "RAILING"
+            or "FACADE";
+
+    private static string? PreservedSpecialFunctionalDomain(
+        RequirementExtractedItem item)
+    {
+        var functionalType = NormalizedFunctionalType(item.FunctionalType);
+        return functionalType is not null && IsSpecialFunctionalDomain(functionalType)
+            ? functionalType
+            : null;
+    }
+
+    private static string? ComponentRole(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.Trim().ToUpperInvariant()
+            .Replace('-', '_')
+            .Replace(' ', '_');
+        return normalized switch
+        {
+            "SLIDING" or "SLIDING_DOOR" or "SLIDING_WINDOW" => "SLIDING",
+            "PROJECTING" => "PROJECTING",
+            "SWING" or "SWING_DOOR" => "SWING",
+            "CASEMENT" => "CASEMENT",
+            "FOLDING" or "FOLDING_DOOR" or "FOLDING_WINDOW" => "FOLDING",
+            "FIXED" => "FIXED",
+            "GRILLE" or "LOUVER" => "GRILLE",
+            _ => null
+        };
+    }
+
+    private static string? MovableFunctionalType(
+        string role,
+        RequirementExtractedItem item) =>
+        role switch
+        {
+            "SLIDING" => PreservedFunctionalType(item, role)
+                ?? (item.ElementType == StructuredElementType.Window
+                ? "SLIDING_WINDOW"
+                : "SLIDING_DOOR"),
+            "PROJECTING" => PreservedFunctionalType(item, role) ?? "PROJECTING",
+            "SWING" => PreservedFunctionalType(item, role) ?? "SWING_DOOR",
+            "CASEMENT" => PreservedFunctionalType(item, role) ?? "CASEMENT",
+            "FOLDING" => PreservedFunctionalType(item, role)
+                ?? (item.ElementType == StructuredElementType.Window
+                ? "FOLDING_WINDOW"
+                : "FOLDING_DOOR"),
+            _ => null
+        };
+
+    private static string? OperationFromFunctionalType(string functionalType) =>
+        functionalType switch
+        {
+            "SLIDING_DOOR" or "SLIDING_WINDOW" => "SLIDING",
+            "PROJECTING" => "PROJECTING",
+            "SWING_DOOR" => "SWING",
+            "CASEMENT" => "CASEMENT",
+            "FOLDING_DOOR" or "FOLDING_WINDOW" => "FOLDING",
+            _ => null
+        };
+
+    private static PrimaryComponentGeometryResolution ResolvePrimaryComponentGeometry(
+        RequirementExtractedItem item,
+        AssemblyPrimaryComponentResolution primary)
+    {
+        if (!primary.OverridesItem || primary.PrimaryRole is null)
+        {
+            return PrimaryComponentGeometryResolution.FromElement(
+                item.WidthMillimeters,
+                item.HeightMillimeters);
+        }
+
+        var matchingSegments = item.Segments
+            .Where(segment => ComponentRole(segment.Role ?? segment.Operation) == primary.PrimaryRole)
+            .OrderBy(segment => segment.Sequence)
+            .ToArray();
+
+        var explicitGeometry = matchingSegments
+            .Where(segment => segment.WidthMillimeters is > 0
+                && segment.HeightMillimeters is > 0)
+            .OrderByDescending(segment => segment.HeightMillimeters)
+            .ThenByDescending(segment => segment.WidthMillimeters)
+            .FirstOrDefault();
+
+        if (explicitGeometry is not null)
+        {
+            return PrimaryComponentGeometryResolution.FromComponent(
+                explicitGeometry.WidthMillimeters,
+                explicitGeometry.HeightMillimeters);
+        }
+
+        if (item.Segments.Count == 0
+            || (item.Segments.Count == 1 && matchingSegments.Length == 1))
+        {
+            return PrimaryComponentGeometryResolution.FromElement(
+                item.WidthMillimeters,
+                item.HeightMillimeters);
+        }
+
+        return PrimaryComponentGeometryResolution.Unresolved();
+    }
+
+    private static bool IsDimensionDependentFunctionalClassification(
+        string? functionalType,
+        string? operation)
+    {
+        var normalizedFunctionalType = NormalizedFunctionalType(functionalType);
+        var normalizedOperation = NormalizedFunctionalType(operation);
+
+        return normalizedFunctionalType is "WINDOW" or "SLIDING_WINDOW"
+            || normalizedOperation is "SLIDING";
+    }
+
+    private sealed record SystemSelectionContext(
+        SgTechnicalSelectionInput Input,
+        AssemblyPrimaryComponentResolution PrimaryComponent,
+        PrimaryComponentGeometryResolution Geometry,
+        IReadOnlyList<string> ReviewReasons);
+
+    private sealed record AssemblyPrimaryComponentResolution(
+        bool OverridesItem,
+        string? FunctionalType,
+        string? PrimaryRole,
+        string? Operation,
+        IReadOnlyList<string> ReviewReasons)
+    {
+        public static AssemblyPrimaryComponentResolution NoOverride() =>
+            new(false, null, null, null, []);
+
+        public static AssemblyPrimaryComponentResolution Override(
+            string functionalType,
+            string? primaryRole,
+            string? operation) =>
+            new(true, functionalType, primaryRole, operation, []);
+
+        public static AssemblyPrimaryComponentResolution RequiresReview(
+            IReadOnlyList<string> reviewReasons) =>
+            new(false, null, null, null, reviewReasons);
+    }
+
+    private sealed record PrimaryComponentGeometryResolution(
+        int? WidthMillimeters,
+        int? HeightMillimeters,
+        bool IsUnresolved)
+    {
+        public static PrimaryComponentGeometryResolution FromElement(
+            int? widthMillimeters,
+            int? heightMillimeters) =>
+            new(widthMillimeters, heightMillimeters, false);
+
+        public static PrimaryComponentGeometryResolution FromComponent(
+            int? widthMillimeters,
+            int? heightMillimeters) =>
+            new(widthMillimeters, heightMillimeters, false);
+
+        public static PrimaryComponentGeometryResolution Unresolved() =>
+            new(null, null, true);
+    }
 
     private static string? ToSelectorLine(RequirementCommercialLine commercialLine) =>
         commercialLine switch
@@ -716,6 +1484,13 @@ public sealed class BuildRequirementTechnicalProposalService(
             RequirementCommercialLine.Signature => "SIGNATURE",
             _ => null
         };
+
+    private static string? NormalizedFunctionalType(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToUpperInvariant()
+                .Replace('-', '_')
+                .Replace(' ', '_');
 
     private static HistoricalCandidateQuery MapHistoricalQuery(
         RequirementExtractedItem item) =>

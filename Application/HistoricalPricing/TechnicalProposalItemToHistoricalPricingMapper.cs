@@ -24,8 +24,10 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
 
         var item = proposalItem.ExtractedItem;
         var warnings = new List<string>();
-        var area = ResolvePricingArea(item, warnings);
-        var quantity = item.Quantity is > 0 ? item.Quantity.Value : 0m;
+        var area = ResolvePricingArea(proposalItem, warnings);
+        var quantity = proposalItem.EffectiveQuantity is > 0
+            ? proposalItem.EffectiveQuantity.Value
+            : 0m;
         if (quantity <= 0)
         {
             warnings.Add("QUANTITY_MISSING");
@@ -37,8 +39,8 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
             GlassValue(glass),
             GlassThickness(glass) ?? item.GlassThicknessMm,
             item.Arrangement ?? item.Operation ?? item.FunctionalType,
-            item.WidthMillimeters,
-            item.HeightMillimeters,
+            proposalItem.EffectiveWidthMillimeters,
+            proposalItem.EffectiveHeightMillimeters,
             area,
             FinishValue(finish),
             quantity > 0 ? quantity : null,
@@ -54,10 +56,13 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
     }
 
     private static decimal? ResolvePricingArea(
-        RequirementExtractedItem item,
+        RequirementTechnicalProposalItem proposalItem,
         ICollection<string> warnings)
     {
-        var geometry = GeometryArea(item.WidthMillimeters, item.HeightMillimeters);
+        var item = proposalItem.ExtractedItem;
+        var geometry = GeometryArea(
+            proposalItem.EffectiveWidthMillimeters,
+            proposalItem.EffectiveHeightMillimeters);
         var reported = item.AreaSquareMeters;
         if (geometry is > 0 && reported is > 0)
         {

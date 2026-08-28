@@ -92,8 +92,10 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
         var category = HistoricalQuoteNormalizer.NormalizeText(query.Category);
         var system = HistoricalQuoteNormalizer.NormalizeText(query.System);
         var glass = HistoricalQuoteNormalizer.GlassFamily(query.Glass) ?? HistoricalQuoteNormalizer.NormalizeText(query.Glass);
+        var glassComposition = HistoricalQuoteNormalizer.NormalizeText(query.GlassComposition);
         var configuration = HistoricalQuoteNormalizer.NormalizeText(query.Configuration);
         var finish = HistoricalQuoteNormalizer.NormalizeText(query.Finish);
+        var commercialLine = HistoricalQuoteNormalizer.NormalizeText(query.CommercialLine);
         var excludedCandidateIds = new HashSet<string>(
             query.ExcludedCandidateIds ?? [],
             StringComparer.OrdinalIgnoreCase);
@@ -101,7 +103,7 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
             query.ExcludedQuoteIds ?? [],
             StringComparer.OrdinalIgnoreCase);
         var top = Math.Clamp(query.Top ?? _options.CandidateTopK, 1, 100);
-        return _corpus.Current.Quotes.SelectMany(quote => quote.Items.Select(item => (quote, item)))
+        var candidates = _corpus.Current.Quotes.SelectMany(quote => quote.Items.Select(item => (quote, item)))
             .Where(pair => pair.item.IsPricingCapable)
             .Where(pair => category is null || pair.item.Category is null || pair.item.Category == category)
             .Where(pair => !excludedQuoteIds.Contains(pair.quote.Id))
@@ -109,6 +111,18 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
             .DistinctBy(pair => (pair.quote.Id, pair.item.Id))
             .Select(pair => Score(pair.quote, pair.item))
             .Where(candidate => candidate.PreliminaryScore > 0)
+            .Where(candidate => candidate.MatchingTier != "NO_COMPARABLE")
+            .Where(candidate => !query.RequireSystemMatchedComparable
+                || candidate.MatchedSystem)
+            .ToArray();
+        if (candidates.Length == 0)
+        {
+            return [];
+        }
+
+        var selectedTier = candidates.Min(candidate => TierRank(candidate.MatchingTier));
+        return candidates
+            .Where(candidate => TierRank(candidate.MatchingTier) == selectedTier)
             .OrderByDescending(candidate => candidate.PreliminaryScore)
             .ThenBy(candidate => candidate.HistoricalQuoteId, StringComparer.Ordinal)
             .ThenBy(candidate => candidate.HistoricalItemId, StringComparer.Ordinal)
@@ -120,7 +134,7 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
             var matched = new List<string>();
             var missing = new List<string>();
             AddExact("category", category, item.Category, HistoricalCandidateRankingWeights.Category);
-            AddText("system", system, item.SystemNormalized, item.Description, HistoricalCandidateRankingWeights.System);
+            AddSystem(system, item.SystemNormalized, item.Description, HistoricalCandidateRankingWeights.System);
             AddExact("glass", glass, item.GlassFamily, HistoricalCandidateRankingWeights.GlassFamily);
             AddText("configuration", configuration, item.ConfigurationNormalized, item.Description, HistoricalCandidateRankingWeights.Configuration);
             AddExact("finish", finish, item.FinishNormalized, HistoricalCandidateRankingWeights.Finish);
@@ -158,11 +172,18 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
                 { score += HistoricalCandidateRankingWeights.Quantity; matched.Add("quantity"); }
                 else missing.Add("quantity");
             }
+            var match = ClassifyEconomicCompatibility(item);
             return new HistoricalComparableCandidate(quote.Id, item.Id, item.Reference, item.Description, item.PublicUnitPrice!.Value,
                 item.PublicTotal, item.Category, item.SystemNormalized, item.GlassFamily, item.GlassThickness,
                 item.GlassComposition, item.ConfigurationNormalized, item.Width, item.Height, actualArea,
                 item.Quantity, item.FinishNormalized, score, matched, missing,
-                item.Issues.Any(issue => issue.Code == "HistoricalAreaMismatch"));
+                item.Issues.Any(issue => issue.Code == "HistoricalAreaMismatch"),
+                match.Tier,
+                match.FallbackReasons,
+                match.MatchedSystem,
+                match.MatchedGlass,
+                match.MatchedFinish,
+                match.MatchedCommercialLine);
 
             void AddExact(string signal, string? expected, string? actual, decimal weight)
             {
@@ -178,6 +199,159 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
                 { score += weight; matched.Add(signal); }
                 else missing.Add(signal);
             }
+            void AddSystem(string? expected, string? primary, string? fallback, decimal weight)
+            {
+                if (expected is null) return;
+                if (SystemMatches(expected, primary)
+                    || SystemMatches(expected, HistoricalQuoteNormalizer.NormalizeText(fallback)))
+                { score += weight; matched.Add("system"); }
+                else missing.Add("system");
+            }
+        }
+
+        EconomicCompatibility ClassifyEconomicCompatibility(HistoricalQuoteItem item)
+        {
+            var fallback = new List<string>();
+            var systemMatch = CompatibleSystem(
+                system,
+                item.SystemNormalized,
+                fallback,
+                out var systemKnownMismatch);
+            var glassMatch = CompatibleGlass(item, fallback, out var glassKnownMismatch);
+            var finishMatch = CompatibleText(finish, item.FinishNormalized, false, "FINISH", fallback, out var finishKnownMismatch);
+            var lineMatch = commercialLine is null;
+
+            if (systemKnownMismatch || glassKnownMismatch || finishKnownMismatch)
+            {
+                return new EconomicCompatibility(
+                    "NO_COMPARABLE",
+                    fallback,
+                    false,
+                    false,
+                    false,
+                    false);
+            }
+
+            var tier = fallback.Count switch
+            {
+                0 => "TIER_1_EXACT_ECONOMIC_MATCH",
+                <= 2 => "TIER_2_MISSING_HISTORICAL_SIGNAL_FALLBACK",
+                _ => "TIER_3_PARTIAL_HISTORICAL_SIGNAL_FALLBACK"
+            };
+            if (commercialLine is not null)
+            {
+                fallback.Add("COMMERCIAL_LINE_NOT_AVAILABLE_IN_HISTORICAL_CORPUS");
+            }
+
+            return new EconomicCompatibility(
+                tier,
+                fallback,
+                systemMatch,
+                glassMatch,
+                finishMatch,
+                lineMatch);
+        }
+
+        bool CompatibleGlass(
+            HistoricalQuoteItem item,
+            ICollection<string> fallback,
+            out bool knownMismatch)
+        {
+            knownMismatch = false;
+            if (glass is null && query.GlassThickness is null && glassComposition is null)
+            {
+                return true;
+            }
+
+            if (glass is not null)
+            {
+                if (item.GlassFamily is null)
+                {
+                    fallback.Add("GLASS_MISSING_IN_HISTORICAL_ITEM");
+                    return false;
+                }
+                if (!string.Equals(item.GlassFamily, glass, StringComparison.OrdinalIgnoreCase))
+                {
+                    knownMismatch = true;
+                    return false;
+                }
+            }
+
+            if (query.GlassThickness is not null)
+            {
+                if (item.GlassThickness is null)
+                {
+                    fallback.Add("GLASS_THICKNESS_MISSING_IN_HISTORICAL_ITEM");
+                    return glass is not null;
+                }
+                if (Math.Abs(item.GlassThickness.Value - query.GlassThickness.Value)
+                    > HistoricalCandidateRankingWeights.ThicknessTolerance)
+                {
+                    knownMismatch = true;
+                    return false;
+                }
+            }
+
+            if (glassComposition is not null)
+            {
+                if (item.GlassComposition is null)
+                {
+                    fallback.Add("GLASS_COMPOSITION_MISSING_IN_HISTORICAL_ITEM");
+                    return glass is not null || query.GlassThickness is not null;
+                }
+                if (!string.Equals(item.GlassComposition, glassComposition, StringComparison.OrdinalIgnoreCase))
+                {
+                    knownMismatch = true;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool CompatibleText(
+            string? expected,
+            string? actual,
+            bool requiredWhenExpected,
+            string signal,
+            ICollection<string> fallback,
+            out bool knownMismatch)
+        {
+            knownMismatch = false;
+            if (expected is null)
+            {
+                return true;
+            }
+            if (actual is null)
+            {
+                fallback.Add($"{signal}_MISSING_IN_HISTORICAL_ITEM");
+                return !requiredWhenExpected;
+            }
+            if (TextMatches(expected, actual) || TextMatches(actual, expected))
+            {
+                return true;
+            }
+
+            knownMismatch = true;
+            return false;
+        }
+
+        bool CompatibleSystem(
+            string? expected,
+            string? actual,
+            ICollection<string> fallback,
+            out bool knownMismatch)
+        {
+            knownMismatch = false;
+            if (expected is null) return true;
+            if (actual is null)
+            {
+                fallback.Add("SYSTEM_MISSING_IN_HISTORICAL_ITEM");
+                return false;
+            }
+            if (SystemMatches(expected, actual)) return true;
+            knownMismatch = true;
+            return false;
         }
     }
 
@@ -187,4 +361,30 @@ public sealed class HistoricalComparableCandidateService : IHistoricalComparable
         if (actual == expected) return true;
         return (" " + actual + " ").Contains(" " + expected + " ", StringComparison.Ordinal);
     }
+
+    private static bool SystemMatches(string expected, string? actual)
+    {
+        if (actual is null) return false;
+        var expectedIdentity = HistoricalQuoteNormalizer.CanonicalSystemIdentity(expected);
+        var actualIdentity = HistoricalQuoteNormalizer.CanonicalSystemIdentity(actual);
+        return expectedIdentity is not null && actualIdentity is not null
+            ? expectedIdentity == actualIdentity
+            : TextMatches(expected, actual) || TextMatches(actual, expected);
+    }
+
+    private static int TierRank(string tier) => tier switch
+    {
+        "TIER_1_EXACT_ECONOMIC_MATCH" => 1,
+        "TIER_2_MISSING_HISTORICAL_SIGNAL_FALLBACK" => 2,
+        "TIER_3_PARTIAL_HISTORICAL_SIGNAL_FALLBACK" => 3,
+        _ => int.MaxValue
+    };
+
+    private sealed record EconomicCompatibility(
+        string Tier,
+        IReadOnlyList<string> FallbackReasons,
+        bool MatchedSystem,
+        bool MatchedGlass,
+        bool MatchedFinish,
+        bool MatchedCommercialLine);
 }

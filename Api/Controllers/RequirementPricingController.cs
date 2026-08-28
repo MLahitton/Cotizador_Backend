@@ -41,6 +41,40 @@ public sealed class RequirementPricingController(
         return MapFailure(result.Failure);
     }
 
+    [HttpPost("items/{technicalProposalItemId:guid}/reprice")]
+    [ProducesResponseType(typeof(RepriceRequirementPricingItemResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> RepriceItem(
+        [FromRoute] Guid requirementId,
+        [FromRoute] Guid technicalProposalItemId,
+        [FromBody] RepriceRequirementPricingItemRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                requirementId,
+                technicalProposalItemId,
+                request.SystemId,
+                request.GlassTypeId,
+                request.FinishTypeId,
+                request.Quantity,
+                request.WidthMm,
+                request.HeightMm),
+            cancellationToken);
+
+        if (result.IsSuccess && result.Pricing is { } pricing)
+        {
+            return Ok(Map(pricing));
+        }
+
+        return MapFailure(result.Failure);
+    }
+
     private IActionResult MapFailure(PriceRequirementTechnicalProposalFailure failure) =>
         failure switch
         {
@@ -97,8 +131,8 @@ public sealed class RequirementPricingController(
             PriceRequirementTechnicalProposalFailure.TechnicalProposalNotConfirmed =>
                 RequirementProblem(StatusCodes.Status409Conflict,
                     RequirementErrorCodes.TechnicalProposalNotConfirmed,
-                    "Propuesta tecnica pendiente de confirmacion",
-                    "Confirma las configuraciones antes de calcular el precio."),
+                    "Propuesta tecnica no lista para pricing",
+                    "Confirma la propuesta y resuelve definiciones bloqueantes antes de calcular el precio. Consulta readiness.pendingDefinitions en la propuesta tecnica."),
             _ => RequirementProblem(StatusCodes.Status500InternalServerError,
                 RequirementErrorCodes.PersistenceError,
                 "Error de consulta",
@@ -121,7 +155,10 @@ public sealed class RequirementPricingController(
             pricing.RequiresReview,
             pricing.Assumptions,
             pricing.MissingData,
-            pricing.Items.Select(Map).ToArray());
+            pricing.Items.Select(Map).ToArray(),
+            pricing.OriginalGrandTotal,
+            pricing.CurrentGrandTotal,
+            pricing.DeltaGrandTotal);
 
     private static RequirementPricingItemResponse Map(
         TechnicalProposalPricingItemReadModel item) =>
@@ -152,7 +189,58 @@ public sealed class RequirementPricingController(
                 comparable.BackendScore,
                 comparable.Ai2Similarity,
                 comparable.SimilarityLevel,
-                comparable.FinalWeight)).ToArray());
+                comparable.FinalWeight,
+                comparable.MatchingTier,
+                comparable.MatchedSystem,
+                comparable.MatchedGlass,
+                comparable.MatchedFinish,
+                comparable.MatchedCommercialLine,
+                comparable.FallbackReasons)).ToArray(),
+            item.OriginalUnit is null ? null : Map(item.OriginalUnit),
+            item.CurrentUnit is null ? null : Map(item.CurrentUnit),
+            item.DeltaUnit is null ? null : Map(item.DeltaUnit),
+            item.OriginalLine is null ? null : Map(item.OriginalLine),
+            item.CurrentLine is null ? null : Map(item.CurrentLine),
+            item.DeltaLine is null ? null : Map(item.DeltaLine));
+
+    private static RepriceRequirementPricingItemResponse Map(
+        RepriceRequirementTechnicalProposalItemReadModel pricing) =>
+        new(
+            pricing.RequirementId,
+            pricing.TechnicalProposalId,
+            pricing.TechnicalProposalItemId,
+            new RequirementPricingItemConfigurationResponse(
+                pricing.SystemId,
+                pricing.GlassTypeId,
+                pricing.FinishTypeId),
+            new RepriceRequirementPricingItemPriceResponse(
+                pricing.Item.OriginalUnit?.Expected,
+                pricing.Item.CurrentUnit?.Expected,
+                pricing.Item.DeltaUnit?.Expected,
+                pricing.Item.OriginalLine?.Expected,
+                pricing.Item.CurrentLine?.Expected,
+                pricing.Item.DeltaLine?.Expected,
+                pricing.Item.Status),
+            new RepriceRequirementPricingSummaryResponse(
+                pricing.OriginalGrandTotal,
+                pricing.CurrentGrandTotal,
+                pricing.DeltaGrandTotal),
+            pricing.Item.Comparables.Select(comparable =>
+                new RequirementPricingComparableResponse(
+                    comparable.CandidateId,
+                    comparable.HistoricalReference,
+                    comparable.PublicUnitPrice,
+                    comparable.ProjectedPrice,
+                    comparable.BackendScore,
+                    comparable.Ai2Similarity,
+                    comparable.SimilarityLevel,
+                    comparable.FinalWeight,
+                    comparable.MatchingTier,
+                    comparable.MatchedSystem,
+                    comparable.MatchedGlass,
+                    comparable.MatchedFinish,
+                    comparable.MatchedCommercialLine,
+                    comparable.FallbackReasons)).ToArray());
 
     private static RequirementPricingRangeResponse Map(
         TechnicalProposalPricingMoneyRange range) =>
@@ -164,4 +252,64 @@ public sealed class RequirementPricingController(
         string title,
         string detail) =>
         ApiProblemDetailsFactory.Create(HttpContext, statusCode, errorCode, title, detail);
+
+    private IActionResult MapFailure(
+        RepriceRequirementTechnicalProposalItemFailure failure) =>
+        failure switch
+        {
+            RepriceRequirementTechnicalProposalItemFailure.InvalidRequest =>
+                RequirementProblem(StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Solicitud invalida",
+                    "El item o la configuracion indicada no son validos."),
+            RepriceRequirementTechnicalProposalItemFailure.Unauthorized =>
+                RequirementProblem(StatusCodes.Status401Unauthorized,
+                    PreQuoteErrorCodes.Unauthorized,
+                    "No autorizado",
+                    "No fue posible identificar al usuario autenticado."),
+            RepriceRequirementTechnicalProposalItemFailure.InactiveUser =>
+                RequirementProblem(StatusCodes.Status403Forbidden,
+                    PreQuoteErrorCodes.InactiveUser,
+                    "Usuario inactivo",
+                    "El usuario autenticado se encuentra inactivo."),
+            RepriceRequirementTechnicalProposalItemFailure.RequirementNotFound =>
+                RequirementProblem(StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.RequirementNotFound,
+                    "Requerimiento no encontrado",
+                    "No existe el requerimiento indicado."),
+            RepriceRequirementTechnicalProposalItemFailure.TechnicalProposalItemNotFound =>
+                RequirementProblem(StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.TechnicalProposalNotFound,
+                    "Item tecnico no encontrado",
+                    "El item indicado no pertenece a la propuesta tecnica vigente."),
+            RepriceRequirementTechnicalProposalItemFailure.TechnicalProposalNotFound =>
+                RequirementProblem(StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.TechnicalProposalNotFound,
+                    "Propuesta tecnica no encontrada",
+                    "El requerimiento todavia no tiene una propuesta tecnica vigente."),
+            RepriceRequirementTechnicalProposalItemFailure.TechnicalProposalNotConfirmed =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalNotConfirmed,
+                    "Propuesta tecnica no lista para pricing",
+                    "Confirma la propuesta tecnica antes de repricing."),
+            RepriceRequirementTechnicalProposalItemFailure.InvalidSystemSelection =>
+                RequirementProblem(StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Sistema invalido",
+                    "El sistema seleccionado no existe o no es seleccionable."),
+            RepriceRequirementTechnicalProposalItemFailure.InvalidGlassSelection =>
+                RequirementProblem(StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Cristal invalido",
+                    "El cristal seleccionado no existe o no es seleccionable."),
+            RepriceRequirementTechnicalProposalItemFailure.InvalidFinishSelection =>
+                RequirementProblem(StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Acabado invalido",
+                    "El acabado seleccionado no existe o no es seleccionable."),
+            _ => RequirementProblem(StatusCodes.Status500InternalServerError,
+                RequirementErrorCodes.PersistenceError,
+                "Error de repricing",
+                "No fue posible recalcular el item indicado.")
+        };
 }

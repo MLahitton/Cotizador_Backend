@@ -128,8 +128,8 @@ public sealed class TechnicalProposalSelectionConfirmationController(
                 RequirementProblem(
                     StatusCodes.Status409Conflict,
                     RequirementErrorCodes.TechnicalProposalIncomplete,
-                    "Propuesta tecnica incompleta",
-                    "Todos los items deben tener sistema, vidrio y acabado antes de confirmar."),
+                    "Propuesta tecnica no lista",
+                    "Hay definiciones tecnicas bloqueantes antes de confirmar. Consulta readiness.pendingDefinitions en la propuesta tecnica."),
             ConfirmRequirementTechnicalProposalSelectionFailure.QueryError =>
                 RequirementProblem(
                     StatusCodes.Status500InternalServerError,

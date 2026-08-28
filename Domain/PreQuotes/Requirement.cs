@@ -681,6 +681,20 @@ public sealed class RequirementExtractedItem
         _segments.Add(segment);
     }
 
+    public void AddEvidence(RequirementExtractedItemEvidence evidence)
+    {
+        ArgumentNullException.ThrowIfNull(evidence);
+
+        if (evidence.RequirementExtractedItemId != Id)
+        {
+            throw new ArgumentException(
+                "La evidencia no pertenece al item extraido.",
+                nameof(evidence));
+        }
+
+        _evidence.Add(evidence);
+    }
+
     internal static void EnsurePositive<T>(T? value, string parameterName)
         where T : struct, IComparable<T>
     {
@@ -1083,6 +1097,9 @@ public sealed class RequirementTechnicalProposalItem
     public Guid? SelectedFinishTypeId { get; private set; }
     public DateTimeOffset? SelectedAtUtc { get; private set; }
     public Guid? SelectedByUserId { get; private set; }
+    public int? ManualQuantityOverride { get; private set; }
+    public int? ManualWidthMillimetersOverride { get; private set; }
+    public int? ManualHeightMillimetersOverride { get; private set; }
     public decimal OverallConfidence { get; private set; }
     public decimal SystemConfidence { get; private set; }
     public decimal GlassConfidence { get; private set; }
@@ -1109,6 +1126,12 @@ public sealed class RequirementTechnicalProposalItem
         FinishAlternatives => _finishAlternatives;
     public IReadOnlyCollection<RequirementTechnicalProposalHistoricalExample>
         HistoricalExamples => _historicalExamples;
+    public int? EffectiveQuantity =>
+        ManualQuantityOverride ?? ExtractedItem?.Quantity;
+    public int? EffectiveWidthMillimeters =>
+        ManualWidthMillimetersOverride ?? ExtractedItem?.WidthMillimeters;
+    public int? EffectiveHeightMillimeters =>
+        ManualHeightMillimetersOverride ?? ExtractedItem?.HeightMillimeters;
 
     public static RequirementTechnicalProposalItem Create(
         Guid technicalProposalId,
@@ -1235,6 +1258,26 @@ public sealed class RequirementTechnicalProposalItem
         SelectedFinishTypeId = EmptyToNull(selectedFinishTypeId);
         SelectedByUserId = selectedByUserId;
         SelectedAtUtc = selectedAtUtc;
+    }
+
+    public void ApplyManualDataOverride(
+        int? quantity,
+        int? widthMillimeters,
+        int? heightMillimeters)
+    {
+        RequirementExtractedItem.EnsurePositive(quantity, nameof(quantity));
+        RequirementExtractedItem.EnsurePositive(
+            widthMillimeters,
+            nameof(widthMillimeters));
+        RequirementExtractedItem.EnsurePositive(
+            heightMillimeters,
+            nameof(heightMillimeters));
+
+        ManualQuantityOverride = quantity ?? ManualQuantityOverride;
+        ManualWidthMillimetersOverride =
+            widthMillimeters ?? ManualWidthMillimetersOverride;
+        ManualHeightMillimetersOverride =
+            heightMillimeters ?? ManualHeightMillimetersOverride;
     }
 
     public bool HasSelectedConfiguration() =>
@@ -1463,4 +1506,286 @@ public sealed class RequirementTechnicalProposalHistoricalExample
                 nameof(technicalExplanation),
                 1000)
         };
+}
+
+public sealed class RequirementPricingSnapshot
+{
+    private RequirementPricingSnapshot() { }
+
+    private readonly List<RequirementPricingItemSnapshot> _items = [];
+
+    public Guid Id { get; private set; }
+    public Guid RequirementId { get; private set; }
+    public Guid TechnicalProposalId { get; private set; }
+    public string Currency { get; private set; } = string.Empty;
+    public string PricingBasis { get; private set; } = string.Empty;
+    public decimal? OriginalGrandTotal { get; private set; }
+    public decimal? CurrentGrandTotal { get; private set; }
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+    public DateTimeOffset UpdatedAtUtc { get; private set; }
+    public Requirement Requirement { get; private set; } = null!;
+    public RequirementTechnicalProposal TechnicalProposal { get; private set; } = null!;
+    public IReadOnlyCollection<RequirementPricingItemSnapshot> Items => _items;
+    public decimal? DeltaGrandTotal =>
+        OriginalGrandTotal is null || CurrentGrandTotal is null
+            ? null
+            : CurrentGrandTotal - OriginalGrandTotal;
+
+    public static RequirementPricingSnapshot Create(
+        Guid requirementId,
+        Guid technicalProposalId,
+        string currency,
+        string pricingBasis,
+        decimal? originalGrandTotal,
+        decimal? currentGrandTotal,
+        DateTimeOffset createdAtUtc)
+    {
+        if (requirementId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El requerimiento es obligatorio.",
+                nameof(requirementId));
+        }
+
+        if (technicalProposalId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La propuesta tecnica es obligatoria.",
+                nameof(technicalProposalId));
+        }
+
+        Requirement.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
+
+        return new RequirementPricingSnapshot
+        {
+            Id = Guid.NewGuid(),
+            RequirementId = requirementId,
+            TechnicalProposalId = technicalProposalId,
+            Currency = Requirement.NormalizeRequired(currency, nameof(currency), 10),
+            PricingBasis = Requirement.NormalizeRequired(
+                pricingBasis,
+                nameof(pricingBasis),
+                80),
+            OriginalGrandTotal = EnsureMoney(originalGrandTotal, nameof(originalGrandTotal)),
+            CurrentGrandTotal = EnsureMoney(currentGrandTotal, nameof(currentGrandTotal)),
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = createdAtUtc
+        };
+    }
+
+    public void AddItem(RequirementPricingItemSnapshot item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.PricingSnapshotId != Id)
+        {
+            throw new ArgumentException(
+                "El item no pertenece al snapshot de pricing.",
+                nameof(item));
+        }
+
+        _items.Add(item);
+    }
+
+    public void UpdateCurrentGrandTotal(
+        decimal? currentGrandTotal,
+        DateTimeOffset updatedAtUtc)
+    {
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        CurrentGrandTotal = EnsureMoney(currentGrandTotal, nameof(currentGrandTotal));
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    internal static decimal? EnsureMoney(decimal? value, string parameterName)
+    {
+        if (value is < 0m)
+        {
+            throw new ArgumentException(
+                "El valor monetario no puede ser negativo.",
+                parameterName);
+        }
+
+        return value;
+    }
+}
+
+public sealed class RequirementPricingItemSnapshot
+{
+    private RequirementPricingItemSnapshot() { }
+
+    public Guid Id { get; private set; }
+    public Guid PricingSnapshotId { get; private set; }
+    public Guid TechnicalProposalItemId { get; private set; }
+    public Guid? OriginalSystemId { get; private set; }
+    public Guid? OriginalGlassTypeId { get; private set; }
+    public Guid? OriginalFinishTypeId { get; private set; }
+    public Guid? CurrentSystemId { get; private set; }
+    public Guid? CurrentGlassTypeId { get; private set; }
+    public Guid? CurrentFinishTypeId { get; private set; }
+    public string OriginalStatus { get; private set; } = string.Empty;
+    public string CurrentStatus { get; private set; } = string.Empty;
+    public decimal? OriginalUnitMinimum { get; private set; }
+    public decimal? OriginalUnitExpected { get; private set; }
+    public decimal? OriginalUnitMaximum { get; private set; }
+    public decimal? OriginalLineMinimum { get; private set; }
+    public decimal? OriginalLineExpected { get; private set; }
+    public decimal? OriginalLineMaximum { get; private set; }
+    public decimal? CurrentUnitMinimum { get; private set; }
+    public decimal? CurrentUnitExpected { get; private set; }
+    public decimal? CurrentUnitMaximum { get; private set; }
+    public decimal? CurrentLineMinimum { get; private set; }
+    public decimal? CurrentLineExpected { get; private set; }
+    public decimal? CurrentLineMaximum { get; private set; }
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+    public DateTimeOffset UpdatedAtUtc { get; private set; }
+    public RequirementPricingSnapshot PricingSnapshot { get; private set; } = null!;
+    public RequirementTechnicalProposalItem TechnicalProposalItem { get; private set; } = null!;
+    public decimal? DeltaUnitExpected =>
+        OriginalUnitExpected is null || CurrentUnitExpected is null
+            ? null
+            : CurrentUnitExpected - OriginalUnitExpected;
+    public decimal? DeltaLineExpected =>
+        OriginalLineExpected is null || CurrentLineExpected is null
+            ? null
+            : CurrentLineExpected - OriginalLineExpected;
+
+    public static RequirementPricingItemSnapshot Create(
+        Guid pricingSnapshotId,
+        Guid technicalProposalItemId,
+        Guid? originalSystemId,
+        Guid? originalGlassTypeId,
+        Guid? originalFinishTypeId,
+        string status,
+        decimal? unitMinimum,
+        decimal? unitExpected,
+        decimal? unitMaximum,
+        decimal? lineMinimum,
+        decimal? lineExpected,
+        decimal? lineMaximum,
+        DateTimeOffset createdAtUtc)
+    {
+        if (pricingSnapshotId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El snapshot de pricing es obligatorio.",
+                nameof(pricingSnapshotId));
+        }
+
+        if (technicalProposalItemId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El item tecnico es obligatorio.",
+                nameof(technicalProposalItemId));
+        }
+
+        Requirement.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
+
+        return new RequirementPricingItemSnapshot
+        {
+            Id = Guid.NewGuid(),
+            PricingSnapshotId = pricingSnapshotId,
+            TechnicalProposalItemId = technicalProposalItemId,
+            OriginalSystemId = EmptyToNull(originalSystemId),
+            OriginalGlassTypeId = EmptyToNull(originalGlassTypeId),
+            OriginalFinishTypeId = EmptyToNull(originalFinishTypeId),
+            CurrentSystemId = EmptyToNull(originalSystemId),
+            CurrentGlassTypeId = EmptyToNull(originalGlassTypeId),
+            CurrentFinishTypeId = EmptyToNull(originalFinishTypeId),
+            OriginalStatus = Requirement.NormalizeRequired(status, nameof(status), 40),
+            CurrentStatus = Requirement.NormalizeRequired(status, nameof(status), 40),
+            OriginalUnitMinimum = RequirementPricingSnapshot.EnsureMoney(
+                unitMinimum,
+                nameof(unitMinimum)),
+            OriginalUnitExpected = RequirementPricingSnapshot.EnsureMoney(
+                unitExpected,
+                nameof(unitExpected)),
+            OriginalUnitMaximum = RequirementPricingSnapshot.EnsureMoney(
+                unitMaximum,
+                nameof(unitMaximum)),
+            OriginalLineMinimum = RequirementPricingSnapshot.EnsureMoney(
+                lineMinimum,
+                nameof(lineMinimum)),
+            OriginalLineExpected = RequirementPricingSnapshot.EnsureMoney(
+                lineExpected,
+                nameof(lineExpected)),
+            OriginalLineMaximum = RequirementPricingSnapshot.EnsureMoney(
+                lineMaximum,
+                nameof(lineMaximum)),
+            CurrentUnitMinimum = RequirementPricingSnapshot.EnsureMoney(
+                unitMinimum,
+                nameof(unitMinimum)),
+            CurrentUnitExpected = RequirementPricingSnapshot.EnsureMoney(
+                unitExpected,
+                nameof(unitExpected)),
+            CurrentUnitMaximum = RequirementPricingSnapshot.EnsureMoney(
+                unitMaximum,
+                nameof(unitMaximum)),
+            CurrentLineMinimum = RequirementPricingSnapshot.EnsureMoney(
+                lineMinimum,
+                nameof(lineMinimum)),
+            CurrentLineExpected = RequirementPricingSnapshot.EnsureMoney(
+                lineExpected,
+                nameof(lineExpected)),
+            CurrentLineMaximum = RequirementPricingSnapshot.EnsureMoney(
+                lineMaximum,
+                nameof(lineMaximum)),
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = createdAtUtc
+        };
+    }
+
+    public void UpdateCurrent(
+        Guid? currentSystemId,
+        Guid? currentGlassTypeId,
+        Guid? currentFinishTypeId,
+        string status,
+        decimal? unitMinimum,
+        decimal? unitExpected,
+        decimal? unitMaximum,
+        decimal? lineMinimum,
+        decimal? lineExpected,
+        decimal? lineMaximum,
+        DateTimeOffset updatedAtUtc)
+    {
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        CurrentSystemId = EmptyToNull(currentSystemId);
+        CurrentGlassTypeId = EmptyToNull(currentGlassTypeId);
+        CurrentFinishTypeId = EmptyToNull(currentFinishTypeId);
+        CurrentStatus = Requirement.NormalizeRequired(status, nameof(status), 40);
+        CurrentUnitMinimum = RequirementPricingSnapshot.EnsureMoney(
+            unitMinimum,
+            nameof(unitMinimum));
+        CurrentUnitExpected = RequirementPricingSnapshot.EnsureMoney(
+            unitExpected,
+            nameof(unitExpected));
+        CurrentUnitMaximum = RequirementPricingSnapshot.EnsureMoney(
+            unitMaximum,
+            nameof(unitMaximum));
+        CurrentLineMinimum = RequirementPricingSnapshot.EnsureMoney(
+            lineMinimum,
+            nameof(lineMinimum));
+        CurrentLineExpected = RequirementPricingSnapshot.EnsureMoney(
+            lineExpected,
+            nameof(lineExpected));
+        CurrentLineMaximum = RequirementPricingSnapshot.EnsureMoney(
+            lineMaximum,
+            nameof(lineMaximum));
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    private static Guid? EmptyToNull(Guid? value) =>
+        value == Guid.Empty ? null : value;
 }

@@ -40,7 +40,13 @@ public sealed record TechnicalProposalPricingComparableReadModel(
     decimal BackendScore,
     decimal? Ai2Similarity,
     string? SimilarityLevel,
-    decimal FinalWeight);
+    decimal FinalWeight,
+    string MatchingTier,
+    bool MatchedSystem,
+    bool MatchedGlass,
+    bool MatchedFinish,
+    bool MatchedCommercialLine,
+    IReadOnlyList<string> FallbackReasons);
 
 public sealed record TechnicalProposalPricingItemReadModel(
     Guid ProposalItemId,
@@ -61,7 +67,13 @@ public sealed record TechnicalProposalPricingItemReadModel(
     IReadOnlyList<string> MappingWarnings,
     IReadOnlyList<string> Assumptions,
     IReadOnlyList<string> MissingData,
-    IReadOnlyList<TechnicalProposalPricingComparableReadModel> Comparables);
+    IReadOnlyList<TechnicalProposalPricingComparableReadModel> Comparables,
+    TechnicalProposalPricingMoneyRange? OriginalUnit = null,
+    TechnicalProposalPricingMoneyRange? CurrentUnit = null,
+    TechnicalProposalPricingMoneyRange? DeltaUnit = null,
+    TechnicalProposalPricingMoneyRange? OriginalLine = null,
+    TechnicalProposalPricingMoneyRange? CurrentLine = null,
+    TechnicalProposalPricingMoneyRange? DeltaLine = null);
 
 public sealed record RequirementTechnicalProposalPricingReadModel(
     Guid RequirementId,
@@ -77,4 +89,19 @@ public sealed record RequirementTechnicalProposalPricingReadModel(
     bool RequiresReview,
     IReadOnlyList<string> Assumptions,
     IReadOnlyList<string> MissingData,
-    IReadOnlyList<TechnicalProposalPricingItemReadModel> Items);
+    IReadOnlyList<TechnicalProposalPricingItemReadModel> Items,
+    decimal? OriginalGrandTotal = null,
+    decimal? CurrentGrandTotal = null,
+    decimal? DeltaGrandTotal = null);
+
+public sealed record RepriceRequirementTechnicalProposalItemReadModel(
+    Guid RequirementId,
+    Guid TechnicalProposalId,
+    Guid TechnicalProposalItemId,
+    Guid? SystemId,
+    Guid? GlassTypeId,
+    Guid? FinishTypeId,
+    TechnicalProposalPricingItemReadModel Item,
+    decimal? OriginalGrandTotal,
+    decimal? CurrentGrandTotal,
+    decimal? DeltaGrandTotal);

@@ -14,6 +14,7 @@ public sealed record RequirementTechnicalProposalResponse(
     int ItemsRequiringReview,
     int TechnicallyCompleteItems,
     int PriceableItems,
+    RequirementTechnicalProposalReadinessResponse Readiness,
     IReadOnlyList<RequirementTechnicalProposalItemResponse> Items);
 
 public sealed record RequirementTechnicalProposalCommercialConfirmationResponse(
@@ -32,6 +33,12 @@ public sealed record RequirementTechnicalProposalItemResponse(
     int? Quantity,
     int? WidthMm,
     int? HeightMm,
+    int? ManualQuantityOverride,
+    int? ManualWidthMmOverride,
+    int? ManualHeightMmOverride,
+    int? EffectiveQuantity,
+    int? EffectiveWidthMm,
+    int? EffectiveHeightMm,
     decimal? AreaM2,
     decimal? ExtractionConfidence,
     string ExtractionStatus,
@@ -47,9 +54,41 @@ public sealed record RequirementTechnicalProposalItemResponse(
     IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
+    RequirementTechnicalProposalItemReadinessResponse Readiness,
     RequirementTechnicalProposalHistoricalEvidenceResponse HistoricalEvidence,
     RequirementTechnicalProposalTraceResponse Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceResponse> Evidence);
+
+public sealed record RequirementTechnicalProposalReadinessResponse(
+    string State,
+    bool IsReadyForConfirmation,
+    bool IsReadyForPricing,
+    int BlockingItems,
+    int WarningItems,
+    int BlockingDefinitions,
+    int WarningDefinitions,
+    int PricingBlockingItems,
+    int PricingBlockingDefinitions,
+    IReadOnlyDictionary<string, int> Categories);
+
+public sealed record RequirementTechnicalProposalItemReadinessResponse(
+    string State,
+    int BlockingCount,
+    int WarningCount,
+    IReadOnlyList<TechnicalProposalPendingDefinitionResponse> PendingDefinitions);
+
+public sealed record TechnicalProposalPendingDefinitionResponse(
+    string Code,
+    string Category,
+    string Severity,
+    string Field,
+    string Title,
+    string Message,
+    string? CurrentValue,
+    string RequiredAction,
+    bool BlocksConfirmation,
+    bool BlocksPricing,
+    IReadOnlyList<string> RelatedReasonCodes);
 
 public sealed record RequirementTechnicalProposalSuggestedResponse(
     RequirementTechnicalProposalSystemOptionResponse? System,

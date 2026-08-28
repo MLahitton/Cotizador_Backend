@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Application.PreQuotes.TechnicalProposalReadiness;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
@@ -102,6 +103,12 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionService(
             if (access != ConfirmRequirementTechnicalProposalSelectionFailure.None)
             {
                 return ConfirmRequirementTechnicalProposalSelectionResult.Failed(access);
+            }
+
+            if (TechnicalProposalReadinessEvaluator.BlocksConfirmation(proposal))
+            {
+                return ConfirmRequirementTechnicalProposalSelectionResult.Failed(
+                    ConfirmRequirementTechnicalProposalSelectionFailure.IncompleteTechnicalProposal);
             }
 
             try

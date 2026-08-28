@@ -240,6 +240,11 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementTechnicalProposals.Add(proposal);
     }
 
+    public void AddPricingSnapshot(RequirementPricingSnapshot snapshot)
+    {
+        dbContext.RequirementPricingSnapshots.Add(snapshot);
+    }
+
     public async Task<RequirementExtractionResult?>
         GetLatestSuccessfulExtractionAsync(
             Guid requirementId,
@@ -345,6 +350,70 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .SingleOrDefaultAsync(
                     proposal => proposal.Id == technicalProposalId,
                     cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementTechnicalProposal?>
+        FindCurrentTechnicalProposalForUpdateAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementTechnicalProposals
+                .Include(proposal => proposal.Requirement)
+                .Include(proposal => proposal.Items)
+                    .ThenInclude(item => item.ExtractedItem)
+                .Where(proposal => proposal.RequirementId == requirementId)
+                .OrderByDescending(proposal =>
+                    proposal.ProcessingAttempt.CompletedAtUtc)
+                .ThenByDescending(proposal => proposal.CreatedAtUtc)
+                .ThenByDescending(proposal => proposal.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementPricingSnapshot?> GetCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementPricingSnapshots
+                .AsNoTracking()
+                .Include(snapshot => snapshot.Items)
+                .Where(snapshot => snapshot.RequirementId == requirementId)
+                .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
+                .ThenByDescending(snapshot => snapshot.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementPricingSnapshot?>
+        FindCurrentPricingSnapshotForUpdateAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementPricingSnapshots
+                .Include(snapshot => snapshot.Items)
+                .Where(snapshot => snapshot.RequirementId == requirementId)
+                .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
+                .ThenByDescending(snapshot => snapshot.Id)
+                .FirstOrDefaultAsync(cancellationToken);
         }
         catch (DbException exception)
         {

@@ -28,7 +28,11 @@ public sealed record SgTechnicalSelectionInput(
     string? RequestedCommercialLine,
     string? RequestedSystemRaw,
     string? Configuration = null,
-    IReadOnlyList<SgHistoricalSystemEvidence>? HistoricalSystemEvidence = null);
+    IReadOnlyList<SgHistoricalSystemEvidence>? HistoricalSystemEvidence = null,
+    string? Description = null,
+    int? PrimaryComponentHeightMillimeters = null,
+    bool HasCompositeGeometry = false,
+    IReadOnlyList<string>? AssociatedContextTexts = null);
 
 public sealed record SgHistoricalSystemEvidence(
     string ProductSystemCode,
@@ -83,6 +87,8 @@ public static class SgTechnicalSelectionRuleCodes
     public const string VeniceWindowMonza = "VENICE_WINDOW_MONZA";
     public const string VenicePreferOverLsa = "VENICE_PREFER_OVER_LSA";
     public const string WindowHeightOver2600AsDoor = "WINDOW_HEIGHT_OVER_2600_AS_DOOR";
+    public const string SystemWetEnvironmentInox = "SYSTEM_WET_ENVIRONMENT_INOX";
+    public const string SystemShowerDivisionInox = "SYSTEM_SHOWER_DIVISION_INOX";
     public const string RuleNotDefinedRequiresReview = "RULE_NOT_DEFINED_REQUIRES_REVIEW";
 }
 
@@ -96,6 +102,10 @@ public static class SgTechnicalSelectionReviewReasons
     public const string SlidingWindowThresholdReview = "SLIDING_WINDOW_THRESHOLD_REVIEW";
     public const string BathroomDivisionMaterialUnknown = "BATHROOM_DIVISION_MATERIAL_UNKNOWN";
     public const string SpecialGeometryWithoutConstraints = "SPECIAL_GEOMETRY_WITHOUT_CONSTRAINTS";
+    public const string AssemblyMultipleMovableTypesRequiresReview =
+        "ASSEMBLY_MULTIPLE_MOVABLE_TYPES_REQUIRES_REVIEW";
+    public const string PrimaryComponentGeometryUnresolved =
+        "PRIMARY_COMPONENT_GEOMETRY_UNRESOLVED";
 }
 
 public sealed class DeterministicSgTechnicalSelector(
@@ -144,7 +154,8 @@ public sealed class DeterministicSgTechnicalSelector(
                 resolutionReasons);
         }
 
-        if (IsBathroomDivisionWithoutMaterial(input))
+        if (IsBathroomDivisionWithoutMaterial(input)
+            && !HasWetEnvironmentContext(input))
         {
             return NoMatch(
                 [SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown],
@@ -182,6 +193,20 @@ public sealed class DeterministicSgTechnicalSelector(
                 0m,
                 true,
                 [SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMetadataIncomplete],
+                candidates.Take(MaxAlternatives)
+                    .Select(candidate => candidate.ProductSystem.Code)
+                    .ToArray(),
+                ResolutionReasons: resolutionReasons);
+        }
+
+        if (RequiresSlidingWindowThresholdReview(input))
+        {
+            return new(
+                null,
+                SgTechnicalSelectionRuleCodes.SystemCandidateRanking,
+                0m,
+                true,
+                [SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview],
                 candidates.Take(MaxAlternatives)
                     .Select(candidate => candidate.ProductSystem.Code)
                     .ToArray(),
@@ -429,9 +454,70 @@ public sealed class DeterministicSgTechnicalSelector(
             }
         }
 
-        if (EffectiveFunctionalType(input) == "SHOWER_DIVISION"
-            && HasInox(input, features)
-            && IsInox(candidate.ProductSystem))
+        if (IsSwingDoor(input))
+        {
+            ApplySwingDoorSpecialFeatures(candidate, input, features);
+        }
+
+        ApplyWetEnvironmentPreference(candidate, input);
+    }
+
+    private static void ApplyWetEnvironmentPreference(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input)
+    {
+        if (!HasWetEnvironmentContext(input)
+            || !IsInox(candidate.ProductSystem))
+        {
+            return;
+        }
+
+        var functionalType = EffectiveFunctionalType(input);
+        candidate.Score += ExactVariantMatchScore + SpecialFeatureMatchScore;
+        if (functionalType == "SHOWER_DIVISION")
+        {
+            candidate.MatchedRuleCodes.Add(
+                SgTechnicalSelectionRuleCodes.SystemShowerDivisionInox);
+            return;
+        }
+
+        candidate.PrimaryRuleCode ??=
+            SgTechnicalSelectionRuleCodes.SystemWetEnvironmentInox;
+        candidate.MatchedRuleCodes.Add(
+            SgTechnicalSelectionRuleCodes.SystemWetEnvironmentInox);
+    }
+
+    private static void ApplySwingDoorSpecialFeatures(
+        SgTechnicalCandidate candidate,
+        SgTechnicalSelectionInput input,
+        IReadOnlySet<string> features)
+    {
+        var doubleEvidence = HasDoubleLeafEvidence(input, features);
+        var inoxEvidence = HasInox(input, features);
+        var isDouble = IsDoubleSwingDoor(candidate.ProductSystem);
+        var isInox = IsInox(candidate.ProductSystem);
+        var isSpecial = IsSpecialSwingDoorVariant(candidate.ProductSystem)
+            && !isDouble
+            && !isInox;
+
+        if (!doubleEvidence && isDouble
+            || !inoxEvidence && isInox
+            || !doubleEvidence && !inoxEvidence && isSpecial)
+        {
+            candidate.CompatibilityState =
+                SgTechnicalCompatibilityState.Incompatible;
+            candidate.FailedRuleCodes.Add("SWING_DOOR_SPECIAL_VARIANT_EVIDENCE");
+            return;
+        }
+
+        if (doubleEvidence && isDouble)
+        {
+            candidate.Score += ExactVariantMatchScore
+                + SpecialFeatureMatchScore;
+            candidate.MatchedRuleCodes.Add("SPECIAL_FEATURE_DOUBLE_SWING_DOOR");
+        }
+
+        if (inoxEvidence && isInox)
         {
             candidate.Score += ExactVariantMatchScore
                 + SpecialFeatureMatchScore;
@@ -446,24 +532,27 @@ public sealed class DeterministicSgTechnicalSelector(
         var functionalType = EffectiveFunctionalType(input);
         var operation = Code(input.Operation);
         var features = Features(input);
+        var effectiveHeight = functionalType == "SLIDING_WINDOW"
+            ? EffectiveSlidingWindowHeight(input)
+            : input.HeightMillimeters;
         var prior = PriorFor(candidate.ProductSystem, functionalType,
-            operation, features, input.HeightMillimeters,
+            operation, features, effectiveHeight,
             input.RequestedCommercialLine);
         if (prior is null)
         {
+            if (functionalType == "SLIDING_WINDOW"
+                && effectiveHeight is null)
+            {
+                candidate.ReviewReasons.Add(
+                    SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview);
+            }
+
             return;
         }
 
         candidate.Score += StrongHistoricalPriorScore;
         candidate.PrimaryRuleCode ??= prior;
         candidate.MatchedRuleCodes.Add(prior);
-        if (prior is SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago
-            or SgTechnicalSelectionRuleCodes.SystemSlidingWindowMonza
-            or SgTechnicalSelectionRuleCodes.VeniceWindowMonza)
-        {
-            candidate.ReviewReasons.Add(
-                SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview);
-        }
     }
 
     private static string? PriorFor(
@@ -717,8 +806,31 @@ public sealed class DeterministicSgTechnicalSelector(
         EffectiveFunctionalType(input) == "SHOWER_DIVISION"
         && !HasInox(input, Features(input));
 
+    private static bool IsSwingDoor(SgTechnicalSelectionInput input)
+    {
+        var functionalType = EffectiveFunctionalType(input);
+        var operation = Code(input.Operation);
+
+        return functionalType == "SWING_DOOR"
+            || functionalType == "DOOR" && operation == "SWING";
+    }
+
     private static bool HasSpecialGeometry(SgTechnicalSelectionInput input) =>
         Code(input.GeometryType) is "L_SHAPE" or "CORNER" or "TRIANGULAR" or "ARCH" or "CURVED";
+
+    private static bool HasDoubleLeafEvidence(
+        SgTechnicalSelectionInput input,
+        IReadOnlySet<string> features) =>
+        features.Contains("DOUBLE")
+        || features.Contains("DOUBLE_LEAF")
+        || features.Contains("TWO_LEAF")
+        || features.Contains("TWO_LEAVES")
+        || Contains(input.Configuration, "DOBLE")
+        || Contains(input.Configuration, "DOUBLE")
+        || Contains(input.Configuration, "DOS HOJAS")
+        || Contains(input.RequestedSystemRaw, "DOBLE")
+        || Contains(input.RequestedSystemRaw, "DOUBLE")
+        || Contains(input.RequestedSystemRaw, "DOS HOJAS");
 
     private static bool HasInox(
         SgTechnicalSelectionInput input,
@@ -727,11 +839,68 @@ public sealed class DeterministicSgTechnicalSelector(
         || Contains(input.Configuration, "INOX")
         || Contains(input.RequestedSystemRaw, "INOX");
 
+    private static bool HasWetEnvironmentContext(SgTechnicalSelectionInput input)
+    {
+        if (EffectiveFunctionalType(input) == "SHOWER_DIVISION")
+        {
+            return true;
+        }
+
+        if (WetText(input.Description)
+            || WetText(input.Configuration)
+            || WetText(input.RequestedSystemRaw)
+            || WetText(input.Operation)
+            || WetText(input.FunctionalType)
+            || WetText(input.GeometryType))
+        {
+            return true;
+        }
+
+        return input.AssociatedContextTexts?.Any(WetText) == true
+            || input.SpecialFeatures.Any(WetText);
+    }
+
+    private static bool WetText(string? value)
+    {
+        var normalized = Code(value);
+        return normalized is not null
+            && (normalized.Contains("BANO", StringComparison.Ordinal)
+                || normalized.Contains("DUCHA", StringComparison.Ordinal)
+                || normalized.Contains("SHOWER", StringComparison.Ordinal)
+                || normalized.Contains("ZONA HUMEDA", StringComparison.Ordinal)
+                || normalized.Contains("HUMEDA", StringComparison.Ordinal)
+                || normalized.Contains("WET", StringComparison.Ordinal)
+                || normalized.Contains("SAUNA", StringComparison.Ordinal)
+                || normalized.Contains("TURCO", StringComparison.Ordinal)
+                || normalized.Contains("SPA", StringComparison.Ordinal)
+                || normalized.Contains("PISCINA", StringComparison.Ordinal)
+                || normalized.Contains("JACUZZI", StringComparison.Ordinal));
+    }
+
     private static bool IsInox(ProductSystemCatalogReadModel system) =>
         Matches(system.Variant, "INOX")
         || Contains(system.Family, "INOX")
         || Contains(system.TechnicalName, "INOX")
         || Contains(system.CommercialName, "INOX");
+
+    private static bool IsDoubleSwingDoor(ProductSystemCatalogReadModel system) =>
+        Contains(system.Variant, "DOBLE")
+        || Contains(system.Variant, "DOUBLE")
+        || Contains(system.Family, "DOBLE")
+        || Contains(system.Family, "DOUBLE")
+        || Contains(system.TechnicalName, "DOBLE")
+        || Contains(system.TechnicalName, "DOUBLE")
+        || Contains(system.CommercialName, "DOBLE")
+        || Contains(system.CommercialName, "DOUBLE")
+        || Contains(system.Name, "DOBLE")
+        || Contains(system.Name, "DOUBLE");
+
+    private static bool IsSpecialSwingDoorVariant(ProductSystemCatalogReadModel system)
+    {
+        var variant = Code(system.Variant);
+        return variant is not null
+            && variant is not "STANDARD" and not "SINGLE" and not "SIMPLE";
+    }
 
     private static bool IsVenice(ProductSystemCatalogReadModel system) =>
         Contains(system.Family, "VENECIA")
@@ -786,8 +955,9 @@ public sealed class DeterministicSgTechnicalSelector(
     {
         var functionalType = Code(input.FunctionalType);
         var operation = Code(input.Operation);
+        var effectiveHeight = EffectiveFunctionalHeight(input);
         if (functionalType == "WINDOW"
-            && input.HeightMillimeters > 2600)
+            && effectiveHeight > 2600)
         {
             return operation switch
             {
@@ -798,7 +968,7 @@ public sealed class DeterministicSgTechnicalSelector(
         }
 
         if (functionalType == "SLIDING_WINDOW"
-            && input.HeightMillimeters > 2600)
+            && effectiveHeight > 2600)
         {
             return "SLIDING_DOOR";
         }
@@ -816,10 +986,32 @@ public sealed class DeterministicSgTechnicalSelector(
         return functionalType;
     }
 
+    private static int? EffectiveSlidingWindowHeight(
+        SgTechnicalSelectionInput input) =>
+        EffectiveFunctionalHeight(input);
+
+    private static int? EffectiveFunctionalHeight(
+        SgTechnicalSelectionInput input)
+    {
+        if (input.PrimaryComponentHeightMillimeters is > 0)
+        {
+            return input.PrimaryComponentHeightMillimeters;
+        }
+
+        return input.HasCompositeGeometry
+            ? null
+            : input.HeightMillimeters;
+    }
+
+    private static bool RequiresSlidingWindowThresholdReview(
+        SgTechnicalSelectionInput input) =>
+        EffectiveFunctionalType(input) == "SLIDING_WINDOW"
+        && EffectiveSlidingWindowHeight(input) is null;
+
     private static IReadOnlyList<string> FunctionalResolutionReasons(
         SgTechnicalSelectionInput input) =>
         Code(input.FunctionalType) is "WINDOW" or "SLIDING_WINDOW"
-        && input.HeightMillimeters > 2600
+        && EffectiveFunctionalHeight(input) > 2600
             ? [SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor]
             : [];
 

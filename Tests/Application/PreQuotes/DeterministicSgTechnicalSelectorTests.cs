@@ -93,6 +93,91 @@ public sealed class DeterministicSgTechnicalSelectorTests
     }
 
     [Fact]
+    public async Task SwingDoorStandard_WithSpecialVariantsAvailable_Suggests3890()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(SwingDoorVariantSystems())).SelectAsync(
+                Input("SWING_DOOR", configuration: "negro pintura al horno"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("3890", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSwingDoor3890,
+            result.AppliedRuleCode);
+        Assert.False(result.RequiresReview);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionReviewReasons.TechnicalSelectionAmbiguous,
+            result.ReviewReasons);
+        Assert.DoesNotContain("3890_DOUBLE", result.Alternatives);
+        Assert.DoesNotContain("3890_INOX", result.Alternatives);
+        Assert.DoesNotContain("SIENA_SWING", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task SwingDoorDouble_WithExplicitEvidence_CanOutrankStandard3890()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(SwingDoorVariantSystems())).SelectAsync(
+                Input("SWING_DOOR", configuration: "puerta doble batiente"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("3890_DOUBLE", result.SuggestedSystemCode);
+        Assert.Contains("3890", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task SwingDoorInox_WithExplicitEvidence_CanOutrankStandard3890()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(SwingDoorVariantSystems())).SelectAsync(
+                Input("SWING_DOOR", feature: "INOX"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("3890_INOX", result.SuggestedSystemCode);
+        Assert.Contains("3890", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task SwingDoorWithoutInoxEvidence_DoesNotSelectInoxFromBlackFinishText()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(SwingDoorVariantSystems())).SelectAsync(
+                Input("SWING_DOOR", configuration: "acabado negro pintura al horno"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("3890", result.SuggestedSystemCode);
+        Assert.DoesNotContain("3890_INOX", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task SwingDoor_WithTwoEquivalentExplicitInoxCandidates_RemainsAmbiguous()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("3890_INOX_A", "SWING_DOOR", "SG 3890", "INOX", "CLASSIC"),
+                System("3890_INOX_B", "SWING_DOOR", "SG 3890", "INOX", "CLASSIC")
+            ])).SelectAsync(
+                Input("SWING_DOOR", feature: "INOX"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Null(result.SuggestedSystemCode);
+        Assert.True(result.RequiresReview);
+        Assert.Contains(
+            SgTechnicalSelectionReviewReasons.TechnicalSelectionAmbiguous,
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task ShowerDivisionWithSwing_DoesNotRouteToArchitectural3890()
+    {
+        var result = await Selector().SelectAsync(
+            Input("SHOWER_DIVISION", operation: "SWING", feature: "INOX"),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotEqual("3890", result.SuggestedSystemCode);
+        Assert.Equal("SG_BATH_DIV_INOX", result.SuggestedSystemCode);
+    }
+
+    [Fact]
     public async Task DoorWithSwingOperation_3890PriorWins()
     {
         var result = await Selector().SelectAsync(
@@ -281,21 +366,22 @@ public sealed class DeterministicSgTechnicalSelectorTests
     }
 
     [Fact]
-    public async Task BathroomDivision_WithoutInox_RequiresReviewWithoutSuggestion()
+    public async Task ShowerDivision_WithoutMaterial_SelectsInoxCandidate()
     {
         var result = await Selector().SelectAsync(
             Input("BATHROOM_DIVISION"),
             TestContext.Current.CancellationToken);
 
-        Assert.Null(result.SuggestedSystemCode);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(
+        Assert.Equal("SG_BATH_DIV_INOX", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSpecialBathroomDivisionInox,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain(
             SgTechnicalSelectionReviewReasons.BathroomDivisionMaterialUnknown,
             result.ReviewReasons);
     }
 
     [Fact]
-    public async Task SlidingWindowLow_LagoWinsMonzaAlternativeAndRequiresReview()
+    public async Task SlidingWindowLow_LagoWinsMonzaAlternativeWithoutThresholdReview()
     {
         var result = await Selector().SelectAsync(
             Input("SLIDING_WINDOW", height: 900),
@@ -305,14 +391,13 @@ public sealed class DeterministicSgTechnicalSelectorTests
         Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago,
             result.AppliedRuleCode);
         Assert.Contains("K50", result.Alternatives);
-        Assert.True(result.RequiresReview);
-        Assert.Contains(
+        Assert.DoesNotContain(
             SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
             result.ReviewReasons);
     }
 
     [Fact]
-    public async Task SlidingWindowHigher_MonzaWinsLagoCanRemainAlternativeAndRequiresReview()
+    public async Task SlidingWindowHigher_MonzaWinsLagoCanRemainAlternativeWithoutThresholdReview()
     {
         var result = await Selector().SelectAsync(
             Input("SLIDING_WINDOW", height: 1500),
@@ -322,7 +407,139 @@ public sealed class DeterministicSgTechnicalSelectorTests
         Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
             result.AppliedRuleCode);
         Assert.Contains("S50", result.Alternatives);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+            result.ReviewReasons);
+    }
+
+    [Theory]
+    [InlineData(999, "S50", SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago)]
+    [InlineData(1000, "S50", SgTechnicalSelectionRuleCodes.SystemSlidingWindowLowLago)]
+    [InlineData(1001, "K50", SgTechnicalSelectionRuleCodes.VeniceWindowMonza)]
+    [InlineData(1500, "K50", SgTechnicalSelectionRuleCodes.VeniceWindowMonza)]
+    public async Task SlidingWindow_UsesInclusiveOneMeterBoundary(
+        int height,
+        string expectedCode,
+        string expectedRule)
+    {
+        var result = await Selector().SelectAsync(
+            Input("SLIDING_WINDOW", height: height),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedCode, result.SuggestedSystemCode);
+        Assert.Equal(expectedRule, result.AppliedRuleCode);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task SlidingWindowAssembly_UsesPrimaryMovableComponentHeight()
+    {
+        var result = await Selector().SelectAsync(
+            Input(
+                "SLIDING_WINDOW",
+                height: 2600,
+                primaryComponentHeight: 1500,
+                hasCompositeGeometry: true),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K50", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task SlidingWindowAssembly_WithoutReliablePrimaryHeightRequiresThresholdReview()
+    {
+        var selector = new DeterministicSgTechnicalSelector(
+            new Catalog(
+            [
+                System("S50", "SLIDING_WINDOW", "PRIMAVERA LAGO", "STANDARD", "CLASSIC"),
+                System("K50", "SLIDING_WINDOW", "VENECIA MONZA", "STANDARD", "ESSENTIAL")
+            ]));
+
+        var result = await selector.SelectAsync(
+            Input("SLIDING_WINDOW", height: 2600, hasCompositeGeometry: true),
+            TestContext.Current.CancellationToken);
+
         Assert.True(result.RequiresReview);
+        Assert.Contains(
+            SgTechnicalSelectionReviewReasons.SlidingWindowThresholdReview,
+            result.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task ShowerDivision_WithSlidingOperation_StillSelectsInox()
+    {
+        var result = await Selector().SelectAsync(
+            Input(
+                "SHOWER_DIVISION",
+                operation: "SLIDING",
+                associatedContextTexts: ["division de baño ducha"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("SG_BATH_DIV_INOX", result.SuggestedSystemCode);
+        Assert.DoesNotContain("K70", result.Alternatives);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSpecialBathroomDivisionInox,
+            result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task WetContext_PrefersCompatibleInoxVariant()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(
+            [
+                System("SLIDING_STD", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "ESSENTIAL"),
+                System("SLIDING_INOX", "SLIDING_DOOR", "GENERIC SLIDING", "INOX", "ESSENTIAL")
+            ])).SelectAsync(
+                Input(
+                    "SLIDING_DOOR",
+                    description: "Puerta corrediza para zona húmeda sauna"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SLIDING_INOX", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemWetEnvironmentInox,
+            result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task WetContext_FromUnassociatedProjectText_DoesNotPolluteItem()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(
+            [
+                System("SLIDING_STD", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "ESSENTIAL"),
+                System("SLIDING_INOX", "SLIDING_DOOR", "GENERIC SLIDING", "INOX", "ESSENTIAL")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SLIDING_STD", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
+            result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task WetContext_WithoutCompatibleInox_DoesNotInventCandidate()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog(
+            [
+                System("SLIDING_STD", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "ESSENTIAL")
+            ])).SelectAsync(
+                Input(
+                    "SLIDING_DOOR",
+                    associatedContextTexts: ["ducha interior"]),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SLIDING_STD", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
+            result.AppliedRuleCode);
     }
 
     [Fact]
@@ -713,7 +930,12 @@ public sealed class DeterministicSgTechnicalSelectorTests
         string? feature = null,
         string? requestedCommercialLine = null,
         string? requestedSystemRaw = null,
-        string? geometryType = null) =>
+        string? geometryType = null,
+        string? configuration = null,
+        string? description = null,
+        int? primaryComponentHeight = null,
+        bool hasCompositeGeometry = false,
+        IReadOnlyList<string>? associatedContextTexts = null) =>
         new(
             functionalType,
             operation,
@@ -728,7 +950,13 @@ public sealed class DeterministicSgTechnicalSelectorTests
             feature is null ? [] : [feature],
             geometryType,
             requestedCommercialLine,
-            requestedSystemRaw);
+            requestedSystemRaw,
+            configuration,
+            null,
+            description,
+            primaryComponentHeight,
+            hasCompositeGeometry,
+            associatedContextTexts);
 
     private static IReadOnlyList<ProductSystemCatalogReadModel> Systems() =>
     [
@@ -756,6 +984,16 @@ public sealed class DeterministicSgTechnicalSelectorTests
         System("K100_DOOR", "SLIDING_DOOR", "VENECIA MONACO", "STANDARD", "ESSENTIAL"),
         System("TRAD_FIXED", "FIXED", "TRADICIONAL", "STANDARD", "TRADITIONAL"),
         System("SG_UNKNOWN", null, null, null, "ESSENTIAL")
+    ];
+
+    private static IReadOnlyList<ProductSystemCatalogReadModel>
+        SwingDoorVariantSystems() =>
+    [
+        System("3890", "SWING_DOOR", "SG 3890", "STANDARD", "CLASSIC"),
+        System("3890_DOUBLE", "SWING_DOOR", "SG 3890", "DOUBLE", "CLASSIC"),
+        System("3890_INOX", "SWING_DOOR", "SG 3890", "INOX", "CLASSIC"),
+        System("SIENA_SWING", "SWING_DOOR", "PRIMAVERA SIENA", "SPECIAL", "CLASSIC"),
+        System("GENERIC_SWING", "SWING_DOOR", "GENERIC SWING", "STANDARD", "ESSENTIAL")
     ];
 
     private static ProductSystemCatalogReadModel System(

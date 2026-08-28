@@ -23,7 +23,10 @@ public sealed class RequirementTechnicalProposalItemConfiguration
                     "AND (\"historical_best_similarity\" IS NULL OR " +
                     "(\"historical_best_similarity\" >= 0 AND \"historical_best_similarity\" <= 1)) " +
                     "AND (\"historical_average_similarity\" IS NULL OR " +
-                    "(\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1))");
+                    "(\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1)) " +
+                    "AND (\"manual_quantity_override\" IS NULL OR \"manual_quantity_override\" > 0) " +
+                    "AND (\"manual_width_millimeters_override\" IS NULL OR \"manual_width_millimeters_override\" > 0) " +
+                    "AND (\"manual_height_millimeters_override\" IS NULL OR \"manual_height_millimeters_override\" > 0)");
 
                 tableBuilder.HasCheckConstraint(
                     "ck_requirement_technical_proposal_items_historical_support",
@@ -86,6 +89,18 @@ public sealed class RequirementTechnicalProposalItemConfiguration
         builder.Property(item => item.SelectedByUserId)
             .HasColumnName("selected_by_user_id")
             .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.ManualQuantityOverride)
+            .HasColumnName("manual_quantity_override")
+            .IsRequired(false);
+
+        builder.Property(item => item.ManualWidthMillimetersOverride)
+            .HasColumnName("manual_width_millimeters_override")
+            .IsRequired(false);
+
+        builder.Property(item => item.ManualHeightMillimetersOverride)
+            .HasColumnName("manual_height_millimeters_override")
             .IsRequired(false);
 
         builder.Property(item => item.OverallConfidence)

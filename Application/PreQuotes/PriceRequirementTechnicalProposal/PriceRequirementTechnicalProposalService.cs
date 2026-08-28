@@ -10,6 +10,16 @@ namespace Application.PreQuotes.PriceRequirementTechnicalProposal;
 
 public sealed record PriceRequirementTechnicalProposalCommand(Guid RequirementId);
 
+public sealed record RepriceRequirementTechnicalProposalItemCommand(
+    Guid RequirementId,
+    Guid TechnicalProposalItemId,
+    Guid? SystemId,
+    Guid? GlassTypeId,
+    Guid? FinishTypeId,
+    int? Quantity = null,
+    int? WidthMillimeters = null,
+    int? HeightMillimeters = null);
+
 public enum PriceRequirementTechnicalProposalFailure
 {
     None = 0,
@@ -27,6 +37,28 @@ public enum PriceRequirementTechnicalProposalFailure
     QueryError
 }
 
+public enum RepriceRequirementTechnicalProposalItemFailure
+{
+    None = 0,
+    InvalidRequest,
+    Unauthorized,
+    InactiveUser,
+    RequirementNotFound,
+    PreQuoteNotFound,
+    ProjectNotFound,
+    InactiveProject,
+    ClientNotFound,
+    InactiveClient,
+    TechnicalProposalNotFound,
+    TechnicalProposalNotConfirmed,
+    TechnicalProposalItemNotFound,
+    InvalidSystemSelection,
+    InvalidGlassSelection,
+    InvalidFinishSelection,
+    QueryError,
+    PersistenceError
+}
+
 public sealed record PriceRequirementTechnicalProposalResult(
     bool IsSuccess,
     PriceRequirementTechnicalProposalFailure Failure,
@@ -38,6 +70,20 @@ public sealed record PriceRequirementTechnicalProposalResult(
 
     public static PriceRequirementTechnicalProposalResult Failed(
         PriceRequirementTechnicalProposalFailure failure) =>
+        new(false, failure, null);
+}
+
+public sealed record RepriceRequirementTechnicalProposalItemResult(
+    bool IsSuccess,
+    RepriceRequirementTechnicalProposalItemFailure Failure,
+    RepriceRequirementTechnicalProposalItemReadModel? Pricing)
+{
+    public static RepriceRequirementTechnicalProposalItemResult Success(
+        RepriceRequirementTechnicalProposalItemReadModel pricing) =>
+        new(true, RepriceRequirementTechnicalProposalItemFailure.None, pricing);
+
+    public static RepriceRequirementTechnicalProposalItemResult Failed(
+        RepriceRequirementTechnicalProposalItemFailure failure) =>
         new(false, failure, null);
 }
 
@@ -106,14 +152,260 @@ public sealed class PriceRequirementTechnicalProposalService(
                 .ToDictionary(value => value.GlassTypeId);
             var finishes = (await finishCatalog.ListActiveAsync(cancellationToken))
                 .ToDictionary(value => value.Id);
+            var snapshot = await requirementRepository.GetCurrentPricingSnapshotAsync(
+                command.RequirementId,
+                cancellationToken);
+            if (snapshot is not null && snapshot.TechnicalProposalId == proposal.Id)
+            {
+                return PriceRequirementTechnicalProposalResult.Success(
+                    MapSnapshot(proposal, snapshot));
+            }
+
+            var pricing = await PriceAsync(
+                proposal,
+                systems,
+                glasses,
+                finishes,
+                cancellationToken);
+            var createdSnapshot = CreateSnapshot(
+                proposal,
+                pricing,
+                DateTimeOffset.UtcNow);
+            requirementRepository.AddPricingSnapshot(createdSnapshot);
+            await requirementRepository.SaveChangesAsync(cancellationToken);
 
             return PriceRequirementTechnicalProposalResult.Success(
-                await PriceAsync(proposal, systems, glasses, finishes, cancellationToken));
+                pricing with
+                {
+                    OriginalGrandTotal = createdSnapshot.OriginalGrandTotal,
+                    CurrentGrandTotal = createdSnapshot.CurrentGrandTotal,
+                    DeltaGrandTotal = createdSnapshot.DeltaGrandTotal,
+                    Items = pricing.Items.Select(item =>
+                        item with
+                        {
+                            OriginalUnit = item.Unit,
+                            CurrentUnit = item.Unit,
+                            DeltaUnit = ZeroDelta(item.Unit),
+                            OriginalLine = item.Line,
+                            CurrentLine = item.Line,
+                            DeltaLine = ZeroDelta(item.Line)
+                        }).ToArray()
+                });
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return PriceRequirementTechnicalProposalResult.Failed(
                 PriceRequirementTechnicalProposalFailure.QueryError);
+        }
+    }
+
+    public async Task<RepriceRequirementTechnicalProposalItemResult> RepriceItemAsync(
+        RepriceRequirementTechnicalProposalItemCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.RequirementId == Guid.Empty
+            || command.TechnicalProposalItemId == Guid.Empty
+            || (command.SystemId is null
+                && command.GlassTypeId is null
+                && command.FinishTypeId is null
+                && command.Quantity is null
+                && command.WidthMillimeters is null
+                && command.HeightMillimeters is null)
+            || command.Quantity is <= 0
+            || command.WidthMillimeters is <= 0
+            || command.HeightMillimeters is <= 0)
+        {
+            return RepriceRequirementTechnicalProposalItemResult.Failed(
+                RepriceRequirementTechnicalProposalItemFailure.InvalidRequest);
+        }
+
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not Guid userId)
+        {
+            return RepriceRequirementTechnicalProposalItemResult.Failed(
+                RepriceRequirementTechnicalProposalItemFailure.Unauthorized);
+        }
+
+        var access = await ValidateAccessAsync(
+            command.RequirementId,
+            userId,
+            cancellationToken);
+        if (access != PriceRequirementTechnicalProposalFailure.None)
+        {
+            return RepriceRequirementTechnicalProposalItemResult.Failed(
+                MapRepriceAccessFailure(access));
+        }
+
+        try
+        {
+            var proposal =
+                await requirementRepository.FindCurrentTechnicalProposalForUpdateAsync(
+                    command.RequirementId,
+                    cancellationToken);
+            if (proposal is null)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .TechnicalProposalNotFound);
+            }
+
+            if (!proposal.IsCommerciallyConfirmed)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .TechnicalProposalNotConfirmed);
+            }
+
+            var proposalItem = proposal.Items.SingleOrDefault(item =>
+                item.Id == command.TechnicalProposalItemId);
+            if (proposalItem is null)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .TechnicalProposalItemNotFound);
+            }
+
+            var systems = (await productSystemCatalog.ListActiveAsync(cancellationToken))
+                .ToDictionary(value => value.Id);
+            var selectableSystems =
+                (await productSystemCatalog.ListActiveSelectableAsync(cancellationToken))
+                .ToDictionary(value => value.Id);
+            var glasses = (await glassCatalog.GetActiveWithCurrentPriceRangesAsync(cancellationToken))
+                .ToDictionary(value => value.GlassTypeId);
+            var finishes = (await finishCatalog.ListActiveAsync(cancellationToken))
+                .ToDictionary(value => value.Id);
+
+            if (command.SystemId is { } requestedSystem
+                && (!selectableSystems.TryGetValue(requestedSystem, out var selectedSystem)
+                    || !selectedSystem.IsActive
+                    || !selectedSystem.IsSelectable))
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .InvalidSystemSelection);
+            }
+
+            if (command.GlassTypeId is { } requestedGlass
+                && (!glasses.TryGetValue(requestedGlass, out var selectedGlass)
+                    || !selectedGlass.IsActive
+                    || !selectedGlass.IsSelectable))
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .InvalidGlassSelection);
+            }
+
+            if (command.FinishTypeId is { } requestedFinish
+                && (!finishes.TryGetValue(requestedFinish, out var selectedFinish)
+                    || !selectedFinish.IsActive
+                    || !selectedFinish.IsSelectable))
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .InvalidFinishSelection);
+            }
+
+            var snapshot =
+                await requirementRepository.FindCurrentPricingSnapshotForUpdateAsync(
+                    command.RequirementId,
+                    cancellationToken);
+            if (snapshot is null || snapshot.TechnicalProposalId != proposal.Id)
+            {
+                var initialPricing = await PriceAsync(
+                    proposal,
+                    systems,
+                    glasses,
+                    finishes,
+                    cancellationToken);
+                snapshot = CreateSnapshot(
+                    proposal,
+                    initialPricing,
+                    DateTimeOffset.UtcNow);
+                requirementRepository.AddPricingSnapshot(snapshot);
+            }
+
+            var itemSnapshot = snapshot.Items.SingleOrDefault(item =>
+                item.TechnicalProposalItemId == proposalItem.Id);
+            if (itemSnapshot is null)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure.QueryError);
+            }
+
+            var baseConfiguration = EffectiveConfiguration(proposalItem);
+            var newSystemId = command.SystemId ?? baseConfiguration.SystemId;
+            var newGlassTypeId = command.GlassTypeId ?? baseConfiguration.GlassTypeId;
+            var newFinishTypeId = command.FinishTypeId ?? baseConfiguration.FinishTypeId;
+            var requireSystemMatchedComparable = command.SystemId is not null
+                && newSystemId != baseConfiguration.SystemId;
+            var now = DateTimeOffset.UtcNow;
+            proposalItem.ApplyManualDataOverride(
+                command.Quantity,
+                command.WidthMillimeters,
+                command.HeightMillimeters);
+            proposalItem.Select(
+                newSystemId,
+                newGlassTypeId,
+                newFinishTypeId,
+                userId,
+                now);
+
+            var commercialLine = proposal.Requirement?.CommercialLine is { } line
+                ? line.ToString().ToUpperInvariant()
+                : null;
+            var repriced = await PriceItemAsync(
+                proposalItem,
+                commercialLine,
+                systems,
+                glasses,
+                finishes,
+                requireSystemMatchedComparable,
+                cancellationToken);
+            var previousCurrent = itemSnapshot.CurrentLineExpected;
+            itemSnapshot.UpdateCurrent(
+                newSystemId,
+                newGlassTypeId,
+                newFinishTypeId,
+                repriced.Status,
+                repriced.Unit.Minimum,
+                repriced.Unit.Expected,
+                repriced.Unit.Maximum,
+                repriced.Line.Minimum,
+                repriced.Line.Expected,
+                repriced.Line.Maximum,
+                now);
+            var currentGrandTotal = snapshot.CurrentGrandTotal is null
+                || previousCurrent is null
+                || itemSnapshot.CurrentLineExpected is null
+                    ? null
+                    : snapshot.CurrentGrandTotal
+                        - previousCurrent
+                        + itemSnapshot.CurrentLineExpected;
+            snapshot.UpdateCurrentGrandTotal(currentGrandTotal, now);
+
+            await requirementRepository.SaveChangesAsync(cancellationToken);
+
+            return RepriceRequirementTechnicalProposalItemResult.Success(
+                new RepriceRequirementTechnicalProposalItemReadModel(
+                    snapshot.RequirementId,
+                    snapshot.TechnicalProposalId,
+                    proposalItem.Id,
+                    newSystemId,
+                    newGlassTypeId,
+                    newFinishTypeId,
+                    ApplySnapshot(repriced, itemSnapshot),
+                    snapshot.OriginalGrandTotal,
+                    snapshot.CurrentGrandTotal,
+                    snapshot.DeltaGrandTotal));
+        }
+        catch (RequirementPersistenceException)
+        {
+            return RepriceRequirementTechnicalProposalItemResult.Failed(
+                RepriceRequirementTechnicalProposalItemFailure.PersistenceError);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return RepriceRequirementTechnicalProposalItemResult.Failed(
+                RepriceRequirementTechnicalProposalItemFailure.QueryError);
         }
     }
 
@@ -125,9 +417,19 @@ public sealed class PriceRequirementTechnicalProposalService(
         CancellationToken cancellationToken)
     {
         var items = new List<TechnicalProposalPricingItemReadModel>();
+        var commercialLine = proposal.Requirement?.CommercialLine is { } line
+            ? line.ToString().ToUpperInvariant()
+            : null;
         foreach (var item in proposal.Items.OrderBy(value => value.ExtractedItem.Sequence).ThenBy(value => value.Id))
         {
-            items.Add(await PriceItemAsync(item, systems, glasses, finishes, cancellationToken));
+            items.Add(await PriceItemAsync(
+                item,
+                commercialLine,
+                systems,
+                glasses,
+                finishes,
+                false,
+                cancellationToken));
         }
 
         var priced = items.Where(value => value.Status == "PRICEABLE").ToArray();
@@ -160,9 +462,11 @@ public sealed class PriceRequirementTechnicalProposalService(
 
     private async Task<TechnicalProposalPricingItemReadModel> PriceItemAsync(
         RequirementTechnicalProposalItem proposalItem,
+        string? commercialLine,
         IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems,
         IReadOnlyDictionary<Guid, GlassTypeCatalogReadModel> glasses,
         IReadOnlyDictionary<Guid, FinishTypeCatalogReadModel> finishes,
+        bool requireSystemMatchedComparable,
         CancellationToken cancellationToken)
     {
         var item = proposalItem.ExtractedItem;
@@ -171,10 +475,6 @@ public sealed class PriceRequirementTechnicalProposalService(
         GlassTypeCatalogReadModel? glass = null;
         FinishTypeCatalogReadModel? finish = null;
         var effective = EffectiveConfiguration(proposalItem);
-        if (!proposalItem.IsTechnicallyComplete || !proposalItem.IsPriceable)
-        {
-            missing.Add("TECHNICAL_PROPOSAL_ITEM_NOT_PRICEABLE");
-        }
         if (effective.SystemId is not { } systemId
             || !systems.TryGetValue(systemId, out system))
         {
@@ -190,9 +490,14 @@ public sealed class PriceRequirementTechnicalProposalService(
         {
             missing.Add(effective.MissingFinishCode);
         }
-        if (item.Quantity is not > 0)
+        if (proposalItem.EffectiveQuantity is not > 0)
         {
             missing.Add("QUANTITY_MISSING");
+        }
+        if (proposalItem.EffectiveWidthMillimeters is not > 0
+            || proposalItem.EffectiveHeightMillimeters is not > 0)
+        {
+            missing.Add("MEASUREMENTS_MISSING");
         }
 
         if (missing.Count > 0 || system is null || glass is null || finish is null)
@@ -207,7 +512,10 @@ public sealed class PriceRequirementTechnicalProposalService(
                 missing);
         }
 
-        var mapping = mapper.Map(proposalItem, system, glass, finish);
+        var mapping = WithPricingContext(
+            mapper.Map(proposalItem, system, glass, finish),
+            commercialLine,
+            requireSystemMatchedComparable);
         if (mapping.PricingArea is not > 0)
         {
             return EmptyItem(proposalItem, "NOT_PRICEABLE", effective.Source,
@@ -269,7 +577,13 @@ public sealed class PriceRequirementTechnicalProposalService(
             mapping.MappingWarnings,
             commercial.Assumptions,
             commercial.MissingData,
-            technical.Comparables.Take(5).Select(MapComparable).ToArray());
+            technical.Comparables.Take(5).Select(MapComparable).ToArray(),
+            unit,
+            unit,
+            ZeroDelta(unit),
+            line,
+            line,
+            ZeroDelta(line));
     }
 
     private static TechnicalProposalPricingComparableReadModel MapComparable(
@@ -282,7 +596,13 @@ public sealed class PriceRequirementTechnicalProposalService(
             value.BackendTechnicalScore,
             value.Ai2SimilarityScore,
             value.SimilarityLevel,
-            value.FinalWeight);
+            value.FinalWeight,
+            value.MatchingTier,
+            value.MatchedSystem,
+            value.MatchedGlass,
+            value.MatchedFinish,
+            value.MatchedCommercialLine,
+            value.FallbackReasons ?? []);
 
     private static TechnicalProposalPricingItemReadModel EmptyItem(
         RequirementTechnicalProposalItem proposalItem,
@@ -303,7 +623,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             item.Description,
             status,
             configurationSource,
-            item.Quantity,
+            proposalItem.EffectiveQuantity,
             pricingArea,
             new TechnicalProposalPricingMoneyRange(null, null, null),
             new TechnicalProposalPricingMoneyRange(null, null, null),
@@ -313,12 +633,211 @@ public sealed class PriceRequirementTechnicalProposalService(
             warnings,
             [],
             missing,
-            []);
+            [],
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            new TechnicalProposalPricingMoneyRange(null, null, null));
     }
+
+    private static RequirementPricingSnapshot CreateSnapshot(
+        RequirementTechnicalProposal proposal,
+        RequirementTechnicalProposalPricingReadModel pricing,
+        DateTimeOffset createdAtUtc)
+    {
+        var snapshot = RequirementPricingSnapshot.Create(
+            proposal.RequirementId,
+            proposal.Id,
+            pricing.Currency,
+            pricing.PricingBasis,
+            pricing.EstimatedSubtotal.Expected,
+            pricing.EstimatedSubtotal.Expected,
+            createdAtUtc);
+        var itemsById = proposal.Items.ToDictionary(item => item.Id);
+        foreach (var pricingItem in pricing.Items)
+        {
+            var proposalItem = itemsById[pricingItem.ProposalItemId];
+            var effective = EffectiveConfiguration(proposalItem);
+            snapshot.AddItem(RequirementPricingItemSnapshot.Create(
+                snapshot.Id,
+                proposalItem.Id,
+                effective.SystemId,
+                effective.GlassTypeId,
+                effective.FinishTypeId,
+                pricingItem.Status,
+                pricingItem.Unit.Minimum,
+                pricingItem.Unit.Expected,
+                pricingItem.Unit.Maximum,
+                pricingItem.Line.Minimum,
+                pricingItem.Line.Expected,
+                pricingItem.Line.Maximum,
+                createdAtUtc));
+        }
+
+        return snapshot;
+    }
+
+    private static RequirementTechnicalProposalPricingReadModel MapSnapshot(
+        RequirementTechnicalProposal proposal,
+        RequirementPricingSnapshot snapshot)
+    {
+        var itemsById = proposal.Items.ToDictionary(item => item.Id);
+        var items = snapshot.Items
+            .OrderBy(value => itemsById[value.TechnicalProposalItemId]
+                .ExtractedItem.Sequence)
+            .ThenBy(value => value.TechnicalProposalItemId)
+            .Select(itemSnapshot =>
+            {
+                var proposalItem = itemsById[itemSnapshot.TechnicalProposalItemId];
+                return ApplySnapshot(
+                    EmptyItem(
+                        proposalItem,
+                        itemSnapshot.CurrentStatus,
+                        "SELECTED",
+                        DisplayPricingArea(proposalItem),
+                        itemSnapshot.CurrentStatus != "PRICEABLE",
+                        [],
+                        itemSnapshot.CurrentStatus == "PRICEABLE"
+                            ? []
+                            : ["NO_COMPARABLES"]),
+                    itemSnapshot);
+            })
+            .ToArray();
+        var priced = items.Count(item => item.Status == "PRICEABLE");
+
+        return new RequirementTechnicalProposalPricingReadModel(
+            snapshot.RequirementId,
+            snapshot.TechnicalProposalId,
+            snapshot.Currency,
+            snapshot.PricingBasis,
+            items.Length,
+            priced,
+            items.Length - priced,
+            items.Count(item => item.RequiresReview),
+            new TechnicalProposalPricingMoneyRange(
+                SumCurrent(items, range => range.Line.Minimum),
+                snapshot.CurrentGrandTotal,
+                SumCurrent(items, range => range.Line.Maximum)),
+            items.All(item => item.Status == "PRICEABLE"),
+            items.Any(item => item.RequiresReview),
+            [],
+            items.Any(item => item.Status != "PRICEABLE")
+                ? ["NO_COMPARABLES"]
+                : [],
+            items,
+            snapshot.OriginalGrandTotal,
+            snapshot.CurrentGrandTotal,
+            snapshot.DeltaGrandTotal);
+    }
+
+    private static TechnicalProposalPricingItemReadModel ApplySnapshot(
+        TechnicalProposalPricingItemReadModel item,
+        RequirementPricingItemSnapshot snapshot)
+    {
+        var originalUnit = new TechnicalProposalPricingMoneyRange(
+            snapshot.OriginalUnitMinimum,
+            snapshot.OriginalUnitExpected,
+            snapshot.OriginalUnitMaximum);
+        var currentUnit = new TechnicalProposalPricingMoneyRange(
+            snapshot.CurrentUnitMinimum,
+            snapshot.CurrentUnitExpected,
+            snapshot.CurrentUnitMaximum);
+        var originalLine = new TechnicalProposalPricingMoneyRange(
+            snapshot.OriginalLineMinimum,
+            snapshot.OriginalLineExpected,
+            snapshot.OriginalLineMaximum);
+        var currentLine = new TechnicalProposalPricingMoneyRange(
+            snapshot.CurrentLineMinimum,
+            snapshot.CurrentLineExpected,
+            snapshot.CurrentLineMaximum);
+
+        return item with
+        {
+            Status = snapshot.CurrentStatus,
+            Unit = currentUnit,
+            Line = currentLine,
+            OriginalUnit = originalUnit,
+            CurrentUnit = currentUnit,
+            DeltaUnit = Delta(currentUnit, originalUnit),
+            OriginalLine = originalLine,
+            CurrentLine = currentLine,
+            DeltaLine = Delta(currentLine, originalLine)
+        };
+    }
+
+    private static decimal? SumCurrent(
+        IReadOnlyList<TechnicalProposalPricingItemReadModel> items,
+        Func<TechnicalProposalPricingItemReadModel, decimal?> selector)
+    {
+        var values = items.Select(selector).ToArray();
+        return values.Any(value => value is null)
+            ? null
+            : values.Sum(value => value!.Value);
+    }
+
+    private static TechnicalProposalPricingMoneyRange ZeroDelta(
+        TechnicalProposalPricingMoneyRange range) =>
+        new(
+            range.Minimum is null ? null : 0m,
+            range.Expected is null ? null : 0m,
+            range.Maximum is null ? null : 0m);
+
+    private static TechnicalProposalPricingMoneyRange Delta(
+        TechnicalProposalPricingMoneyRange current,
+        TechnicalProposalPricingMoneyRange original) =>
+        new(
+            current.Minimum is null || original.Minimum is null
+                ? null
+                : current.Minimum - original.Minimum,
+            current.Expected is null || original.Expected is null
+                ? null
+                : current.Expected - original.Expected,
+            current.Maximum is null || original.Maximum is null
+                ? null
+                : current.Maximum - original.Maximum);
+
+    private static RepriceRequirementTechnicalProposalItemFailure
+        MapRepriceAccessFailure(PriceRequirementTechnicalProposalFailure failure) =>
+        failure switch
+        {
+            PriceRequirementTechnicalProposalFailure.InvalidRequest =>
+                RepriceRequirementTechnicalProposalItemFailure.InvalidRequest,
+            PriceRequirementTechnicalProposalFailure.Unauthorized =>
+                RepriceRequirementTechnicalProposalItemFailure.Unauthorized,
+            PriceRequirementTechnicalProposalFailure.InactiveUser =>
+                RepriceRequirementTechnicalProposalItemFailure.InactiveUser,
+            PriceRequirementTechnicalProposalFailure.RequirementNotFound =>
+                RepriceRequirementTechnicalProposalItemFailure.RequirementNotFound,
+            PriceRequirementTechnicalProposalFailure.PreQuoteNotFound =>
+                RepriceRequirementTechnicalProposalItemFailure.PreQuoteNotFound,
+            PriceRequirementTechnicalProposalFailure.ProjectNotFound =>
+                RepriceRequirementTechnicalProposalItemFailure.ProjectNotFound,
+            PriceRequirementTechnicalProposalFailure.InactiveProject =>
+                RepriceRequirementTechnicalProposalItemFailure.InactiveProject,
+            PriceRequirementTechnicalProposalFailure.ClientNotFound =>
+                RepriceRequirementTechnicalProposalItemFailure.ClientNotFound,
+            PriceRequirementTechnicalProposalFailure.InactiveClient =>
+                RepriceRequirementTechnicalProposalItemFailure.InactiveClient,
+            _ => RepriceRequirementTechnicalProposalItemFailure.QueryError
+        };
 
     private static EffectiveTechnicalConfiguration EffectiveConfiguration(
         RequirementTechnicalProposalItem proposalItem)
     {
+        if (!proposalItem.HasSelectedConfiguration())
+        {
+            return new EffectiveTechnicalConfiguration(
+                "SUGGESTED",
+                proposalItem.SuggestedSystemId,
+                proposalItem.SuggestedGlassTypeId,
+                proposalItem.SuggestedFinishTypeId,
+                "SYSTEM_NOT_RESOLVED",
+                "GLASS_NOT_RESOLVED",
+                "FINISH_NOT_RESOLVED");
+        }
+
         return new EffectiveTechnicalConfiguration(
             "SELECTED",
             proposalItem.SelectedSystemId,
@@ -328,6 +847,21 @@ public sealed class PriceRequirementTechnicalProposalService(
             "SELECTED_GLASS_MISSING",
             "SELECTED_FINISH_MISSING");
     }
+
+    private static TechnicalProposalItemHistoricalPricingMapping WithPricingContext(
+        TechnicalProposalItemHistoricalPricingMapping mapping,
+        string? commercialLine,
+        bool requireSystemMatchedComparable) =>
+        mapping with
+        {
+            CandidateQuery = mapping.CandidateQuery with
+            {
+                CommercialLine = string.IsNullOrWhiteSpace(commercialLine)
+                    ? mapping.CandidateQuery.CommercialLine
+                    : commercialLine.Trim(),
+                RequireSystemMatchedComparable = requireSystemMatchedComparable
+            }
+        };
 
     private async Task<PriceRequirementTechnicalProposalFailure> ValidateAccessAsync(
         Guid requirementId,
@@ -383,6 +917,15 @@ public sealed class PriceRequirementTechnicalProposalService(
 
     private static decimal? Multiply(decimal? value, decimal quantity) =>
         value is null ? null : value.Value * quantity;
+
+    private static decimal? DisplayPricingArea(
+        RequirementTechnicalProposalItem proposalItem) =>
+        proposalItem.EffectiveWidthMillimeters is > 0
+            && proposalItem.EffectiveHeightMillimeters is > 0
+            ? proposalItem.EffectiveWidthMillimeters.Value
+                * proposalItem.EffectiveHeightMillimeters.Value
+                / 1_000_000m
+            : proposalItem.ExtractedItem.AreaSquareMeters;
 
     private sealed record EffectiveTechnicalConfiguration(
         string Source,

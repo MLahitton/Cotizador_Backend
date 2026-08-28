@@ -44,6 +44,8 @@ public interface IRequirementRepository
 
     void AddTechnicalProposal(RequirementTechnicalProposal proposal);
 
+    void AddPricingSnapshot(RequirementPricingSnapshot snapshot);
+
     Task<RequirementExtractionResult?> GetLatestSuccessfulExtractionAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
@@ -54,6 +56,18 @@ public interface IRequirementRepository
 
     Task<RequirementTechnicalProposal?> FindTechnicalProposalForUpdateAsync(
         Guid technicalProposalId,
+        CancellationToken cancellationToken);
+
+    Task<RequirementTechnicalProposal?> FindCurrentTechnicalProposalForUpdateAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
+    Task<RequirementPricingSnapshot?> GetCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
+    Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotForUpdateAsync(
+        Guid requirementId,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RequirementExtractedItem>> GetExtractedItemsAsync(

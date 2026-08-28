@@ -627,6 +627,10 @@ public sealed class ProcessRequirementService(
                     value.Confidence,
                     MapExtractionStatus(value.Status),
                     createdAtUtc)).ToArray();
+            foreach (var evidence in persistableEvidence)
+            {
+                extracted.AddEvidence(evidence);
+            }
 
             var segments = item.Segments?.Select((segment, index) =>
                 RequirementExtractedItemSegment.Create(

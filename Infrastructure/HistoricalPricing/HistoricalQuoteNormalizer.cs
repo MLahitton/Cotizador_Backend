@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Application.Common.Abstractions.HistoricalPricing;
 
 namespace Infrastructure.HistoricalPricing;
 
@@ -56,6 +57,9 @@ public static partial class HistoricalQuoteNormalizer
         var text = NormalizeText(value);
         return text is not null && (text.Contains("PVB", StringComparison.Ordinal) || text.Contains('+')) ? text : null;
     }
+
+    public static string? CanonicalSystemIdentity(string? value) =>
+        HistoricalSystemIdentity.Canonicalize(value);
 
     [GeneratedRegex(@"(?<!\d)(\d{1,2}(?:[.,]\d+)?)\s*MM\b")]
     private static partial Regex ThicknessRegex();

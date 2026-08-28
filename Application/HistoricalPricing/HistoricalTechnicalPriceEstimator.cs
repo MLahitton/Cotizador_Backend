@@ -20,6 +20,11 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
         var evaluation = await _similarityService.EvaluateAsync(query, cancellationToken);
         var assumptions = new List<string>();
         var missing = new HashSet<string>(StringComparer.Ordinal);
+        if (query.RequireSystemMatchedComparable
+            && evaluation.Candidates.Count == 0)
+        {
+            missing.Add("SYSTEM_MATCH_REQUIRED_NO_COMPARABLES");
+        }
         var newUnitArea = ResolveNewUnitArea(query);
         if (newUnitArea is null)
         {
@@ -96,7 +101,13 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
                 historicalUnitArea.Value,
                 projectedPrice,
                 isStrong,
-                candidate.HasAreaMismatch));
+                candidate.HasAreaMismatch,
+                candidate.MatchingTier,
+                candidate.MatchedSystem,
+                candidate.MatchedGlass,
+                candidate.MatchedFinish,
+                candidate.MatchedCommercialLine,
+                candidate.FallbackReasons));
         }
 
         var filtered = ExcludeOutliers(comparables, assumptions);
@@ -266,7 +277,7 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
         HistoricalCandidateQuery query,
         HistoricalComparableCandidate candidate) =>
         KnownTextMismatch(query.Category, candidate.Category)
-        || KnownTextMismatch(query.System, candidate.System)
+        || KnownSystemMismatch(query.System, candidate.System)
         || KnownTextMismatch(query.Glass, candidate.Glass)
         || KnownDecimalMismatch(
             query.GlassThickness,
@@ -280,9 +291,12 @@ public sealed class HistoricalTechnicalPriceEstimator : IHistoricalTechnicalPric
         && !string.Equals(expected.Trim(), actual.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static bool SystemsMatch(string? expected, string? actual) =>
+        HistoricalSystemIdentity.Matches(expected, actual);
+
+    private static bool KnownSystemMismatch(string? expected, string? actual) =>
         !string.IsNullOrWhiteSpace(expected)
         && !string.IsNullOrWhiteSpace(actual)
-        && string.Equals(expected.Trim(), actual.Trim(), StringComparison.OrdinalIgnoreCase);
+        && !HistoricalSystemIdentity.Matches(expected, actual);
 
     private static bool KnownDecimalMismatch(
         decimal? expected,

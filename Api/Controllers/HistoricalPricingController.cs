@@ -118,5 +118,11 @@ public sealed class HistoricalPricingController(
                     value.FinalWeight,
                     value.PublicUnitPrice,
                     value.HistoricalUnitArea,
-                    value.ProjectedPrice)).ToArray());
+                    value.ProjectedPrice,
+                    value.MatchingTier,
+                    value.MatchedSystem,
+                    value.MatchedGlass,
+                    value.MatchedFinish,
+                    value.MatchedCommercialLine,
+                    value.FallbackReasons ?? [])).ToArray());
 }

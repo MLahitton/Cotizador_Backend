@@ -4,7 +4,10 @@ public sealed record UpdateRequirementTechnicalProposalItemSelectionRequest(
     bool? ConfirmSuggested,
     Guid? SystemId,
     Guid? GlassId,
-    Guid? FinishId);
+    Guid? FinishId,
+    int? Quantity = null,
+    int? WidthMm = null,
+    int? HeightMm = null);
 
 public sealed record UpdateRequirementTechnicalProposalItemSelectionResponse(
     Guid TechnicalProposalId,
