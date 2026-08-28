@@ -429,13 +429,17 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
-    public async Task RepriceItem_WithChangedSystem_RequiresSystemMatchedComparable()
+    public async Task RepriceItem_WithChangedSystemAndLastValidPrice_PreservesCurrentPrice()
     {
         HistoricalCandidateQuery? captured = null;
         var item = ProposalItem(Item());
         var context = CreateContext(
             [item],
-            TechnicalEstimate(null, null, null),
+            TechnicalEstimate(
+                null,
+                null,
+                null,
+                ["SYSTEM_MATCH_REQUIRED_NO_COMPARABLES"]),
             query => captured = query);
         var snapshot = Snapshot(
             context.Requirement.Id,
@@ -461,11 +465,181 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.True(captured!.RequireSystemMatchedComparable);
-        Assert.Equal("NO_ESTIMATE", result.Pricing!.Item.Status);
+        Assert.Equal("PRICEABLE", result.Pricing!.Item.Status);
+        Assert.Equal("LAST_VALID_CURRENT", result.Pricing.Item.PriceSource);
+        Assert.Equal("NO_ESTIMATE", result.Pricing.Item.RepriceAttemptState);
+        Assert.Equal(
+            "SYSTEM_MATCH_REQUIRED_NO_COMPARABLES",
+            result.Pricing.Item.RepriceAttemptReason);
+        Assert.Contains(
+            "SYSTEM_MATCH_REQUIRED_NO_COMPARABLES",
+            result.Pricing.Item.MissingData);
+        Assert.Contains(
+            "LAST_VALID_PRICE_PRESERVED",
+            result.Pricing.Item.MissingData);
         Assert.Empty(result.Pricing.Item.Comparables);
-        Assert.Null(result.Pricing.Item.CurrentLine!.Expected);
+        Assert.Equal(100m, result.Pricing.Item.CurrentLine!.Expected);
         Assert.Equal(100m, result.Pricing.Item.OriginalLine!.Expected);
+        Assert.Equal(100m, result.Pricing.CurrentGrandTotal);
+        Assert.Equal(0m, result.Pricing.DeltaGrandTotal);
+    }
+
+    [Fact]
+    public async Task RepriceItem_AfterSuccessfulThenFailedReprice_KeepsLastSuccessfulCurrent()
+    {
+        var item = ProposalItem(Item());
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(
+                null,
+                null,
+                null,
+                ["SYSTEM_MATCH_REQUIRED_NO_COMPARABLES"]));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 200m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                SystemLsa9060Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("PRICEABLE", result.Pricing!.Item.Status);
+        Assert.Equal("LAST_VALID_CURRENT", result.Pricing.Item.PriceSource);
+        Assert.Equal(200m, result.Pricing.Item.CurrentLine!.Expected);
+        Assert.Equal(100m, result.Pricing.Item.DeltaLine!.Expected);
+        Assert.Equal(200m, result.Pricing.CurrentGrandTotal);
+        Assert.Equal(100m, result.Pricing.DeltaGrandTotal);
+    }
+
+    [Fact]
+    public async Task RepriceItem_WithNeverPricedItemAndNoEstimate_RemainsNotEstimated()
+    {
+        var item = ProposalItem(Item());
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(
+                null,
+                null,
+                null,
+                ["SYSTEM_MATCH_REQUIRED_NO_COMPARABLES"]));
+        var snapshot = RequirementPricingSnapshot.Create(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            "COP",
+            "PUBLIC_QUOTED_ITEM_PRICES",
+            null,
+            null,
+            At);
+        snapshot.AddItem(RequirementPricingItemSnapshot.Create(
+            snapshot.Id,
+            item.Id,
+            item.SuggestedSystemId,
+            item.SuggestedGlassTypeId,
+            item.SuggestedFinishTypeId,
+            "NO_ESTIMATE",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            At));
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                SystemLsa9060Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("NO_ESTIMATE", result.Pricing!.Item.Status);
+        Assert.Null(result.Pricing.Item.PriceSource);
+        Assert.Equal("NO_ESTIMATE", result.Pricing.Item.RepriceAttemptState);
+        Assert.Null(result.Pricing.Item.CurrentLine!.Expected);
         Assert.Null(result.Pricing.CurrentGrandTotal);
+    }
+
+    [Fact]
+    public async Task RepriceItem_SuccessAfterFailedAttempt_UpdatesLastValidCurrent()
+    {
+        var item = ProposalItem(Item());
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(
+                null,
+                null,
+                null,
+                ["SYSTEM_MATCH_REQUIRED_NO_COMPARABLES"]));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 200m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var failed = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                SystemLsa9060Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+        context.TechnicalEstimator.EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(TechnicalEstimate(300m, 400m, 500m));
+
+        var succeeded = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(failed.IsSuccess);
+        Assert.Equal(200m, failed.Pricing!.Item.CurrentLine!.Expected);
+        Assert.True(succeeded.IsSuccess);
+        Assert.Equal("CURRENT_ESTIMATE", succeeded.Pricing!.Item.PriceSource);
+        Assert.Equal("PRICEABLE", succeeded.Pricing.Item.RepriceAttemptState);
+        Assert.Equal(400m, succeeded.Pricing.Item.CurrentLine!.Expected);
+        Assert.Equal(300m, succeeded.Pricing.Item.DeltaLine!.Expected);
+        Assert.Equal(400m, succeeded.Pricing.CurrentGrandTotal);
+        Assert.Equal(300m, succeeded.Pricing.DeltaGrandTotal);
     }
 
     [Theory]
@@ -833,7 +1007,8 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     private static HistoricalTechnicalPriceEstimate TechnicalEstimate(
         decimal? minimum,
         decimal? expected,
-        decimal? maximum) =>
+        decimal? maximum,
+        IReadOnlyList<string>? missingData = null) =>
         new(
             "COP",
             minimum,
@@ -847,7 +1022,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             expected is null ? 0 : 3,
             expected is null,
             [],
-            [],
+            missingData ?? [],
             [],
             expected is null
                 ? []

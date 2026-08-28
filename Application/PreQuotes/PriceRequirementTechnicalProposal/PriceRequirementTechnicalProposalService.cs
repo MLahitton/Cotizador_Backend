@@ -103,6 +103,9 @@ public sealed class PriceRequirementTechnicalProposalService(
 {
     private const string PricingBasis = "PUBLIC_QUOTED_ITEM_PRICES";
     private const string Currency = "COP";
+    private const string PriceSourceCurrentEstimate = "CURRENT_ESTIMATE";
+    private const string PriceSourceLastValidCurrent = "LAST_VALID_CURRENT";
+    private const string LastValidPricePreservedReason = "LAST_VALID_PRICE_PRESERVED";
 
     public async Task<PriceRequirementTechnicalProposalResult> ExecuteAsync(
         PriceRequirementTechnicalProposalCommand command,
@@ -361,26 +364,48 @@ public sealed class PriceRequirementTechnicalProposalService(
                 requireSystemMatchedComparable,
                 cancellationToken);
             var previousCurrent = itemSnapshot.CurrentLineExpected;
-            itemSnapshot.UpdateCurrent(
-                newSystemId,
-                newGlassTypeId,
-                newFinishTypeId,
-                repriced.Status,
-                repriced.Unit.Minimum,
-                repriced.Unit.Expected,
-                repriced.Unit.Maximum,
-                repriced.Line.Minimum,
-                repriced.Line.Expected,
-                repriced.Line.Maximum,
-                now);
-            var currentGrandTotal = snapshot.CurrentGrandTotal is null
-                || previousCurrent is null
-                || itemSnapshot.CurrentLineExpected is null
-                    ? null
-                    : snapshot.CurrentGrandTotal
-                        - previousCurrent
-                        + itemSnapshot.CurrentLineExpected;
-            snapshot.UpdateCurrentGrandTotal(currentGrandTotal, now);
+            var hasNewEstimate = HasCompleteEstimate(repriced.Line);
+            var hasLastValidCurrent = HasCompleteCurrentEstimate(itemSnapshot);
+            TechnicalProposalPricingItemReadModel responseItem;
+            if (!hasNewEstimate && hasLastValidCurrent)
+            {
+                responseItem = ApplySnapshot(
+                    PreserveLastValidCurrent(repriced),
+                    itemSnapshot);
+            }
+            else
+            {
+                itemSnapshot.UpdateCurrent(
+                    newSystemId,
+                    newGlassTypeId,
+                    newFinishTypeId,
+                    repriced.Status,
+                    repriced.Unit.Minimum,
+                    repriced.Unit.Expected,
+                    repriced.Unit.Maximum,
+                    repriced.Line.Minimum,
+                    repriced.Line.Expected,
+                    repriced.Line.Maximum,
+                    now);
+                var currentGrandTotal = snapshot.CurrentGrandTotal is null
+                    || previousCurrent is null
+                    || itemSnapshot.CurrentLineExpected is null
+                        ? null
+                        : snapshot.CurrentGrandTotal
+                            - previousCurrent
+                            + itemSnapshot.CurrentLineExpected;
+                snapshot.UpdateCurrentGrandTotal(currentGrandTotal, now);
+                responseItem = ApplySnapshot(
+                    repriced with
+                    {
+                        PriceSource = hasNewEstimate ? PriceSourceCurrentEstimate : null,
+                        RepriceAttemptState = hasNewEstimate ? "PRICEABLE" : repriced.Status,
+                        RepriceAttemptReason = hasNewEstimate
+                            ? null
+                            : FirstReason(repriced)
+                    },
+                    itemSnapshot);
+            }
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
 
@@ -392,7 +417,7 @@ public sealed class PriceRequirementTechnicalProposalService(
                     newSystemId,
                     newGlassTypeId,
                     newFinishTypeId,
-                    ApplySnapshot(repriced, itemSnapshot),
+                    responseItem,
                     snapshot.OriginalGrandTotal,
                     snapshot.CurrentGrandTotal,
                     snapshot.DeltaGrandTotal));
@@ -583,7 +608,10 @@ public sealed class PriceRequirementTechnicalProposalService(
             ZeroDelta(unit),
             line,
             line,
-            ZeroDelta(line));
+            ZeroDelta(line),
+            hasEstimate ? PriceSourceCurrentEstimate : null,
+            hasEstimate ? "PRICEABLE" : status,
+            hasEstimate ? null : FirstReason(commercial.MissingData));
     }
 
     private static TechnicalProposalPricingComparableReadModel MapComparable(
@@ -639,7 +667,10 @@ public sealed class PriceRequirementTechnicalProposalService(
             new TechnicalProposalPricingMoneyRange(null, null, null),
             new TechnicalProposalPricingMoneyRange(null, null, null),
             new TechnicalProposalPricingMoneyRange(null, null, null),
-            new TechnicalProposalPricingMoneyRange(null, null, null));
+            new TechnicalProposalPricingMoneyRange(null, null, null),
+            null,
+            status,
+            FirstReason(missing));
     }
 
     private static RequirementPricingSnapshot CreateSnapshot(
@@ -766,6 +797,60 @@ public sealed class PriceRequirementTechnicalProposalService(
             DeltaLine = Delta(currentLine, originalLine)
         };
     }
+
+    private static TechnicalProposalPricingItemReadModel PreserveLastValidCurrent(
+        TechnicalProposalPricingItemReadModel repriced)
+    {
+        var missing = AppendDistinct(
+            repriced.MissingData,
+            [LastValidPricePreservedReason]);
+        var assumptions = AppendDistinct(
+            repriced.Assumptions,
+            [LastValidPricePreservedReason]);
+
+        return repriced with
+        {
+            Status = "PRICEABLE",
+            RequiresReview = true,
+            Assumptions = assumptions,
+            MissingData = missing,
+            PriceSource = PriceSourceLastValidCurrent,
+            RepriceAttemptState = repriced.Status,
+            RepriceAttemptReason = FirstReason(repriced)
+        };
+    }
+
+    private static bool HasCompleteEstimate(TechnicalProposalPricingMoneyRange range) =>
+        range.Minimum is not null
+        && range.Expected is not null
+        && range.Maximum is not null;
+
+    private static bool HasCompleteCurrentEstimate(
+        RequirementPricingItemSnapshot itemSnapshot) =>
+        itemSnapshot.CurrentStatus == "PRICEABLE"
+        && itemSnapshot.CurrentUnitMinimum is not null
+        && itemSnapshot.CurrentUnitExpected is not null
+        && itemSnapshot.CurrentUnitMaximum is not null
+        && itemSnapshot.CurrentLineMinimum is not null
+        && itemSnapshot.CurrentLineExpected is not null
+        && itemSnapshot.CurrentLineMaximum is not null;
+
+    private static IReadOnlyList<string> AppendDistinct(
+        IReadOnlyList<string> source,
+        IReadOnlyList<string> values) =>
+        source.Concat(values)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static string? FirstReason(TechnicalProposalPricingItemReadModel item) =>
+        FirstReason(item.MissingData)
+        ?? FirstReason(item.Assumptions)
+        ?? item.Status;
+
+    private static string? FirstReason(IReadOnlyList<string> values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
     private static decimal? SumCurrent(
         IReadOnlyList<TechnicalProposalPricingItemReadModel> items,

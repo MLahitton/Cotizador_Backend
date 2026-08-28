@@ -49,7 +49,10 @@ public sealed record RequirementPricingItemResponse(
     RequirementPricingRangeResponse? DeltaUnit,
     RequirementPricingRangeResponse? OriginalLine,
     RequirementPricingRangeResponse? CurrentLine,
-    RequirementPricingRangeResponse? DeltaLine);
+    RequirementPricingRangeResponse? DeltaLine,
+    string? PriceSource,
+    string? RepriceAttemptState,
+    string? RepriceAttemptReason);
 
 public sealed record RequirementPricingComparableResponse(
     string CandidateId,
@@ -96,7 +99,10 @@ public sealed record RepriceRequirementPricingItemPriceResponse(
     decimal? OriginalLineTotal,
     decimal? CurrentLineTotal,
     decimal? DeltaLineTotal,
-    string State);
+    string State,
+    string? PriceSource,
+    string? RepriceAttemptState,
+    string? RepriceAttemptReason);
 
 public sealed record RepriceRequirementPricingSummaryResponse(
     decimal? OriginalGrandTotal,

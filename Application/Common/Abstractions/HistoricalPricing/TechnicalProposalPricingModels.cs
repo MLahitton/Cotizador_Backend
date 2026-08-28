@@ -73,7 +73,10 @@ public sealed record TechnicalProposalPricingItemReadModel(
     TechnicalProposalPricingMoneyRange? DeltaUnit = null,
     TechnicalProposalPricingMoneyRange? OriginalLine = null,
     TechnicalProposalPricingMoneyRange? CurrentLine = null,
-    TechnicalProposalPricingMoneyRange? DeltaLine = null);
+    TechnicalProposalPricingMoneyRange? DeltaLine = null,
+    string? PriceSource = null,
+    string? RepriceAttemptState = null,
+    string? RepriceAttemptReason = null);
 
 public sealed record RequirementTechnicalProposalPricingReadModel(
     Guid RequirementId,

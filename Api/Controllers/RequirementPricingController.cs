@@ -201,7 +201,10 @@ public sealed class RequirementPricingController(
             item.DeltaUnit is null ? null : Map(item.DeltaUnit),
             item.OriginalLine is null ? null : Map(item.OriginalLine),
             item.CurrentLine is null ? null : Map(item.CurrentLine),
-            item.DeltaLine is null ? null : Map(item.DeltaLine));
+            item.DeltaLine is null ? null : Map(item.DeltaLine),
+            item.PriceSource,
+            item.RepriceAttemptState,
+            item.RepriceAttemptReason);
 
     private static RepriceRequirementPricingItemResponse Map(
         RepriceRequirementTechnicalProposalItemReadModel pricing) =>
@@ -220,7 +223,10 @@ public sealed class RequirementPricingController(
                 pricing.Item.OriginalLine?.Expected,
                 pricing.Item.CurrentLine?.Expected,
                 pricing.Item.DeltaLine?.Expected,
-                pricing.Item.Status),
+                pricing.Item.Status,
+                pricing.Item.PriceSource,
+                pricing.Item.RepriceAttemptState,
+                pricing.Item.RepriceAttemptReason),
             new RepriceRequirementPricingSummaryResponse(
                 pricing.OriginalGrandTotal,
                 pricing.CurrentGrandTotal,
