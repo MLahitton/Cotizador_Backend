@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.HistoricalPricing;
@@ -384,6 +385,40 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WhenRegisteredPricingIsCancelled_DoesNotPersistSnapshot()
+    {
+        var cancellation = new CancellationTokenSource();
+        var context = CreateContext(
+            [ProposalItem(Item())],
+            TechnicalEstimate(100m, 200m, 300m));
+        context.CancellationRegistry.Register(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(cancellation.Token);
+        context.TechnicalEstimator.EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                cancellation.Cancel();
+                return Task.FromCanceled<HistoricalTechnicalPriceEstimate>(
+                    cancellation.Token);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(
+                context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            PriceRequirementTechnicalProposalFailure.Cancelled,
+            result.Failure);
+        context.Requirements.DidNotReceive().AddPricingSnapshot(
+            Arg.Any<RequirementPricingSnapshot>());
+    }
+
+    [Fact]
     public async Task RepriceItem_UpdatesSelectedAndOnlyPricesTargetItemIncrementally()
     {
         var first = ProposalItem(Item(reference: "PV-06"));
@@ -720,6 +755,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var glasses = Substitute.For<IGlassTypeCatalogRepository>();
         var finishes = Substitute.For<IFinishTypeCatalogRepository>();
         var technicalEstimator = Substitute.For<IHistoricalTechnicalPriceEstimator>();
+        var cancellationRegistry = Substitute.For<IOperationCancellationRegistry>();
 
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
         var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
@@ -757,6 +793,10 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             .Returns([FinishBlack(), FinishWhite()]);
         technicalEstimator.EstimateAsync(Arg.Do<HistoricalCandidateQuery>(query => captureQuery?.Invoke(query)), Arg.Any<CancellationToken>())
             .Returns(technicalEstimate);
+        cancellationRegistry.Register(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<CancellationToken>(1));
 
         var commercial = new HistoricalCommercialPriceEstimator(technicalEstimator);
         var service = new PriceRequirementTechnicalProposalService(
@@ -771,10 +811,11 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             finishes,
             new TechnicalProposalItemToHistoricalPricingMapper(),
             technicalEstimator,
-            commercial);
+            commercial,
+            cancellationRegistry);
 
         return new Context(service, requirements, requirement, proposal,
-            technicalEstimator);
+            technicalEstimator, cancellationRegistry);
     }
 
     private static RequirementPricingSnapshot Snapshot(
@@ -1054,5 +1095,6 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         IRequirementRepository Requirements,
         Requirement Requirement,
         RequirementTechnicalProposal Proposal,
-        IHistoricalTechnicalPriceEstimator TechnicalEstimator);
+        IHistoricalTechnicalPriceEstimator TechnicalEstimator,
+        IOperationCancellationRegistry CancellationRegistry);
 }

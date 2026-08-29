@@ -31,6 +31,7 @@ public sealed class GetCurrentRequirementServiceTests
             At,
             true,
             Guid.NewGuid(),
+            null,
             DocumentProcessingState.Finished,
             DocumentProcessingOutcome.Completed,
             null,

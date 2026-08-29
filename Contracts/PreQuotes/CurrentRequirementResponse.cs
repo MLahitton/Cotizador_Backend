@@ -8,6 +8,7 @@ public sealed record CurrentRequirementResponse(
     DateTimeOffset CreatedAtUtc,
     bool HasTechnicalProposal,
     Guid? TechnicalProposalId,
+    Guid? LatestAttemptId,
     string? LatestAttemptState,
     string? LatestAttemptOutcome,
     string? LatestAttemptErrorCode,

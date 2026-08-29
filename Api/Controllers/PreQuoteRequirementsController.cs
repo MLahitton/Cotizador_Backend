@@ -64,6 +64,7 @@ public sealed class PreQuoteRequirementsController(
                 requirement.CreatedAtUtc,
                 requirement.HasTechnicalProposal,
                 requirement.TechnicalProposalId,
+                requirement.LatestAttemptId,
                 requirement.LatestAttemptState?.ToString(),
                 requirement.LatestAttemptOutcome?.ToString(),
                 requirement.LatestAttemptErrorCode,

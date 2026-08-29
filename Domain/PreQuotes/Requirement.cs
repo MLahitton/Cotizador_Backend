@@ -231,6 +231,20 @@ public sealed class Requirement
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    public void MarkProcessingCancelled(DateTimeOffset updatedAtUtc)
+    {
+        if (Status != RequirementStatus.Processing)
+        {
+            throw new InvalidOperationException(
+                "El requerimiento no se encuentra en procesamiento.");
+        }
+
+        EnsureValidUpdateDate(updatedAtUtc);
+
+        Status = RequirementStatus.Pending;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     private void EnsureValidUpdateDate(DateTimeOffset updatedAtUtc)
     {
         EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
@@ -452,6 +466,17 @@ public sealed class RequirementProcessingAttempt
         Outcome = DocumentProcessingOutcome.Failed;
         CompletedAtUtc = completedAtUtc;
         ErrorCode = normalizedErrorCode;
+    }
+
+    public void Cancel(DateTimeOffset completedAtUtc)
+    {
+        EnsureProcessing();
+        EnsureValidCompletionDate(completedAtUtc);
+
+        ProcessingState = DocumentProcessingState.Finished;
+        Outcome = DocumentProcessingOutcome.Cancelled;
+        CompletedAtUtc = completedAtUtc;
+        ErrorCode = null;
     }
 
     private void EnsureProcessing()

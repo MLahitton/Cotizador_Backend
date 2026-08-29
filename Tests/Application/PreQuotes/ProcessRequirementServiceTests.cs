@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
@@ -1046,6 +1047,41 @@ public sealed class ProcessRequirementServiceTests
         }
     }
 
+    [Fact]
+    public async Task Execute_WhenRegisteredOperationIsCancelled_FinalizesCancelled()
+    {
+        var cancellation = new CancellationTokenSource();
+        var context = CreateContext("success", File("source.pdf", PdfContentType));
+        context.CancellationRegistry.Register(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(cancellation.Token);
+        context.Ai2.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                cancellation.Cancel();
+                return Task.FromCanceled<DocumentProcessingClientResult>(
+                    cancellation.Token);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ProcessRequirementFailure.Cancelled, result.Failure);
+        Assert.NotNull(result.Attempt);
+        Assert.Equal(DocumentProcessingOutcome.Cancelled,
+            result.Attempt!.Outcome);
+        Assert.Equal(RequirementStatus.Pending, context.Requirement.Status);
+        context.Requirements.DidNotReceive().AddExtractionResult(
+            Arg.Any<RequirementExtractionResult>());
+        context.Requirements.DidNotReceive().AddTechnicalProposal(
+            Arg.Any<RequirementTechnicalProposal>());
+    }
+
     private static Context CreateContext(
         string scenario,
         params RequirementFile[] files)
@@ -1058,6 +1094,7 @@ public sealed class ProcessRequirementServiceTests
         var requirements = Substitute.For<IRequirementRepository>();
         var storage = Substitute.For<IFileStorage>();
         var ai2 = Substitute.For<IAi2DocumentProcessingClient>();
+        var cancellationRegistry = Substitute.For<IOperationCancellationRegistry>();
         var user = User.CreateFromGoogle(
             "user@example.com", "User", null, null, At);
         var client = Client.Create(
@@ -1112,6 +1149,10 @@ public sealed class ProcessRequirementServiceTests
                 ? Task.FromException<Stream>(new FileStorageReadException(
                     new IOException("sensitive")))
                 : Task.FromResult<Stream>(new MemoryStream([1, 2, 3, 4])));
+        cancellationRegistry.Register(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<CancellationToken>(1));
 
         ai2.ProcessAsync(
                 Arg.Any<DocumentProcessingClientRequest>(),
@@ -1192,6 +1233,36 @@ public sealed class ProcessRequirementServiceTests
                     activeAttempt?.StartedAtUtc ?? completedAtUtc,
                     completedAtUtc);
             });
+        requirements.FinalizeProcessingCancellationAsync(
+                requirement.Id,
+                Arg.Any<Guid>(),
+                Arg.Any<DateTimeOffset>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var completedAtUtc = call.ArgAt<DateTimeOffset>(2);
+                if (activeAttempt is not null
+                    && activeAttempt.ProcessingState
+                        == DocumentProcessingState.Processing)
+                {
+                    activeAttempt.Cancel(completedAtUtc);
+                }
+
+                if (requirement.Status == RequirementStatus.Processing)
+                {
+                    requirement.MarkProcessingCancelled(completedAtUtc);
+                }
+
+                preQuote.RegisterActivity(completedAtUtc);
+                return new RequirementProcessingCancellationFinalization(
+                    requirement.Id,
+                    call.ArgAt<Guid>(1),
+                    activeAttempt?.CorrelationId ?? Guid.NewGuid(),
+                    DocumentProcessingState.Finished,
+                    DocumentProcessingOutcome.Cancelled,
+                    activeAttempt?.StartedAtUtc ?? completedAtUtc,
+                    completedAtUtc);
+            });
         var productSystemItems = ProductSystemsFor(scenario);
         var productSystems = Substitute.For<IProductSystemCatalogRepository>();
         productSystems.ListActiveSelectableAsync(Arg.Any<CancellationToken>())
@@ -1252,6 +1323,7 @@ public sealed class ProcessRequirementServiceTests
             requirements,
             storage,
             ai2,
+            cancellationRegistry,
             technicalProposal,
             new FixedTimeProvider(At.AddMinutes(10)),
             Substitute.For<ILogger<ProcessRequirementService>>());
@@ -1262,6 +1334,7 @@ public sealed class ProcessRequirementServiceTests
             project,
             requirements,
             ai2,
+            cancellationRegistry,
             glassCatalogItems,
             productSystemItems);
     }
@@ -1891,6 +1964,7 @@ public sealed class ProcessRequirementServiceTests
         ProjectEntity Project,
         IRequirementRepository Requirements,
         IAi2DocumentProcessingClient Ai2,
+        IOperationCancellationRegistry CancellationRegistry,
         IReadOnlyList<GlassTypeCatalogReadModel> Glasses,
         IReadOnlyList<ProductSystemCatalogReadModel> Systems);
 }

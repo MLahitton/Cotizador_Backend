@@ -148,6 +148,13 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                             attempt.RequirementId == requirement.Id)
                         .OrderByDescending(attempt => attempt.CreatedAtUtc)
                         .ThenByDescending(attempt => attempt.Id)
+                        .Select(attempt => (Guid?)attempt.Id)
+                        .FirstOrDefault(),
+                    dbContext.RequirementProcessingAttempts
+                        .Where(attempt =>
+                            attempt.RequirementId == requirement.Id)
+                        .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                        .ThenByDescending(attempt => attempt.Id)
                         .Select(attempt =>
                             (DocumentProcessingState?)attempt.ProcessingState)
                         .FirstOrDefault(),
@@ -189,6 +196,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 selected.CreatedAtUtc,
                 selected.HasTechnicalProposal,
                 selected.TechnicalProposalId,
+                selected.LatestAttemptId,
                 selected.LatestAttemptState,
                 selected.LatestAttemptOutcome,
                 selected.LatestAttemptErrorCode,
@@ -219,6 +227,29 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .SingleOrDefaultAsync(
                     attempt => attempt.Id == processingAttemptId,
                     cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementProcessingAttempt?>
+        FindActiveProcessingAttemptByRequirementIdAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementProcessingAttempts
+                .Where(attempt =>
+                    attempt.RequirementId == requirementId
+                    && (attempt.ProcessingState == DocumentProcessingState.Pending
+                        || attempt.ProcessingState
+                            == DocumentProcessingState.Processing))
+                .OrderByDescending(attempt => attempt.CreatedAtUtc)
+                .ThenByDescending(attempt => attempt.Id)
+                .FirstOrDefaultAsync(cancellationToken);
         }
         catch (DbException exception)
         {
@@ -271,6 +302,65 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             await SaveChangesAsync(cancellationToken);
 
             return CreateFailureFinalization(requirement.Id, attempt);
+        }
+        catch (RequirementPersistenceException)
+        {
+            throw;
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementProcessingCancellationFinalization?>
+        FinalizeProcessingCancellationAsync(
+            Guid requirementId,
+            Guid processingAttemptId,
+            DateTimeOffset completedAtUtc,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            dbContext.ChangeTracker.Clear();
+            var requirement = await dbContext.Requirements
+                .SingleOrDefaultAsync(
+                    value => value.Id == requirementId,
+                    cancellationToken);
+            var attempt = await dbContext.RequirementProcessingAttempts
+                .SingleOrDefaultAsync(
+                    value => value.Id == processingAttemptId
+                        && value.RequirementId == requirementId,
+                    cancellationToken);
+
+            if (requirement is null || attempt is null)
+            {
+                return null;
+            }
+
+            if (attempt.ProcessingState != DocumentProcessingState.Processing)
+            {
+                return attempt.Outcome == DocumentProcessingOutcome.Cancelled
+                    ? CreateCancellationFinalization(requirement.Id, attempt)
+                    : null;
+            }
+
+            var preQuote = await dbContext.PreQuotes
+                .SingleOrDefaultAsync(
+                    value => value.Id == requirement.PreQuoteId,
+                    cancellationToken);
+
+            attempt.Cancel(completedAtUtc);
+
+            if (requirement.Status == RequirementStatus.Processing)
+            {
+                requirement.MarkProcessingCancelled(completedAtUtc);
+            }
+
+            preQuote?.RegisterActivity(completedAtUtc);
+            await SaveChangesAsync(cancellationToken);
+
+            return CreateCancellationFinalization(requirement.Id, attempt);
         }
         catch (RequirementPersistenceException)
         {
@@ -536,6 +626,21 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             attempt.CompletedAtUtc!.Value);
     }
 
+    private static RequirementProcessingCancellationFinalization
+        CreateCancellationFinalization(
+            Guid requirementId,
+            RequirementProcessingAttempt attempt)
+    {
+        return new RequirementProcessingCancellationFinalization(
+            requirementId,
+            attempt.Id,
+            attempt.CorrelationId,
+            attempt.ProcessingState,
+            attempt.Outcome ?? DocumentProcessingOutcome.Cancelled,
+            attempt.StartedAtUtc!.Value,
+            attempt.CompletedAtUtc!.Value);
+    }
+
     private sealed record CurrentRequirementProjection(
         Guid RequirementId,
         Guid PreQuoteId,
@@ -546,6 +651,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         DateTimeOffset CreatedAtUtc,
         bool HasTechnicalProposal,
         Guid? TechnicalProposalId,
+        Guid? LatestAttemptId,
         DocumentProcessingState? LatestAttemptState,
         DocumentProcessingOutcome? LatestAttemptOutcome,
         string? LatestAttemptErrorCode)

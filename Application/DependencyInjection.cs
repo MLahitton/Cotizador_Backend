@@ -66,6 +66,7 @@ public static class DependencyInjection
         services.AddScoped<CreateDocumentProcessingAttemptService>();
         services.AddScoped<CreateRequirementService>();
         services.AddScoped<ProcessRequirementService>();
+        services.AddScoped<CancelRequirementProcessingAttemptService>();
         services.AddScoped<PriceRequirementTechnicalProposalService>();
         services.AddScoped<GetDocumentProcessingAttemptService>();
         services.AddScoped<

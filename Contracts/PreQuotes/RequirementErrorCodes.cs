@@ -23,6 +23,12 @@ public static class RequirementErrorCodes
     public const string ClientInactive = "REQUIREMENT_CLIENT_INACTIVE";
     public const string ProcessingAlreadyActive =
         "REQUIREMENT_PROCESSING_ALREADY_ACTIVE";
+    public const string ProcessingAttemptNotFound =
+        "REQUIREMENT_PROCESSING_ATTEMPT_NOT_FOUND";
+    public const string ProcessingCancelled =
+        "REQUIREMENT_PROCESSING_CANCELLED";
+    public const string PricingCancelled =
+        "REQUIREMENT_PRICING_CANCELLED";
     public const string NoFiles = "REQUIREMENT_NO_FILES";
     public const string StorageError = "REQUIREMENT_STORAGE_ERROR";
     public const string AiServiceUnavailable =

@@ -35,7 +35,9 @@ public sealed class RequirementProcessingAttemptConfiguration
                 "AND \"error_code\" IS NULL) " +
                 "OR (\"outcome\" = 'Failed' " +
                 "AND \"error_code\" IS NOT NULL " +
-                "AND \"error_code\" <> ''))))"));
+                "AND \"error_code\" <> '') " +
+                "OR (\"outcome\" = 'Cancelled' " +
+                "AND \"error_code\" IS NULL))))"));
 
         builder.HasKey(attempt => attempt.Id);
 

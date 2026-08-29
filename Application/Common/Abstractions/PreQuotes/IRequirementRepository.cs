@@ -34,11 +34,23 @@ public interface IRequirementRepository
         Guid processingAttemptId,
         CancellationToken cancellationToken);
 
+    Task<RequirementProcessingAttempt?>
+        FindActiveProcessingAttemptByRequirementIdAsync(
+            Guid requirementId,
+            CancellationToken cancellationToken);
+
     Task<RequirementProcessingFailureFinalization?>
         FinalizeProcessingFailureAsync(
             Guid requirementId,
             Guid processingAttemptId,
             string errorCode,
+            DateTimeOffset completedAtUtc,
+            CancellationToken cancellationToken);
+
+    Task<RequirementProcessingCancellationFinalization?>
+        FinalizeProcessingCancellationAsync(
+            Guid requirementId,
+            Guid processingAttemptId,
             DateTimeOffset completedAtUtc,
             CancellationToken cancellationToken);
 
@@ -103,6 +115,15 @@ public sealed record RequirementProcessingFailureFinalization(
     DateTimeOffset StartedAtUtc,
     DateTimeOffset CompletedAtUtc);
 
+public sealed record RequirementProcessingCancellationFinalization(
+    Guid RequirementId,
+    Guid ProcessingAttemptId,
+    Guid CorrelationId,
+    DocumentProcessingState ProcessingState,
+    DocumentProcessingOutcome Outcome,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset CompletedAtUtc);
+
 public sealed record CurrentRequirementReadModel(
     Guid RequirementId,
     Guid PreQuoteId,
@@ -111,6 +132,7 @@ public sealed record CurrentRequirementReadModel(
     DateTimeOffset CreatedAtUtc,
     bool HasTechnicalProposal,
     Guid? TechnicalProposalId,
+    Guid? LatestAttemptId,
     DocumentProcessingState? LatestAttemptState,
     DocumentProcessingOutcome? LatestAttemptOutcome,
     string? LatestAttemptErrorCode,

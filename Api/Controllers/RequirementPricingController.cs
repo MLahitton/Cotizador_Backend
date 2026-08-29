@@ -41,6 +41,27 @@ public sealed class RequirementPricingController(
         return MapFailure(result.Failure);
     }
 
+    [HttpPost("cancel")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Cancel(
+        [FromRoute] Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        if (requirementId == Guid.Empty)
+        {
+            return RequirementProblem(
+                StatusCodes.Status400BadRequest,
+                RequirementErrorCodes.InvalidRequest,
+                "Solicitud invalida",
+                "El requerimiento indicado no es valido.");
+        }
+
+        await service.CancelAsync(requirementId, cancellationToken);
+        return Accepted();
+    }
+
     [HttpPost("items/{technicalProposalItemId:guid}/reprice")]
     [ProducesResponseType(typeof(RepriceRequirementPricingItemResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
@@ -133,6 +154,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.TechnicalProposalNotConfirmed,
                     "Propuesta tecnica no lista para pricing",
                     "Confirma la propuesta y resuelve definiciones bloqueantes antes de calcular el precio. Consulta readiness.pendingDefinitions en la propuesta tecnica."),
+            PriceRequirementTechnicalProposalFailure.Cancelled =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.PricingCancelled,
+                    "Pricing cancelado",
+                    "El pricing del requerimiento fue cancelado."),
             _ => RequirementProblem(StatusCodes.Status500InternalServerError,
                 RequirementErrorCodes.PersistenceError,
                 "Error de consulta",

@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Diagnostics;
+using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
@@ -23,6 +24,7 @@ public sealed class ProcessRequirementService(
     IRequirementRepository requirementRepository,
     IFileStorage fileStorage,
     IAi2DocumentProcessingClient ai2Client,
+    IOperationCancellationRegistry cancellationRegistry,
     BuildRequirementTechnicalProposalService technicalProposalService,
     TimeProvider timeProvider,
     ILogger<ProcessRequirementService> logger)
@@ -247,6 +249,11 @@ public sealed class ProcessRequirementService(
             userId,
             Guid.NewGuid(),
             createdAtUtc);
+        var operationKey = RequirementOperationKeys.ProcessingAttempt(
+            attempt.Id);
+        var operationCancellationToken = cancellationRegistry.Register(
+            operationKey,
+            cancellationToken);
         using var perfContext = NewPipePerformanceContext.Begin(
             requirement.Id,
             attempt.Id);
@@ -255,13 +262,15 @@ public sealed class ProcessRequirementService(
         {
             var persistAttempt = Stopwatch.StartNew();
             requirementRepository.AddProcessingAttempt(attempt);
-            await requirementRepository.SaveChangesAsync(cancellationToken);
+            await requirementRepository.SaveChangesAsync(
+                operationCancellationToken);
 
             var startedAtUtc = timeProvider.GetUtcNow();
             attempt.Start(startedAtUtc);
             requirement.StartProcessing(startedAtUtc);
             preQuote.RegisterActivity(startedAtUtc);
-            await requirementRepository.SaveChangesAsync(cancellationToken);
+            await requirementRepository.SaveChangesAsync(
+                operationCancellationToken);
             RecordPerfStage(
                 stages,
                 requirement.Id,
@@ -285,7 +294,7 @@ public sealed class ProcessRequirementService(
                 var openFile = Stopwatch.StartNew();
                 streams.Add(await fileStorage.OpenReadAsync(
                     file.value.StorageKey,
-                    cancellationToken));
+                    operationCancellationToken));
                 RecordPerfStage(
                     stages,
                     requirement.Id,
@@ -306,7 +315,7 @@ public sealed class ProcessRequirementService(
             var ai2Extraction = Stopwatch.StartNew();
             var aiResult = await ai2Client.ProcessAsync(
                 request,
-                cancellationToken);
+                operationCancellationToken);
             RecordPerfStage(
                 stages,
                 requirement.Id,
@@ -323,7 +332,7 @@ public sealed class ProcessRequirementService(
                     preQuote,
                     attempt,
                     MapAiFailure(aiResult.Failure),
-                    cancellationToken);
+                    operationCancellationToken);
             }
 
             if (aiResult.Response.StructuredExtraction is null)
@@ -335,7 +344,7 @@ public sealed class ProcessRequirementService(
                     new AiFailure(
                         ProcessRequirementFailure.AiInvalidResponse,
                         AiInvalidResponseErrorCode),
-                    cancellationToken);
+                    operationCancellationToken);
             }
 
             return await CompleteAttemptAsync(
@@ -347,7 +356,15 @@ public sealed class ProcessRequirementService(
                 stages,
                 totalStopwatch,
                 files.Count,
-                cancellationToken);
+                operationCancellationToken);
+        }
+        catch (OperationCanceledException) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            return await CancelAttemptAsync(
+                requirement,
+                attempt,
+                CancellationToken.None);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -371,6 +388,7 @@ public sealed class ProcessRequirementService(
         }
         finally
         {
+            cancellationRegistry.Complete(operationKey);
             foreach (var stream in streams)
             {
                 await stream.DisposeAsync();
@@ -748,6 +766,45 @@ public sealed class ProcessRequirementService(
         }
     }
 
+    private async Task<ProcessRequirementResult> CancelAttemptAsync(
+        Requirement requirement,
+        RequirementProcessingAttempt attempt,
+        CancellationToken cancellationToken)
+    {
+        var completedAtUtc = timeProvider.GetUtcNow();
+
+        try
+        {
+            var finalization =
+                await requirementRepository.FinalizeProcessingCancellationAsync(
+                    requirement.Id,
+                    attempt.Id,
+                    completedAtUtc,
+                    cancellationToken);
+
+            if (finalization is null)
+            {
+                return ProcessRequirementResult.Failed(
+                    ProcessRequirementFailure.PersistenceError);
+            }
+
+            return ProcessRequirementResult.Failed(
+                ProcessRequirementFailure.Cancelled,
+                CreateAttemptResult(finalization));
+        }
+        catch (Exception exception) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            LogFailure(
+                exception,
+                requirement.Id,
+                attempt.RequestedByUserId,
+                "attempt_cancel");
+            return ProcessRequirementResult.Failed(
+                ProcessRequirementFailure.PersistenceError);
+        }
+    }
+
     private static DocumentProcessingClientRequest CreateAi2Request(
         Requirement requirement,
         Guid projectId,
@@ -805,6 +862,21 @@ public sealed class ProcessRequirementService(
             finalization.StartedAtUtc,
             finalization.CompletedAtUtc,
             summary);
+    }
+
+    private static ProcessedRequirementAttemptResult CreateAttemptResult(
+        RequirementProcessingCancellationFinalization finalization)
+    {
+        return new ProcessedRequirementAttemptResult(
+            finalization.RequirementId,
+            finalization.ProcessingAttemptId,
+            finalization.CorrelationId,
+            finalization.ProcessingState,
+            finalization.Outcome,
+            null,
+            finalization.StartedAtUtc,
+            finalization.CompletedAtUtc,
+            null);
     }
 
     private static AiFailure MapAiFailure(

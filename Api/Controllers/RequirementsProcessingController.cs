@@ -14,7 +14,8 @@ namespace Api.Controllers;
     UnsupportedMediaTypeErrorCode = RequirementErrorCodes.InvalidRequest)]
 [Route("api/v2/requirements/{requirementId}/process")]
 public sealed class RequirementsProcessingController(
-    ProcessRequirementService processRequirementService) : ControllerBase
+    ProcessRequirementService processRequirementService,
+    CancelRequirementProcessingAttemptService cancelService) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType(
@@ -58,6 +59,72 @@ public sealed class RequirementsProcessingController(
         }
 
         return MapFailure(result.Failure);
+    }
+
+    [HttpPost("/api/v2/processing-attempts/{processingAttemptId:guid}/cancel")]
+    [ProducesResponseType(
+        typeof(ProcessRequirementResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Cancel(
+        [FromRoute] Guid processingAttemptId,
+        CancellationToken cancellationToken)
+    {
+        var result = await cancelService.ExecuteAsync(
+            new CancelRequirementProcessingAttemptCommand(
+                processingAttemptId),
+            cancellationToken);
+
+        if (result.IsSuccess && result.Attempt is { } attempt)
+        {
+            return Ok(MapAttempt(attempt));
+        }
+
+        return MapCancelFailure(result.Failure);
+    }
+
+    [HttpPost("cancel")]
+    [ProducesResponseType(
+        typeof(ProcessRequirementResponse),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType(
+        typeof(ApiProblemDetailsResponse),
+        StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> CancelActiveForRequirement(
+        [FromRoute] Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        var result = await cancelService.ExecuteAsync(
+            new CancelRequirementProcessingByRequirementCommand(
+                requirementId),
+            cancellationToken);
+
+        if (result.IsSuccess && result.Attempt is { } attempt)
+        {
+            return Ok(MapAttempt(attempt));
+        }
+
+        return MapCancelFailure(result.Failure);
     }
 
     private IActionResult MapFailure(ProcessRequirementFailure failure)
@@ -172,11 +239,49 @@ public sealed class RequirementsProcessingController(
                     RequirementErrorCodes.PersistenceError,
                     "Error de persistencia",
                     "No fue posible registrar el procesamiento del requerimiento."),
+            ProcessRequirementFailure.Cancelled =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.ProcessingCancelled,
+                    "Procesamiento cancelado",
+                    "El procesamiento del requerimiento fue cancelado."),
             _ => RequirementProblem(
                 StatusCodes.Status500InternalServerError,
                 RequirementErrorCodes.PersistenceError,
                 "Error de persistencia",
                 "No fue posible registrar el procesamiento del requerimiento.")
+        };
+    }
+
+    private IActionResult MapCancelFailure(
+        CancelRequirementProcessingAttemptFailure failure)
+    {
+        return failure switch
+        {
+            CancelRequirementProcessingAttemptFailure.InvalidRequest =>
+                RequirementProblem(
+                    StatusCodes.Status400BadRequest,
+                    RequirementErrorCodes.InvalidRequest,
+                    "Solicitud invalida",
+                    "El intento de procesamiento indicado no es valido."),
+            CancelRequirementProcessingAttemptFailure.Unauthorized =>
+                RequirementProblem(
+                    StatusCodes.Status401Unauthorized,
+                    PreQuoteErrorCodes.Unauthorized,
+                    "No autorizado",
+                    "No fue posible identificar al usuario autenticado."),
+            CancelRequirementProcessingAttemptFailure
+                .ProcessingAttemptNotFound =>
+                RequirementProblem(
+                    StatusCodes.Status404NotFound,
+                    RequirementErrorCodes.ProcessingAttemptNotFound,
+                    "Intento no encontrado",
+                    "No existe el intento de procesamiento indicado."),
+            _ => RequirementProblem(
+                StatusCodes.Status500InternalServerError,
+                RequirementErrorCodes.PersistenceError,
+                "Error de persistencia",
+                "No fue posible cancelar el procesamiento del requerimiento.")
         };
     }
 

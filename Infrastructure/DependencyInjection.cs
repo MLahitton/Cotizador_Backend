@@ -4,12 +4,14 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
 using Infrastructure.Authentication;
 using Infrastructure.DocumentProcessing;
 using Infrastructure.HistoricalPricing;
+using Infrastructure.Operations;
 using Infrastructure.Persistence;
 using Infrastructure.Persistence.Repositories;
 using Infrastructure.Storage;
@@ -104,6 +106,8 @@ public static class DependencyInjection
         services.AddSingleton<
             IDocumentProcessingDiagnostics,
             DocumentProcessingDiagnostics>();
+        services.AddSingleton<IOperationCancellationRegistry,
+            InMemoryOperationCancellationRegistry>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddHttpClient<CotizadorAiDocumentProcessingClient>(
             (serviceProvider, httpClient) =>

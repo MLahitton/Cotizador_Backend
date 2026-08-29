@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Domain.PreQuotes;
@@ -34,7 +35,8 @@ public enum PriceRequirementTechnicalProposalFailure
     InactiveClient,
     TechnicalProposalNotFound,
     TechnicalProposalNotConfirmed,
-    QueryError
+    QueryError,
+    Cancelled
 }
 
 public enum RepriceRequirementTechnicalProposalItemFailure
@@ -99,7 +101,8 @@ public sealed class PriceRequirementTechnicalProposalService(
     IFinishTypeCatalogRepository finishCatalog,
     ITechnicalProposalItemToHistoricalPricingMapper mapper,
     IHistoricalTechnicalPriceEstimator technicalEstimator,
-    IHistoricalCommercialPriceEstimator commercialEstimator)
+    IHistoricalCommercialPriceEstimator commercialEstimator,
+    IOperationCancellationRegistry cancellationRegistry)
 {
     private const string PricingBasis = "PUBLIC_QUOTED_ITEM_PRICES";
     private const string Currency = "COP";
@@ -132,11 +135,17 @@ public sealed class PriceRequirementTechnicalProposalService(
             return PriceRequirementTechnicalProposalResult.Failed(access);
         }
 
+        var operationKey = RequirementOperationKeys.Pricing(
+            command.RequirementId);
+        var operationCancellationToken = cancellationRegistry.Register(
+            operationKey,
+            cancellationToken);
+
         try
         {
             var proposal = await requirementRepository.GetCurrentTechnicalProposalAsync(
                 command.RequirementId,
-                cancellationToken);
+                operationCancellationToken);
             if (proposal is null)
             {
                 return PriceRequirementTechnicalProposalResult.Failed(
@@ -149,15 +158,18 @@ public sealed class PriceRequirementTechnicalProposalService(
                     PriceRequirementTechnicalProposalFailure.TechnicalProposalNotConfirmed);
             }
 
-            var systems = (await productSystemCatalog.ListActiveAsync(cancellationToken))
+            var systems = (await productSystemCatalog.ListActiveAsync(
+                    operationCancellationToken))
                 .ToDictionary(value => value.Id);
-            var glasses = (await glassCatalog.GetActiveWithCurrentPriceRangesAsync(cancellationToken))
+            var glasses = (await glassCatalog.GetActiveWithCurrentPriceRangesAsync(
+                    operationCancellationToken))
                 .ToDictionary(value => value.GlassTypeId);
-            var finishes = (await finishCatalog.ListActiveAsync(cancellationToken))
+            var finishes = (await finishCatalog.ListActiveAsync(
+                    operationCancellationToken))
                 .ToDictionary(value => value.Id);
             var snapshot = await requirementRepository.GetCurrentPricingSnapshotAsync(
                 command.RequirementId,
-                cancellationToken);
+                operationCancellationToken);
             if (snapshot is not null && snapshot.TechnicalProposalId == proposal.Id)
             {
                 return PriceRequirementTechnicalProposalResult.Success(
@@ -169,13 +181,15 @@ public sealed class PriceRequirementTechnicalProposalService(
                 systems,
                 glasses,
                 finishes,
-                cancellationToken);
+                operationCancellationToken);
+            operationCancellationToken.ThrowIfCancellationRequested();
             var createdSnapshot = CreateSnapshot(
                 proposal,
                 pricing,
                 DateTimeOffset.UtcNow);
             requirementRepository.AddPricingSnapshot(createdSnapshot);
-            await requirementRepository.SaveChangesAsync(cancellationToken);
+            await requirementRepository.SaveChangesAsync(
+                operationCancellationToken);
 
             return PriceRequirementTechnicalProposalResult.Success(
                 pricing with
@@ -195,11 +209,35 @@ public sealed class PriceRequirementTechnicalProposalService(
                         }).ToArray()
                 });
         }
+        catch (OperationCanceledException) when (
+            !cancellationToken.IsCancellationRequested)
+        {
+            return PriceRequirementTechnicalProposalResult.Failed(
+                PriceRequirementTechnicalProposalFailure.Cancelled);
+        }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return PriceRequirementTechnicalProposalResult.Failed(
                 PriceRequirementTechnicalProposalFailure.QueryError);
         }
+        finally
+        {
+            cancellationRegistry.Complete(operationKey);
+        }
+    }
+
+    public Task<bool> CancelAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        if (requirementId == Guid.Empty)
+        {
+            return Task.FromResult(false);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(cancellationRegistry.TryCancel(
+            RequirementOperationKeys.Pricing(requirementId)));
     }
 
     public async Task<RepriceRequirementTechnicalProposalItemResult> RepriceItemAsync(
@@ -447,6 +485,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             : null;
         foreach (var item in proposal.Items.OrderBy(value => value.ExtractedItem.Sequence).ThenBy(value => value.Id))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             items.Add(await PriceItemAsync(
                 item,
                 commercialLine,
