@@ -41,6 +41,7 @@ public sealed class CanonicalCatalogController(
 
         return Ok(new GetCanonicalCatalogResponse(
             result.Systems.Select(value => new CanonicalCatalogSystemResponse(
+                value.Id,
                 value.Code,
                 value.Name,
                 value.TechnicalName,
@@ -61,8 +62,10 @@ public sealed class CanonicalCatalogController(
                 value.Name,
                 value.IsActive)).ToArray(),
             result.Finishes.Select(value => new CanonicalCatalogFinishResponse(
+                value.Id,
                 value.Code,
                 value.Name,
+                value.IsSelectable,
                 value.RequiresReview,
                 value.IsActive)).ToArray(),
             result.Aliases.Select(value => new CanonicalCatalogAliasResponse(

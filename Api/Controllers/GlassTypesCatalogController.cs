@@ -47,6 +47,7 @@ public sealed class GlassTypesCatalogController(
                 item.Code,
                 item.Name,
                 item.Description,
+                item.IsSelectable,
                 item.IsActive,
                 item.CurrentPriceRange is null
                     ? null

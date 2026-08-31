@@ -117,6 +117,55 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
     }
 
     [Fact]
+    public async Task Execute_ClassicWithSignatureSystem_ReturnsInvalidSystemSelection()
+    {
+        var context = CreateContext(
+            RequirementCommercialLine.Classic,
+            alternativeSystemLine: "SIGNATURE");
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            UpdateRequirementTechnicalProposalItemSelectionFailure
+                .InvalidSystemSelection,
+            result.Failure);
+    }
+
+    [Theory]
+    [InlineData(RequirementCommercialLine.Essential)]
+    [InlineData(RequirementCommercialLine.Bioconfort)]
+    public async Task Execute_OpenLineAcceptsCrossLineAndFunctionalTypeSystem(
+        RequirementCommercialLine commercialLine)
+    {
+        var context = CreateContext(
+            commercialLine,
+            alternativeSystemLine: "SIGNATURE",
+            alternativeFunctionalType: "SLIDING_WINDOW");
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(context.AlternativeSystem.Id, result.Selection!.System!.Id);
+    }
+
+    [Fact]
     public async Task Execute_WithItemFromAnotherProposal_ReturnsItemNotFound()
     {
         var context = CreateContext();
@@ -138,7 +187,10 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             result.Failure);
     }
 
-    private static Context CreateContext()
+    private static Context CreateContext(
+        RequirementCommercialLine commercialLine = RequirementCommercialLine.Essential,
+        string alternativeSystemLine = "ESSENTIAL",
+        string alternativeFunctionalType = "SLIDING_DOOR")
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -175,7 +227,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         var requirement = Requirement.Create(
             preQuote.Id,
             UserId,
-            RequirementCommercialLine.Essential,
+            commercialLine,
             At);
         var extraction = RequirementExtractionResult.Create(
             Guid.NewGuid(),
@@ -249,7 +301,9 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             "K70");
         var alternativeSystem = ProductSystem(
             Guid.Parse("33333333-3333-3333-3333-333333333333"),
-            "K72");
+            "K72",
+            alternativeSystemLine,
+            alternativeFunctionalType);
         var suggestedGlass = Glass(
             Guid.Parse("44444444-4444-4444-4444-444444444444"),
             "TEMP_6",
@@ -346,17 +400,21 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             suggestedFinish);
     }
 
-    private static ProductSystemCatalogReadModel ProductSystem(Guid id, string code) =>
+    private static ProductSystemCatalogReadModel ProductSystem(
+        Guid id,
+        string code,
+        string commercialLine = "ESSENTIAL",
+        string functionalType = "SLIDING_DOOR") =>
         new(
             id,
             code,
             $"Sistema {code}",
             $"Sistema tecnico {code}",
             code,
-            "SLIDING_DOOR",
+            functionalType,
             code,
             "SERIE",
-            "ESSENTIAL",
+            commercialLine,
             "STANDARD",
             true,
             true,

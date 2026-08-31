@@ -171,7 +171,10 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
             if (command.SystemId is { } systemId
                 && !systems.Any(system => system.Id == systemId
                     && system.IsActive
-                    && system.IsSelectable))
+                    && system.IsSelectable
+                    && IsAllowedForCommercialLine(
+                        system,
+                        proposal.Requirement.CommercialLine)))
             {
                 return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
                     UpdateRequirementTechnicalProposalItemSelectionFailure
@@ -251,6 +254,26 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                 UpdateRequirementTechnicalProposalItemSelectionFailure.QueryError);
         }
     }
+
+    private static bool IsAllowedForCommercialLine(
+        ProductSystemCatalogReadModel system,
+        RequirementCommercialLine? commercialLine) =>
+        commercialLine switch
+        {
+            RequirementCommercialLine.Classic => MatchesLine(system, "CLASSIC"),
+            RequirementCommercialLine.Signature => MatchesLine(system, "SIGNATURE"),
+            RequirementCommercialLine.Essential => true,
+            RequirementCommercialLine.Bioconfort => true,
+            _ => false
+        };
+
+    private static bool MatchesLine(
+        ProductSystemCatalogReadModel system,
+        string expected) =>
+        string.Equals(
+            system.CommercialLine?.Trim(),
+            expected,
+            StringComparison.OrdinalIgnoreCase);
 
     private async Task<UpdateRequirementTechnicalProposalItemSelectionFailure>
         ValidateAccessAsync(

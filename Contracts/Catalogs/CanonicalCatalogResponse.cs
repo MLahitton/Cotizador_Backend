@@ -1,6 +1,7 @@
 namespace Contracts.Catalogs;
 
 public sealed record CanonicalCatalogSystemResponse(
+    Guid Id,
     string Code,
     string Name,
     string? TechnicalName,
@@ -23,8 +24,10 @@ public sealed record CanonicalCatalogFrameResponse(
     bool IsActive);
 
 public sealed record CanonicalCatalogFinishResponse(
+    Guid Id,
     string Code,
     string Name,
+    bool IsSelectable,
     bool RequiresReview,
     bool IsActive);
 

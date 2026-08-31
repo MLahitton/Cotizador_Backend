@@ -58,6 +58,10 @@ public sealed class GlassTypesCatalogHttpTests
                 value.GetProperty("code").GetString()));
         foreach (var item in items.EnumerateArray())
         {
+            Assert.NotEqual(
+                Guid.Empty,
+                item.GetProperty("glassTypeId").GetGuid());
+            Assert.True(item.GetProperty("isSelectable").GetBoolean());
             var code = item.GetProperty("code").GetString();
             var range = item.GetProperty("currentPriceRange");
             if (code is "LAM_4_4_GRAY" or "LAM_5_5_GRAY" or "UNKNOWN_GLASS")
@@ -80,6 +84,9 @@ public sealed class GlassTypesCatalogHttpTests
             Assert.False(item.TryGetProperty("createdAtUtc", out _));
             Assert.False(item.TryGetProperty("priceRangeVersions", out _));
         }
+        Assert.Equal(items.GetArrayLength(), items.EnumerateArray()
+            .Select(value => value.GetProperty("glassTypeId").GetGuid())
+            .Distinct().Count());
     }
 
     [Fact]

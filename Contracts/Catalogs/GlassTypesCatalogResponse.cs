@@ -16,6 +16,7 @@ public sealed record GlassTypeCatalogItemResponse(
     string Code,
     string Name,
     string? Description,
+    bool IsSelectable,
     bool IsActive,
     GlassPriceRangeResponse? CurrentPriceRange);
 

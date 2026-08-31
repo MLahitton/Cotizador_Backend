@@ -51,7 +51,7 @@ public sealed class ProductSystemConfiguration
             functionalType: FunctionalType(value.TechnicalName),
             family: Family(value.TechnicalName),
             series: Series(value.TechnicalName),
-            commercialLine: CommercialLine(value.TechnicalName),
+            commercialLine: CommercialLine(value.DisplayName),
             variant: Variant(value.TechnicalName),
             isSelectable: IsSelectableSystem(value.DisplayName))).ToArray());
     }
@@ -137,6 +137,55 @@ public sealed class ProductSystemConfiguration
         new(77, "SYS_VENTANA_PLEGABLE_PREMIUM_V", "VENTANA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 55", "VENTANA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA")
     ];
 
+    private static readonly string[] ConfirmedClassicSystemNames =
+    [
+        "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
+        "CUERPO DOBLE BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
+        "CUERPO FIJO LINEA CLASSIC SISTEMA 3831",
+        "CUERPO FIJO LINEA CLASSIC PRIMAVERA SERIE SG 3",
+        "CUERPO FIJO LINEA CLASSIC PRIMAVERA SIENA",
+        "CUERPO PROYECTANTE LINEA CLASSIC SISTEMA 3831",
+        "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA",
+        "PUERTA BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
+        "PUERTA BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+        "PUERTA DOBLE BATIENTE LINEA CLASSIC SISTEMA SERIE SG 3890",
+        "PUERTA CORREDIZA LINEA CLASSIC SISTEMA 8025",
+        "PUERTA CORREDIZA LINEA CLASSIC PRIMAVERA LAGO",
+        "PUERTA CORREDIZA LINEA CLASSIC PRIMAVERA LUCCA",
+        "VENTANA CORREDIZA LINEA CLASSIC PRIMAVERA SERIE SG 3",
+        "VENTANA CORREDIZA LINEA CLASSIC PRIMAVERA LAGO",
+        "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA SG 7038",
+        "PUERTA CORREDIZA LINEA TRADICIONAL SISTEMA SG 8025",
+        "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 5020",
+        "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 744",
+        "VENTANA CORREDIZA LINEA TRADICIONAL SISTEMA SG 8025"
+    ];
+
+    private static readonly string[] ConfirmedSignatureSystemNames =
+    [
+        "PUERTA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9052",
+        "CUERPO FIJO LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+        "CUERPO PROYECTANTE LINEA PREMIUM EUROPEO SISTEMA LSA 0932",
+        "VENTANA CORREDIZA LINEA PREMIUM EUROPEO SISTEMA LSA 9060",
+        "CUERPO BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "CUERPO DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "CUERPO FIJO LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "CUERPO PROYECTANTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "CUERPO PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA",
+        "PUERTA BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "PUERTA DOBLE BATIENTE LINEA PREMIUM TIPO EUROPEO VENECIA FERMO",
+        "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO",
+        "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO TIPO POKET",
+        "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA SERIE 100 TIPO POKET",
+        "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES",
+        "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES TIPO POKET",
+        "PUERTA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA",
+        "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO",
+        "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA",
+        "VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES",
+        "VENTANA PLEGABLE LINEA PREMIUM TIPO EUROPEO SISTEMA VENECIA PIEGA"
+    ];
+
     private sealed record SystemSeed(
         int Sequence,
         string Code,
@@ -211,6 +260,8 @@ public sealed class ProductSystemConfiguration
     private static string? CommercialLine(string name)
     {
         var value = NormalizeSystemText(name);
+        if (ContainsSystemName(ConfirmedClassicSystemNames, value)) return "CLASSIC";
+        if (ContainsSystemName(ConfirmedSignatureSystemNames, value)) return "SIGNATURE";
         if (value.Contains("CLASSIC")) return "CLASSIC";
         if (value.Contains("PREMIUM")) return "PREMIUM";
         if (value.Contains("TRADICIONAL")) return "TRADITIONAL";
@@ -218,6 +269,12 @@ public sealed class ProductSystemConfiguration
         if (value.StartsWith("SISTEMA") || value.Contains("DIVISIONES DE BANO") || value.Contains("BARANDA")) return "SPECIAL";
         return null;
     }
+
+    private static bool ContainsSystemName(
+        IEnumerable<string> systemNames,
+        string normalizedName) =>
+        systemNames.Any(name =>
+            NormalizeSystemText(name) == normalizedName);
 
     private static string? Variant(string name)
     {

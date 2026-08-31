@@ -73,6 +73,10 @@ public sealed class ApplicationDbContext(
         Set<RequirementPricingSnapshot>();
     public DbSet<RequirementPricingItemSnapshot> RequirementPricingItemSnapshots =>
         Set<RequirementPricingItemSnapshot>();
+    public DbSet<RequirementChatThread> RequirementChatThreads =>
+        Set<RequirementChatThread>();
+    public DbSet<RequirementChatMessage> RequirementChatMessages =>
+        Set<RequirementChatMessage>();
 
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();

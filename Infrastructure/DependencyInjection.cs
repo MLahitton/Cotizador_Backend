@@ -139,6 +139,20 @@ public static class DependencyInjection
         services.AddTransient<IAi2DocumentProcessingClient>(
             serviceProvider => serviceProvider.GetRequiredService<
                 CotizadorAi2DocumentProcessingClient>());
+        services.AddHttpClient<CotizadorAi2RequirementChatClient>(
+            (serviceProvider, httpClient) =>
+            {
+                var options = serviceProvider
+                    .GetRequiredService<CotizadorAi2Options>();
+                httpClient.BaseAddress = options.BaseUri;
+                httpClient.Timeout = Timeout.InfiniteTimeSpan;
+                httpClient.DefaultRequestHeaders.Accept.Clear();
+                httpClient.DefaultRequestHeaders.Accept.Add(
+                    new MediaTypeWithQualityHeaderValue("application/json"));
+            });
+        services.AddTransient<IRequirementChatAiClient>(
+            serviceProvider => serviceProvider.GetRequiredService<
+                CotizadorAi2RequirementChatClient>());
         services.AddTransient<
             IDocumentProcessingClient,
             DocumentProcessingProviderClient>();
@@ -161,6 +175,7 @@ public static class DependencyInjection
             IDocumentProcessingRepository,
             DocumentProcessingRepository>();
         services.AddScoped<IRequirementRepository, RequirementRepository>();
+        services.AddScoped<IRequirementChatRepository, RequirementChatRepository>();
         services.AddScoped<IPreQuoteRepository, PreQuoteRepository>();
         services.AddScoped<
             IPreQuoteDocumentQueryRepository,

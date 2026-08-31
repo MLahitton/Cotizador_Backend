@@ -586,6 +586,44 @@ public sealed class DeterministicSgTechnicalSelectorTests
         Assert.DoesNotContain("K70", result.Alternatives);
     }
 
+    [Theory]
+    [InlineData("SLIDING_DOOR", "CLASSIC_TRAD_7038_DOOR", "SG 7038")]
+    [InlineData("SLIDING_DOOR", "CLASSIC_TRAD_8025_DOOR", "SG 8025")]
+    [InlineData("SLIDING_WINDOW", "CLASSIC_TRAD_5020_WINDOW", "SG 5020")]
+    [InlineData("SLIDING_WINDOW", "CLASSIC_TRAD_744_WINDOW", "SG 744")]
+    [InlineData("SLIDING_WINDOW", "CLASSIC_TRAD_8025_WINDOW", "SG 8025")]
+    public async Task Classic_ConfirmedTraditionalSystemsRemainEligible(
+        string functionalType,
+        string expectedCode,
+        string family)
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(expectedCode, functionalType, family, "STANDARD", "CLASSIC"),
+                System("SIGNATURE_COMPATIBLE", functionalType, "VENECIA NAPOLES", "STANDARD", "SIGNATURE")
+            ])).SelectAsync(
+                Input(functionalType, requestedCommercialLine: "CLASSIC"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedCode, result.SuggestedSystemCode);
+        Assert.DoesNotContain("SIGNATURE_COMPATIBLE", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task Classic_FiltersOutCompatibleSignatureSystem()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("CLASSIC_COMPATIBLE", "SLIDING_DOOR", "SG 7038", "STANDARD", "CLASSIC"),
+                System("SIGNATURE_COMPATIBLE", "SLIDING_DOOR", "VENECIA NAPOLES", "STANDARD", "SIGNATURE")
+            ])).SelectAsync(
+                Input("SLIDING_DOOR", requestedCommercialLine: "CLASSIC"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("CLASSIC_COMPATIBLE", result.SuggestedSystemCode);
+        Assert.DoesNotContain("SIGNATURE_COMPATIBLE", result.Alternatives);
+    }
+
     [Fact]
     public async Task Signature_FiltersOutNonSignatureCandidates()
     {
@@ -595,6 +633,42 @@ public sealed class DeterministicSgTechnicalSelectorTests
 
         Assert.Equal("SIG_FIXED", result.SuggestedSystemCode);
         Assert.DoesNotContain("K40", result.Alternatives);
+    }
+
+    [Theory]
+    [InlineData("SLIDING_WINDOW", "SIGNATURE_MONZA", "VENECIA MONZA")]
+    [InlineData("PROJECTING", "SIGNATURE_LSA0932_PROJECTING", "LSA 0932")]
+    [InlineData("SLIDING_WINDOW", "SIGNATURE_LSA9060_WINDOW", "LSA 9060")]
+    public async Task Signature_ConfirmedSystemsRemainEligible(
+        string functionalType,
+        string expectedCode,
+        string family)
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(expectedCode, functionalType, family, "STANDARD", "SIGNATURE"),
+                System("CLASSIC_COMPATIBLE", functionalType, "PRIMAVERA LAGO", "STANDARD", "CLASSIC")
+            ])).SelectAsync(
+                Input(functionalType, requestedCommercialLine: "SIGNATURE"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedCode, result.SuggestedSystemCode);
+        Assert.DoesNotContain("CLASSIC_COMPATIBLE", result.Alternatives);
+    }
+
+    [Fact]
+    public async Task Signature_FiltersOutCompatibleClassicSystem()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System("SIGNATURE_COMPATIBLE", "SLIDING_WINDOW", "VENECIA MONZA", "STANDARD", "SIGNATURE"),
+                System("CLASSIC_COMPATIBLE", "SLIDING_WINDOW", "PRIMAVERA LAGO", "STANDARD", "CLASSIC")
+            ])).SelectAsync(
+                Input("SLIDING_WINDOW", requestedCommercialLine: "SIGNATURE"),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SIGNATURE_COMPATIBLE", result.SuggestedSystemCode);
+        Assert.DoesNotContain("CLASSIC_COMPATIBLE", result.Alternatives);
     }
 
     [Fact]
@@ -632,6 +706,27 @@ public sealed class DeterministicSgTechnicalSelectorTests
         Assert.DoesNotContain(
             SgTechnicalSelectionReviewReasons.CommercialLineMismatch,
             result.ReviewReasons);
+    }
+
+    [Theory]
+    [InlineData("ESSENTIAL")]
+    [InlineData("BIOCONFORT")]
+    public async Task OpenCommercialLines_AllowClassicAndSignatureSystems(
+        string requestedCommercialLine)
+    {
+        var classic = await new DeterministicSgTechnicalSelector(
+            new Catalog([System("CLASSIC_FIXED", "FIXED", "SG 3831", "STANDARD", "CLASSIC")]))
+            .SelectAsync(
+                Input("FIXED", requestedCommercialLine: requestedCommercialLine),
+                TestContext.Current.CancellationToken);
+        var signature = await new DeterministicSgTechnicalSelector(
+            new Catalog([System("SIGNATURE_FIXED", "FIXED", "VENECIA FERMO", "STANDARD", "SIGNATURE")]))
+            .SelectAsync(
+                Input("FIXED", requestedCommercialLine: requestedCommercialLine),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("CLASSIC_FIXED", classic.SuggestedSystemCode);
+        Assert.Equal("SIGNATURE_FIXED", signature.SuggestedSystemCode);
     }
 
     [Fact]

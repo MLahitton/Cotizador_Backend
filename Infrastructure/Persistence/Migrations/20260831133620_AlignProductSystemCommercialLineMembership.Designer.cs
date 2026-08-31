@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260831133620_AlignProductSystemCommercialLineMembership")]
+    partial class AlignProductSystemCommercialLineMembership
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -4920,123 +4923,6 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Domain.PreQuotes.RequirementChatMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("ChatThreadId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("chat_thread_id");
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("varchar(4000)")
-                        .HasColumnName("content");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("metadata_json");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("role");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer")
-                        .HasColumnName("sequence");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChatThreadId")
-                        .HasDatabaseName("ix_requirement_chat_messages_thread_id");
-
-                    b.HasIndex("ChatThreadId", "Sequence")
-                        .IsUnique()
-                        .HasDatabaseName("ux_requirement_chat_messages_thread_sequence");
-
-                    b.HasIndex("ChatThreadId", "CreatedAtUtc", "Id")
-                        .HasDatabaseName("ix_requirement_chat_messages_thread_created_id");
-
-                    b.ToTable("requirement_chat_messages", "core", t =>
-                        {
-                            t.HasCheckConstraint("ck_requirement_chat_messages_content", "length(btrim(\"content\")) > 0");
-
-                            t.HasCheckConstraint("ck_requirement_chat_messages_role", "\"role\" IN ('User', 'Assistant')");
-
-                            t.HasCheckConstraint("ck_requirement_chat_messages_sequence", "\"sequence\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("Domain.PreQuotes.RequirementChatThread", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at_utc");
-
-                    b.Property<Guid>("CreatedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("created_by_user_id");
-
-                    b.Property<Guid>("RequirementId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("requirement_id");
-
-                    b.Property<string>("Scope")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)")
-                        .HasColumnName("scope");
-
-                    b.Property<Guid?>("TechnicalProposalItemId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("technical_proposal_item_id");
-
-                    b.Property<DateTimeOffset>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at_utc");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CreatedByUserId")
-                        .HasDatabaseName("ix_requirement_chat_threads_created_by_user_id");
-
-                    b.HasIndex("RequirementId")
-                        .HasDatabaseName("ix_requirement_chat_threads_requirement_id");
-
-                    b.HasIndex("TechnicalProposalItemId")
-                        .HasDatabaseName("ix_requirement_chat_threads_technical_proposal_item_id");
-
-                    b.HasIndex("RequirementId", "Scope")
-                        .IsUnique()
-                        .HasDatabaseName("ux_requirement_chat_threads_requirement_scope")
-                        .HasFilter("\"scope\" = 'Requirement'");
-
-                    b.HasIndex("RequirementId", "TechnicalProposalItemId", "Scope")
-                        .IsUnique()
-                        .HasDatabaseName("ux_requirement_chat_threads_requirement_item_scope")
-                        .HasFilter("\"scope\" = 'Item'");
-
-                    b.ToTable("requirement_chat_threads", "core", t =>
-                        {
-                            t.HasCheckConstraint("ck_requirement_chat_threads_locator", "(\"scope\" = 'Requirement' AND \"technical_proposal_item_id\" IS NULL) OR (\"scope\" = 'Item' AND \"technical_proposal_item_id\" IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_requirement_chat_threads_scope", "\"scope\" IN ('Requirement', 'Item')");
-                        });
-                });
-
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7459,34 +7345,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("SupersedesRequirement");
                 });
 
-            modelBuilder.Entity("Domain.PreQuotes.RequirementChatMessage", b =>
-                {
-                    b.HasOne("Domain.PreQuotes.RequirementChatThread", "ChatThread")
-                        .WithMany("Messages")
-                        .HasForeignKey("ChatThreadId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChatThread");
-                });
-
-            modelBuilder.Entity("Domain.PreQuotes.RequirementChatThread", b =>
-                {
-                    b.HasOne("Domain.Identity.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("Domain.PreQuotes.Requirement", "Requirement")
-                        .WithMany()
-                        .HasForeignKey("RequirementId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Requirement");
-                });
-
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>
                 {
                     b.HasOne("Domain.PreQuotes.RequirementExtractionResult", "ExtractionResult")
@@ -8024,11 +7882,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("ProcessingAttempts");
 
                     b.Navigation("SupersededByRequirement");
-                });
-
-            modelBuilder.Entity("Domain.PreQuotes.RequirementChatThread", b =>
-                {
-                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.RequirementExtractedItem", b =>

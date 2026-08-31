@@ -45,6 +45,21 @@ public sealed class CanonicalCatalogHttpTests
         Assert.Equal(13, systems.GetArrayLength());
         Assert.Equal(2, frames.GetArrayLength());
         Assert.Equal(5, finishes.GetArrayLength());
+        Assert.All(systems.EnumerateArray(), value =>
+        {
+            Assert.NotEqual(Guid.Empty, value.GetProperty("id").GetGuid());
+            Assert.False(string.IsNullOrWhiteSpace(value.GetProperty("code").GetString()));
+            Assert.True(value.TryGetProperty("commercialLine", out _));
+            Assert.True(value.TryGetProperty("functionalType", out _));
+            Assert.True(value.TryGetProperty("isSelectable", out _));
+        });
+        Assert.Equal(systems.GetArrayLength(), systems.EnumerateArray()
+            .Select(value => value.GetProperty("id").GetGuid()).Distinct().Count());
+        Assert.All(finishes.EnumerateArray(), value =>
+        {
+            Assert.NotEqual(Guid.Empty, value.GetProperty("id").GetGuid());
+            Assert.True(value.GetProperty("isSelectable").GetBoolean());
+        });
         Assert.Contains(systems.EnumerateArray(), value =>
             value.GetProperty("code").GetString() == "BARANDA"
             && !value.GetProperty("priceable").GetBoolean()
