@@ -1,4 +1,4 @@
-using Domain.Catalogs;
+﻿using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -31,6 +31,9 @@ public sealed class ApplicationDbContext(
     public DbSet<Project> Projects => Set<Project>();
 
     public DbSet<PreQuote> PreQuotes => Set<PreQuote>();
+
+    public DbSet<PreQuoteSerialCounter> PreQuoteSerialCounters =>
+        Set<PreQuoteSerialCounter>();
 
     public DbSet<PreQuoteDocument> PreQuoteDocuments =>
         Set<PreQuoteDocument>();

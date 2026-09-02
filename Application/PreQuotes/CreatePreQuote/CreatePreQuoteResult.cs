@@ -1,4 +1,4 @@
-namespace Application.PreQuotes.CreatePreQuote;
+﻿namespace Application.PreQuotes.CreatePreQuote;
 
 public enum CreatePreQuoteFailure
 {
@@ -17,6 +17,8 @@ public enum CreatePreQuoteFailure
 public sealed record CreatedPreQuoteResult(
     Guid Id,
     Guid ProjectId,
+    string Serial,
+    string? Name,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc);
 

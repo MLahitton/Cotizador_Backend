@@ -1,4 +1,4 @@
-namespace Application.PreQuotes.GetProjectPreQuotes;
+﻿namespace Application.PreQuotes.GetProjectPreQuotes;
 
 public enum GetProjectPreQuotesFailure
 {
@@ -13,6 +13,8 @@ public enum GetProjectPreQuotesFailure
 public sealed record PreQuoteListItemResult(
     Guid Id,
     Guid ProjectId,
+    string Serial,
+    string? Name,
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,

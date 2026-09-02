@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.DocumentProcessing;
@@ -1102,7 +1102,7 @@ public sealed class ProcessRequirementServiceTests
             null, null, UserId, At);
         var project = ProjectEntity.Create(
             client.Id, "P-001", "Project", null, null, UserId, At);
-        var preQuote = PreQuote.Create(project.Id, UserId, At);
+        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
         var requirement = Requirement.Create(
             preQuote.Id,
             UserId,
@@ -1798,9 +1798,9 @@ public sealed class ProcessRequirementServiceTests
             "tempered_evidence_vertical_uniform_900_2700" =>
                 "altura de 2.70m dividida en 3 tramos verticales de 0.90m cada uno",
             "tempered_evidence_horizontal_4000" =>
-                "dividida horizontalmente en paÃ±os de 1500 mm, 1000 mm y 1500 mm",
+                "dividida horizontalmente en paÃƒÂ±os de 1500 mm, 1000 mm y 1500 mm",
             "tempered_evidence_horizontal_joint_4500" =>
-                "dividida horizontalmente en paÃ±os de 1000 mm, 2500 mm y 1000 mm",
+                "dividida horizontalmente en paÃƒÂ±os de 1000 mm, 2500 mm y 1000 mm",
             "tempered_evidence_inconsistent_900_2700" =>
                 "tramo superior 900 mm, central 900 mm, inferior 500 mm",
             "skylight_roof_geometry_5110_920" =>

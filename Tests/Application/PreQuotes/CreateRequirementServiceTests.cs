@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
@@ -229,7 +229,7 @@ public sealed class CreateRequirementServiceTests
         var owner = scenario == "foreign" ? Guid.NewGuid() : UserId;
         var project = ProjectEntity.Create(
             client.Id, "P-001", "Project", null, null, owner, At);
-        var preQuote = PreQuote.Create(project.Id, UserId, At);
+        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
 
         currentUser.IsAuthenticated.Returns(scenario != "unauthorized");
         currentUser.UserId.Returns(UserId);

@@ -83,6 +83,8 @@ public sealed class PreQuoteCreationProblemDetailsTests
             CreatePreQuoteResponse>(TestContext.Current.CancellationToken);
         Assert.NotNull(body);
         Assert.Equal(host.ProjectId, body.ProjectId);
+        Assert.Equal("PC-2020-0001", body.Serial);
+        Assert.Null(body.Name);
         await host.PreQuoteRepository.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
     }
@@ -205,6 +207,10 @@ public sealed class PreQuoteCreationProblemDetailsTests
                         new ProjectQueryException(
                             new InvalidOperationException("sensitive"))));
             }
+            preQuotes.ReserveNextSerialAsync(
+                    Arg.Any<DateTimeOffset>(),
+                    Arg.Any<CancellationToken>())
+                .Returns("PC-2020-0001");
             preQuotes.SaveChangesAsync(Arg.Any<CancellationToken>())
                 .Returns(scenario == "persistence"
                     ? Task.FromException(new PreQuotePersistenceException(

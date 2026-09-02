@@ -1,4 +1,4 @@
-using Domain.PreQuotes;
+﻿using Domain.PreQuotes;
 
 namespace Application.Common.Abstractions.PreQuotes;
 
@@ -18,6 +18,10 @@ public interface IPreQuoteRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    Task<string> ReserveNextSerialAsync(
+        DateTimeOffset createdAtUtc,
+        CancellationToken cancellationToken);
+
     void Add(PreQuote preQuote);
 
     void AddDocument(PreQuoteDocument document);
@@ -28,13 +32,35 @@ public interface IPreQuoteRepository
 public sealed record PreQuoteDetails(
     Guid Id,
     Guid ProjectId,
+    string Serial,
+    string? Name,
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc)
+{
+    public PreQuoteDetails(
+        Guid id,
+        Guid projectId,
+        int documentCount,
+        DateTimeOffset createdAtUtc,
+        DateTimeOffset updatedAtUtc)
+        : this(
+            id,
+            projectId,
+            PreQuote.FormatSerial(createdAtUtc.UtcDateTime.Year, 1),
+            null,
+            documentCount,
+            createdAtUtc,
+            updatedAtUtc)
+    {
+    }
+}
 
 public sealed record PreQuoteSearchItem(
     Guid Id,
     Guid ProjectId,
+    string Serial,
+    string? Name,
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
@@ -46,7 +72,43 @@ public sealed record PreQuoteSearchItem(
     int? TechnicalProposalItemCount,
     DocumentProcessingState? LatestAttemptState,
     DocumentProcessingOutcome? LatestAttemptOutcome,
-    string? LatestAttemptErrorCode);
+    string? LatestAttemptErrorCode)
+{
+    public PreQuoteSearchItem(
+        Guid id,
+        Guid projectId,
+        int documentCount,
+        DateTimeOffset createdAtUtc,
+        DateTimeOffset updatedAtUtc,
+        bool hasRequirement,
+        Guid? latestRequirementId,
+        RequirementStatus? latestRequirementStatus,
+        bool hasTechnicalProposal,
+        Guid? technicalProposalId,
+        int? technicalProposalItemCount,
+        DocumentProcessingState? latestAttemptState,
+        DocumentProcessingOutcome? latestAttemptOutcome,
+        string? latestAttemptErrorCode)
+        : this(
+            id,
+            projectId,
+            PreQuote.FormatSerial(createdAtUtc.UtcDateTime.Year, 1),
+            null,
+            documentCount,
+            createdAtUtc,
+            updatedAtUtc,
+            hasRequirement,
+            latestRequirementId,
+            latestRequirementStatus,
+            hasTechnicalProposal,
+            technicalProposalId,
+            technicalProposalItemCount,
+            latestAttemptState,
+            latestAttemptOutcome,
+            latestAttemptErrorCode)
+    {
+    }
+}
 
 public sealed record PreQuoteSearchPage(
     IReadOnlyList<PreQuoteSearchItem> Items,
@@ -66,7 +128,7 @@ public sealed class PreQuotePersistenceException : Exception
 {
     public PreQuotePersistenceException(Exception innerException)
         : base(
-            "No fue posible guardar la precotización.",
+            "No fue posible guardar la precotizaciÃ³n.",
             innerException)
     {
     }

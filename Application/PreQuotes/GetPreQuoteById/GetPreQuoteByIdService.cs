@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.PreQuotes;
 using FluentValidation;
@@ -91,6 +91,8 @@ public sealed class GetPreQuoteByIdService(
             new PreQuoteDetailsResult(
                 preQuote.Id,
                 preQuote.ProjectId,
+                preQuote.Serial,
+                preQuote.Name,
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc));

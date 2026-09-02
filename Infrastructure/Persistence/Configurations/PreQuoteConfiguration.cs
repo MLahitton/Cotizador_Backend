@@ -1,4 +1,4 @@
-using Domain.PreQuotes;
+﻿using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -25,6 +25,18 @@ public sealed class PreQuoteConfiguration
         builder.Property(preQuote => preQuote.CreatedByUserId)
             .HasColumnName("created_by_user_id")
             .IsRequired();
+
+        builder.Property(preQuote => preQuote.Serial)
+            .HasColumnName("serial")
+            .HasColumnType("varchar(20)")
+            .HasMaxLength(PreQuote.MaxSerialLength)
+            .IsRequired();
+
+        builder.Property(preQuote => preQuote.Name)
+            .HasColumnName("name")
+            .HasColumnType("varchar(160)")
+            .HasMaxLength(PreQuote.MaxNameLength)
+            .IsRequired(false);
 
         builder.Property(preQuote => preQuote.CreatedAtUtc)
             .HasColumnName("created_at_utc")
@@ -54,5 +66,9 @@ public sealed class PreQuoteConfiguration
 
         builder.HasIndex(preQuote => preQuote.UpdatedAtUtc)
             .HasDatabaseName("ix_pre_quotes_updated_at_utc");
+
+        builder.HasIndex(preQuote => preQuote.Serial)
+            .IsUnique()
+            .HasDatabaseName("ux_pre_quotes_serial");
     }
 }

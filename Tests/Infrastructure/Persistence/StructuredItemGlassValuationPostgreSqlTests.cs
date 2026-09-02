@@ -1,4 +1,4 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using Application.Common.Abstractions.PreQuotes;
 using CotizadorBackend.Tests.TestDoubles;
 using Domain.Catalogs;
@@ -165,7 +165,7 @@ public sealed class StructuredItemGlassValuationPostgreSqlTests(
             null, null, user.Id, At);
         var project = Project.Create(
             client.Id, "P-001", "Project", null, "Bogota", user.Id, At);
-        var preQuote = PreQuote.Create(project.Id, user.Id, At);
+        var preQuote = PreQuote.Create(project.Id, user.Id, "PC-2020-0001", null, At);
         var document = PreQuoteDocument.Create(
             preQuote.Id, "document.pdf", "application/pdf", 4,
             "prequotes/document.pdf", user.Id, At);

@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.HistoricalPricing;
+﻿using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Abstractions.PreQuotes;
 using Application.HistoricalPricing;
 using Application.Authentication.GetCurrentUser;
@@ -21,6 +21,7 @@ using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.CreatePreQuoteDocument;
 using Application.PreQuotes.GetPreQuoteById;
 using Application.PreQuotes.GetProjectPreQuotes;
+using Application.PreQuotes.UpdatePreQuoteName;
 using Application.PreQuotes.GetPreQuoteDocuments;
 using Application.PreQuotes.GetStructuredDocumentExtraction;
 using Application.PreQuotes.CreatePreQuoteDraft;
@@ -77,6 +78,7 @@ public static class DependencyInjection
         services.AddScoped<CreatePreQuoteDocumentService>();
         services.AddScoped<GetPreQuoteByIdService>();
         services.AddScoped<GetProjectPreQuotesService>();
+        services.AddScoped<UpdatePreQuoteNameService>();
         services.AddScoped<GetPreQuoteDocumentsService>();
         services.AddScoped<GetStructuredDocumentExtractionService>();
         services.AddScoped<IHistoricalDocumentEstimatePipeline, HistoricalDocumentEstimatePipeline>();

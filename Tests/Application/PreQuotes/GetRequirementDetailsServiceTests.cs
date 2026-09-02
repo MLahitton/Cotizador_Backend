@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
@@ -112,7 +112,7 @@ public sealed class GetRequirementDetailsServiceTests
             null,
             UserId,
             At);
-        var preQuote = PreQuote.Create(project.Id, UserId, At);
+        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
         var requirement = Requirement.Create(
             preQuote.Id,
             UserId,
@@ -149,7 +149,7 @@ public sealed class GetRequirementDetailsServiceTests
             .Returns(new PreQuoteDetails(
                 preQuote.Id,
                 preQuote.ProjectId,
-                DocumentCount: 0,
+                0,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc));
         projects.FindByIdAsync(project.Id, Arg.Any<CancellationToken>())

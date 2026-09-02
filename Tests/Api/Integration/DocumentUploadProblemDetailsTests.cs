@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -259,7 +259,7 @@ public sealed class DocumentUploadProblemDetailsTests
             var owner = scenario == "foreign" ? Guid.NewGuid() : UserId;
             var project = ProjectEntity.Create(clientEntity.Id, "P-1", "Project", null, null, owner, At);
             var preQuote = global::Domain.PreQuotes.PreQuote.Create(
-                project.Id, UserId, At);
+                project.Id, UserId, "PC-2020-0001", null, At);
             current.IsAuthenticated.Returns(scenario != "unauthorized"); current.UserId.Returns(UserId);
             if (scenario == "inactive_user") user.Deactivate(At.AddMinutes(1));
             if (scenario == "inactive_project") project.SetActive(false, owner, At.AddMinutes(1));

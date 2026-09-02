@@ -1,4 +1,4 @@
-using Application.PreQuotes.CreatePreQuote;
+﻿using Application.PreQuotes.CreatePreQuote;
 using Application.PreQuotes.GetProjectPreQuotes;
 using Contracts.Common;
 using Contracts.PreQuotes;
@@ -50,6 +50,8 @@ public sealed class ProjectPreQuotesController(
         var response = new CreatePreQuoteResponse(
             preQuote.Id,
             preQuote.ProjectId,
+            preQuote.Serial,
+            preQuote.Name,
             preQuote.CreatedAtUtc,
             preQuote.UpdatedAtUtc);
 
@@ -94,6 +96,8 @@ public sealed class ProjectPreQuotesController(
             .Select(preQuote => new PreQuoteListItemResponse(
                 preQuote.Id,
                 preQuote.ProjectId,
+                preQuote.Serial,
+                preQuote.Name,
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc,

@@ -1,7 +1,9 @@
+using System.Data;
 using System.Data.Common;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -36,6 +38,8 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                 .Select(preQuote => new PreQuoteDetails(
                     preQuote.Id,
                     preQuote.ProjectId,
+                    preQuote.Serial,
+                    preQuote.Name,
                     dbContext.PreQuoteDocuments.Count(document =>
                         document.PreQuoteId == preQuote.Id),
                     preQuote.CreatedAtUtc,
@@ -83,6 +87,8 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                 .Select(preQuote => new PreQuotePageProjection(
                     preQuote.Id,
                     preQuote.ProjectId,
+                    preQuote.Serial,
+                    preQuote.Name,
                     dbContext.PreQuoteDocuments.Count(document =>
                         document.PreQuoteId == preQuote.Id),
                     preQuote.CreatedAtUtc,
@@ -167,6 +173,8 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                     return new PreQuoteSearchItem(
                         preQuote.Id,
                         preQuote.ProjectId,
+                        preQuote.Serial,
+                        preQuote.Name,
                         preQuote.DocumentCount,
                         preQuote.CreatedAtUtc,
                         preQuote.UpdatedAtUtc,
@@ -187,6 +195,69 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
         catch (DbException exception)
         {
             throw new PreQuoteQueryException(exception);
+        }
+    }
+
+    public async Task<string> ReserveNextSerialAsync(
+        DateTimeOffset createdAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var year = createdAtUtc.UtcDateTime.Year;
+        var connection = dbContext.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State == ConnectionState.Closed;
+
+        try
+        {
+            if (shouldCloseConnection)
+            {
+                await dbContext.Database.OpenConnectionAsync(cancellationToken);
+            }
+
+            using var command = connection.CreateCommand();
+            var currentTransaction = dbContext.Database.CurrentTransaction;
+            if (currentTransaction is not null)
+            {
+                command.Transaction = currentTransaction.GetDbTransaction();
+            }
+
+            command.CommandText = """
+                INSERT INTO core.pre_quote_serial_counters (year, next_sequence)
+                VALUES (@year, 2)
+                ON CONFLICT (year)
+                DO UPDATE SET next_sequence = core.pre_quote_serial_counters.next_sequence + 1
+                RETURNING next_sequence - 1;
+                """;
+
+            var yearParameter = command.CreateParameter();
+            yearParameter.ParameterName = "year";
+            yearParameter.Value = year;
+            command.Parameters.Add(yearParameter);
+
+            var scalar = await command.ExecuteScalarAsync(cancellationToken);
+            if (scalar is null || scalar is DBNull)
+            {
+                throw new PreQuotePersistenceException(
+                    new InvalidOperationException(
+                        "No se obtuvo el consecutivo de la precotizacion."));
+            }
+
+            var sequence = Convert.ToInt32(scalar);
+            return PreQuote.FormatSerial(year, sequence);
+        }
+        catch (DbException exception)
+        {
+            throw new PreQuotePersistenceException(exception);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new PreQuotePersistenceException(exception);
+        }
+        finally
+        {
+            if (shouldCloseConnection)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
         }
     }
 
@@ -216,6 +287,8 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
     private sealed record PreQuotePageProjection(
         Guid Id,
         Guid ProjectId,
+        string Serial,
+        string? Name,
         int DocumentCount,
         DateTimeOffset CreatedAtUtc,
         DateTimeOffset UpdatedAtUtc);

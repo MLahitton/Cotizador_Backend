@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
@@ -132,7 +132,10 @@ public sealed class CreatePreQuoteService(
         PreQuote preQuote;
         try
         {
-            preQuote = PreQuote.Create(project.Id, user.Id, now);
+            var serial = await preQuoteRepository.ReserveNextSerialAsync(
+                now,
+                cancellationToken);
+            preQuote = PreQuote.Create(project.Id, user.Id, serial, null, now);
             preQuoteRepository.Add(preQuote);
             await preQuoteRepository.SaveChangesAsync(
                 cancellationToken);
@@ -149,6 +152,8 @@ public sealed class CreatePreQuoteService(
             new CreatedPreQuoteResult(
                 preQuote.Id,
                 preQuote.ProjectId,
+                preQuote.Serial,
+                preQuote.Name,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc));
     }

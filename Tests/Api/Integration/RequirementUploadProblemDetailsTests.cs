@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
@@ -318,7 +318,7 @@ public sealed class RequirementUploadProblemDetailsTests
                 null,
                 UserId,
                 At);
-            var preQuote = PreQuote.Create(project.Id, UserId, At);
+            var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
 
             current.IsAuthenticated.Returns(scenario != "unauthorized");
             current.UserId.Returns(UserId);

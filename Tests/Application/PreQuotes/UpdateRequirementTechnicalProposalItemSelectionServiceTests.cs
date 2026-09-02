@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -223,7 +223,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             null,
             UserId,
             At);
-        var preQuote = PreQuote.Create(project.Id, UserId, At);
+        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
         var requirement = Requirement.Create(
             preQuote.Id,
             UserId,

@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.Catalogs;
 using Domain.Clients;
@@ -387,7 +387,7 @@ public sealed class PreQuoteDraftSnapshotPersistenceTests(
             "Bogota",
             owner.Id,
             At);
-        var preQuote = PreQuote.Create(project.Id, owner.Id, At);
+        var preQuote = PreQuote.Create(project.Id, owner.Id, "PC-2020-0001", null, At);
         var document = PreQuoteDocument.Create(
             preQuote.Id,
             "document.pdf",

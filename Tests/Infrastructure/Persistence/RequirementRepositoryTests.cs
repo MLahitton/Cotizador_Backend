@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.PreQuotes;
+﻿using Application.Common.Abstractions.PreQuotes;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -378,7 +378,7 @@ public sealed class RequirementRepositoryTests(
             "Bogota",
             user.Id,
             At);
-        var preQuote = PreQuote.Create(project.Id, user.Id, At);
+        var preQuote = PreQuote.Create(project.Id, user.Id, "PC-2020-0001", null, At);
         context.Users.Add(user);
         context.Clients.Add(client);
         context.Projects.Add(project);

@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.Authentication;
+﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
@@ -74,8 +74,11 @@ public sealed class CreatePreQuoteServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.PreQuote);
         Assert.Equal(context.Project.Id, result.PreQuote.ProjectId);
+        Assert.Equal("PC-2026-0001", result.PreQuote.Serial);
+        Assert.Null(result.PreQuote.Name);
         Assert.NotNull(captured);
         Assert.Equal(result.PreQuote.Id, captured.Id);
+        Assert.Equal("PC-2026-0001", captured.Serial);
         await context.PreQuoteRepository.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
     }
@@ -127,6 +130,10 @@ public sealed class CreatePreQuoteServiceTests
                     new ProjectQueryException(
                         new InvalidOperationException("sensitive"))));
         }
+        preQuoteRepository.ReserveNextSerialAsync(
+                Arg.Any<DateTimeOffset>(),
+                Arg.Any<CancellationToken>())
+            .Returns("PC-2026-0001");
         preQuoteRepository.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(scenario == "persistence"
                 ? Task.FromException(new PreQuotePersistenceException(

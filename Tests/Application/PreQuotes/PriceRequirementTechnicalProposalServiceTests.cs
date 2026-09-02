@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -760,7 +760,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
         var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
         var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, UserId, At);
-        var preQuote = PreQuote.Create(project.Id, UserId, At);
+        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
         var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
         var proposal = RequirementTechnicalProposal.Create(requirement.Id, Guid.NewGuid(), Guid.NewGuid(), false, At);
         SetPrivateProperty(proposal, "Requirement", requirement);

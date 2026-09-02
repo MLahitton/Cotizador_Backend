@@ -1,8 +1,10 @@
-namespace Contracts.PreQuotes;
+﻿namespace Contracts.PreQuotes;
 
 public sealed record PreQuoteListItemResponse(
     Guid Id,
     Guid ProjectId,
+    string Serial,
+    string? Name,
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
