@@ -464,6 +464,183 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task RepriceItem_AccumulatesMultipleItemRepricesFromSnapshotItems()
+    {
+        var first = ProposalItem(Item(reference: "PV-06"));
+        var second = ProposalItem(Item(reference: "V-01"));
+        var context = CreateContext(
+            [first, second],
+            TechnicalEstimate(50m, 50m, 50m));
+        context.TechnicalEstimator.EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                TechnicalEstimate(50m, 50m, 50m),
+                TechnicalEstimate(80m, 80m, 80m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(first, 100m, 100m), (second, 200m, 200m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var firstResult = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                first.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+        var secondResult = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                second.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(firstResult.IsSuccess);
+        Assert.True(secondResult.IsSuccess);
+        var firstSnapshot = snapshot.Items.Single(item =>
+            item.TechnicalProposalItemId == first.Id);
+        var secondSnapshot = snapshot.Items.Single(item =>
+            item.TechnicalProposalItemId == second.Id);
+        Assert.Equal(50m, firstSnapshot.CurrentLineExpected);
+        Assert.Equal(80m, secondSnapshot.CurrentLineExpected);
+        Assert.Equal(300m, snapshot.OriginalGrandTotal);
+        Assert.Equal(130m, snapshot.CurrentGrandTotal);
+        Assert.Equal(-170m, snapshot.DeltaGrandTotal);
+        Assert.Equal(130m, firstSnapshot.CurrentLineExpected
+            + secondSnapshot.CurrentLineExpected);
+        Assert.Equal(-170m, firstSnapshot.DeltaLineExpected
+            + secondSnapshot.DeltaLineExpected);
+        Assert.Equal(130m, secondResult.Pricing!.CurrentGrandTotal);
+        Assert.Equal(-170m, secondResult.Pricing.DeltaGrandTotal);
+    }
+
+    [Fact]
+    public async Task Execute_AfterMultipleRepricesReturnsConsistentSnapshotTotals()
+    {
+        var first = ProposalItem(Item(reference: "PV-06"));
+        var second = ProposalItem(Item(reference: "V-01"));
+        var context = CreateContext(
+            [first, second],
+            TechnicalEstimate(50m, 50m, 50m));
+        context.TechnicalEstimator.EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                TechnicalEstimate(50m, 50m, 50m),
+                TechnicalEstimate(80m, 80m, 80m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(first, 100m, 100m), (second, 200m, 200m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+        context.Requirements.GetCurrentPricingSnapshotAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                first.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+        await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                second.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var pricing = result.Pricing!;
+        Assert.Equal(50m, pricing.Items.Single(item =>
+            item.ProposalItemId == first.Id).CurrentLine!.Expected);
+        Assert.Equal(80m, pricing.Items.Single(item =>
+            item.ProposalItemId == second.Id).CurrentLine!.Expected);
+        Assert.Equal(130m, pricing.EstimatedSubtotal.Expected);
+        Assert.Equal(130m, pricing.CurrentGrandTotal);
+        Assert.Equal(-170m, pricing.DeltaGrandTotal);
+        Assert.Equal(pricing.CurrentGrandTotal, pricing.EstimatedSubtotal.Expected);
+    }
+
+    [Fact]
+    public async Task RepriceItem_MultipleRepricesSameItemKeepOriginalImmutable()
+    {
+        var item = ProposalItem(Item(reference: "PV-06"));
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(80m, 80m, 80m));
+        context.TechnicalEstimator.EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                TechnicalEstimate(80m, 80m, 80m),
+                TechnicalEstimate(60m, 60m, 60m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 100m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                null,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                null,
+                GlassTemp6Id,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(100m, result.Pricing!.Item.OriginalLine!.Expected);
+        Assert.Equal(60m, result.Pricing.Item.CurrentLine!.Expected);
+        Assert.Equal(-40m, result.Pricing.Item.DeltaLine!.Expected);
+        Assert.Equal(100m, snapshot.OriginalGrandTotal);
+        Assert.Equal(60m, snapshot.CurrentGrandTotal);
+        Assert.Equal(-40m, snapshot.DeltaGrandTotal);
+    }
+    [Fact]
     public async Task RepriceItem_WithChangedSystemAndLastValidPrice_PreservesCurrentPrice()
     {
         HistoricalCandidateQuery? captured = null;
@@ -778,6 +955,8 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         currentUser.UserId.Returns(UserId);
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(user);
         requirements.FindByIdAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(requirement);
+        requirements.BeginPricingUpdateTransactionAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => new NoopRequirementPersistenceTransaction());
         requirements.GetCurrentTechnicalProposalAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(proposal);
         preQuotes.FindByIdAsync(preQuote.Id, Arg.Any<CancellationToken>()).Returns(new PreQuoteDetails(
             preQuote.Id, preQuote.ProjectId, 0, preQuote.CreatedAtUtc, preQuote.UpdatedAtUtc));
@@ -1088,6 +1267,15 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
         Assert.NotNull(property);
         property!.SetValue(target, value);
+    }
+
+    private sealed class NoopRequirementPersistenceTransaction
+        : IRequirementPersistenceTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken) =>
+            Task.CompletedTask;
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed record Context(

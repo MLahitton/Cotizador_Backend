@@ -1721,6 +1721,18 @@ public sealed class RequirementPricingSnapshot
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    public void RecalculateCurrentGrandTotal(DateTimeOffset updatedAtUtc)
+    {
+        var currentValues = _items
+            .Select(item => item.CurrentLineExpected)
+            .ToArray();
+        decimal? currentGrandTotal = currentValues.Any(value => value is null)
+            ? null
+            : currentValues.Sum(value => value!.Value);
+
+        UpdateCurrentGrandTotal(currentGrandTotal, updatedAtUtc);
+    }
+
     internal static decimal? EnsureMoney(decimal? value, string parameterName)
     {
         if (value is < 0m)

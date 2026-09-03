@@ -278,6 +278,9 @@ public sealed class PriceRequirementTechnicalProposalService(
 
         try
         {
+            await using var transaction =
+                await requirementRepository.BeginPricingUpdateTransactionAsync(
+                    cancellationToken);
             var proposal =
                 await requirementRepository.FindCurrentTechnicalProposalForUpdateAsync(
                     command.RequirementId,
@@ -401,7 +404,6 @@ public sealed class PriceRequirementTechnicalProposalService(
                 finishes,
                 requireSystemMatchedComparable,
                 cancellationToken);
-            var previousCurrent = itemSnapshot.CurrentLineExpected;
             var hasNewEstimate = HasCompleteEstimate(repriced.Line);
             var hasLastValidCurrent = HasCompleteCurrentEstimate(itemSnapshot);
             TechnicalProposalPricingItemReadModel responseItem;
@@ -425,14 +427,7 @@ public sealed class PriceRequirementTechnicalProposalService(
                     repriced.Line.Expected,
                     repriced.Line.Maximum,
                     now);
-                var currentGrandTotal = snapshot.CurrentGrandTotal is null
-                    || previousCurrent is null
-                    || itemSnapshot.CurrentLineExpected is null
-                        ? null
-                        : snapshot.CurrentGrandTotal
-                            - previousCurrent
-                            + itemSnapshot.CurrentLineExpected;
-                snapshot.UpdateCurrentGrandTotal(currentGrandTotal, now);
+                snapshot.RecalculateCurrentGrandTotal(now);
                 responseItem = ApplySnapshot(
                     repriced with
                     {
@@ -446,6 +441,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             }
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
 
             return RepriceRequirementTechnicalProposalItemResult.Success(
                 new RepriceRequirementTechnicalProposalItemReadModel(
@@ -777,6 +773,15 @@ public sealed class PriceRequirementTechnicalProposalService(
             .ToArray();
         var priced = items.Count(item => item.Status == "PRICEABLE");
 
+        var estimatedSubtotal = new TechnicalProposalPricingMoneyRange(
+            SumCurrent(items, range => range.Line.Minimum),
+            SumCurrent(items, range => range.Line.Expected),
+            SumCurrent(items, range => range.Line.Maximum));
+        var deltaGrandTotal = estimatedSubtotal.Expected is null
+            || snapshot.OriginalGrandTotal is null
+                ? null
+                : estimatedSubtotal.Expected - snapshot.OriginalGrandTotal;
+
         return new RequirementTechnicalProposalPricingReadModel(
             snapshot.RequirementId,
             snapshot.TechnicalProposalId,
@@ -786,10 +791,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             priced,
             items.Length - priced,
             items.Count(item => item.RequiresReview),
-            new TechnicalProposalPricingMoneyRange(
-                SumCurrent(items, range => range.Line.Minimum),
-                snapshot.CurrentGrandTotal,
-                SumCurrent(items, range => range.Line.Maximum)),
+            estimatedSubtotal,
             items.All(item => item.Status == "PRICEABLE"),
             items.Any(item => item.RequiresReview),
             [],
@@ -798,8 +800,8 @@ public sealed class PriceRequirementTechnicalProposalService(
                 : [],
             items,
             snapshot.OriginalGrandTotal,
-            snapshot.CurrentGrandTotal,
-            snapshot.DeltaGrandTotal);
+            estimatedSubtotal.Expected,
+            deltaGrandTotal);
     }
 
     private static TechnicalProposalPricingItemReadModel ApplySnapshot(

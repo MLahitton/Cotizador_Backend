@@ -98,11 +98,19 @@ public interface IRequirementRepository
         Guid requirementId,
         CancellationToken cancellationToken);
 
+    Task<IRequirementPersistenceTransaction> BeginPricingUpdateTransactionAsync(
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<RequirementExtractedItem>> GetExtractedItemsAsync(
         Guid extractionResultId,
         CancellationToken cancellationToken);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
+}
+
+public interface IRequirementPersistenceTransaction : IAsyncDisposable
+{
+    Task CommitAsync(CancellationToken cancellationToken);
 }
 
 public sealed record RequirementProcessingFailureFinalization(
