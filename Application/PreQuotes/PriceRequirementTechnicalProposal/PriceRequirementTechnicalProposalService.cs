@@ -549,10 +549,7 @@ public sealed class PriceRequirementTechnicalProposalService(
         }
 
         var priced = items.Where(value => value.Status == "PRICEABLE").ToArray();
-        var subtotal = new TechnicalProposalPricingMoneyRange(
-            priced.Length == 0 ? null : priced.Sum(value => value.Line.Minimum!.Value),
-            priced.Length == 0 ? null : priced.Sum(value => value.Line.Expected!.Value),
-            priced.Length == 0 ? null : priced.Sum(value => value.Line.Maximum!.Value));
+        var subtotal = AggregateLineRanges(priced);
         var notPriceable = items.Count - priced.Length;
         var assumptions = items.SelectMany(value => value.Assumptions)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -837,10 +834,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             .ToArray();
         var priced = items.Count(item => item.Status == "PRICEABLE");
 
-        var estimatedSubtotal = new TechnicalProposalPricingMoneyRange(
-            SumCurrent(items, range => range.Line.Minimum),
-            SumCurrent(items, range => range.Line.Expected),
-            SumCurrent(items, range => range.Line.Maximum));
+        var estimatedSubtotal = AggregateLineRanges(items);
         var deltaGrandTotal = estimatedSubtotal.Expected is null
             || snapshot.OriginalGrandTotal is null
                 ? null
@@ -957,16 +951,68 @@ public sealed class PriceRequirementTechnicalProposalService(
     private static string? FirstReason(IReadOnlyList<string> values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 
-    private static decimal? SumCurrent(
-        IReadOnlyList<TechnicalProposalPricingItemReadModel> items,
-        Func<TechnicalProposalPricingItemReadModel, decimal?> selector)
+    private static TechnicalProposalPricingMoneyRange AggregateLineRanges(
+        IReadOnlyList<TechnicalProposalPricingItemReadModel> items)
     {
-        var values = items.Select(selector).ToArray();
-        return values.Any(value => value is null)
-            ? null
-            : values.Sum(value => value!.Value);
+        if (items.Count == 0)
+        {
+            return new TechnicalProposalPricingMoneyRange(null, null, null);
+        }
+
+        var expectedValues = items.Select(item => item.Line.Expected).ToArray();
+        if (expectedValues.Any(value => value is null))
+        {
+            return new TechnicalProposalPricingMoneyRange(null, null, null);
+        }
+
+        var expected = expectedValues.Sum(value => value!.Value);
+        var downside = CombineUncertainty(
+            items,
+            item => item.Line.Expected is null || item.Line.Minimum is null
+                ? (decimal?)null
+                : item.Line.Expected.Value - item.Line.Minimum.Value,
+            expected);
+        var upside = CombineUncertainty(
+            items,
+            item => item.Line.Expected is null || item.Line.Maximum is null
+                ? (decimal?)null
+                : item.Line.Maximum.Value - item.Line.Expected.Value,
+            expected);
+
+        return new TechnicalProposalPricingMoneyRange(
+            downside is null ? null : expected - downside.Value,
+            expected,
+            upside is null ? null : expected + upside.Value);
     }
 
+    private static decimal? CombineUncertainty(
+        IReadOnlyList<TechnicalProposalPricingItemReadModel> items,
+        Func<TechnicalProposalPricingItemReadModel, decimal?> spreadSelector,
+        decimal expectedTotal)
+    {
+        var values = items.Select(spreadSelector).ToArray();
+        if (values.Any(value => value is null))
+        {
+            return null;
+        }
+
+        var sumOfSquares = values.Sum(value => value!.Value * value.Value);
+        var rootSumSquare = (decimal)Math.Sqrt((double)sumOfSquares);
+        var linear = values.Sum(value => value!.Value);
+        var weakExpected = items
+            .Where(IsWeakGlobalEvidence)
+            .Sum(item => item.Line.Expected!.Value);
+        var weakShare = expectedTotal <= 0m
+            ? 1m
+            : Math.Clamp(weakExpected / expectedTotal, 0m, 1m);
+        return rootSumSquare + (linear - rootSumSquare) * weakShare;
+    }
+
+    private static bool IsWeakGlobalEvidence(
+        TechnicalProposalPricingItemReadModel item) =>
+        item.RequiresReview
+        || string.Equals(item.ConfidenceLevel, "LOW", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(item.ConfidenceLevel, "MEDIUM", StringComparison.OrdinalIgnoreCase);
     private static TechnicalProposalPricingMoneyRange ZeroDelta(
         TechnicalProposalPricingMoneyRange range) =>
         new(

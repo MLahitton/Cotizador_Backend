@@ -121,6 +121,65 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithTwoPricedItems_CombinesGlobalUncertaintyWithoutLinearExtremes()
+    {
+        var context = CreateContext(
+            [
+                ProposalItem(Item(reference: "A", quantity: 1)),
+                ProposalItem(Item(reference: "B", quantity: 2))
+            ],
+            TechnicalEstimate(90m, 100m, 110m));
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var subtotal = result.Pricing!.EstimatedSubtotal;
+        Assert.Equal(300m, subtotal.Expected);
+        Assert.Equal(300m - Sqrt(500m), subtotal.Minimum);
+        Assert.Equal(300m + Sqrt(500m), subtotal.Maximum);
+    }
+
+    [Fact]
+    public async Task Execute_WithManyModerateUncertainties_DoesNotGrowGlobalRangeLinearly()
+    {
+        var items = Enumerable.Range(1, 10)
+            .Select(index => ProposalItem(Item(reference: $"I-{index:00}")))
+            .ToArray();
+        var context = CreateContext(items, TechnicalEstimate(90m, 100m, 110m));
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var subtotal = result.Pricing!.EstimatedSubtotal;
+        var width = subtotal.Maximum!.Value - subtotal.Minimum!.Value;
+        Assert.Equal(1_000m, subtotal.Expected);
+        Assert.True(width < 200m);
+        Assert.True(width > 20m);
+    }
+
+    [Fact]
+    public async Task Execute_WithAsymmetricItemRange_PreservesGlobalAsymmetry()
+    {
+        var context = CreateContext(
+            [ProposalItem(Item(reference: "A"))],
+            TechnicalEstimate(80m, 100m, 105m));
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var subtotal = result.Pricing!.EstimatedSubtotal;
+        Assert.Equal(80m, subtotal.Minimum);
+        Assert.Equal(100m, subtotal.Expected);
+        Assert.Equal(105m, subtotal.Maximum);
+    }
+
+    [Fact]
     public async Task Execute_WithSelectedSameAsSuggested_ReportsSelectedSource()
     {
         var proposalItem = ProposalItem(Item());
@@ -1034,6 +1093,8 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         Assert.False(result.Pricing.IsCompleteTotal);
     }
 
+    private static decimal Sqrt(decimal value) =>
+        (decimal)Math.Sqrt((double)value);
     private static Context CreateContext(
         IReadOnlyList<RequirementTechnicalProposalItem> items,
         HistoricalTechnicalPriceEstimate technicalEstimate,
