@@ -170,7 +170,7 @@ public sealed class PriceRequirementTechnicalProposalService(
             var snapshot = await requirementRepository.GetCurrentPricingSnapshotAsync(
                 command.RequirementId,
                 operationCancellationToken);
-            if (snapshot is not null && snapshot.TechnicalProposalId == proposal.Id)
+            if (snapshot is not null && IsCurrentSnapshot(proposal, snapshot))
             {
                 return PriceRequirementTechnicalProposalResult.Success(
                     MapSnapshot(proposal, snapshot));
@@ -187,7 +187,28 @@ public sealed class PriceRequirementTechnicalProposalService(
                 proposal,
                 pricing,
                 DateTimeOffset.UtcNow);
-            requirementRepository.AddPricingSnapshot(createdSnapshot);
+            if (snapshot is null)
+            {
+                requirementRepository.AddPricingSnapshot(createdSnapshot);
+            }
+            else
+            {
+                var currentSnapshot = await requirementRepository
+                    .FindCurrentPricingSnapshotAsync(
+                        command.RequirementId,
+                        operationCancellationToken);
+                if (currentSnapshot is null)
+                {
+                    requirementRepository.AddPricingSnapshot(createdSnapshot);
+                }
+                else
+                {
+                    requirementRepository.ReplacePricingSnapshot(
+                        currentSnapshot,
+                        createdSnapshot);
+                }
+            }
+
             await requirementRepository.SaveChangesAsync(
                 operationCancellationToken);
 
@@ -352,7 +373,7 @@ public sealed class PriceRequirementTechnicalProposalService(
                 await requirementRepository.FindCurrentPricingSnapshotForUpdateAsync(
                     command.RequirementId,
                     cancellationToken);
-            if (snapshot is null || snapshot.TechnicalProposalId != proposal.Id)
+            if (snapshot is null || !IsCurrentSnapshot(proposal, snapshot))
             {
                 var initialPricing = await PriceAsync(
                     proposal,
@@ -360,11 +381,19 @@ public sealed class PriceRequirementTechnicalProposalService(
                     glasses,
                     finishes,
                     cancellationToken);
-                snapshot = CreateSnapshot(
+                var replacement = CreateSnapshot(
                     proposal,
                     initialPricing,
                     DateTimeOffset.UtcNow);
-                requirementRepository.AddPricingSnapshot(snapshot);
+                if (snapshot is null)
+                {
+                    requirementRepository.AddPricingSnapshot(replacement);
+                    snapshot = replacement;
+                }
+                else
+                {
+                    requirementRepository.ReplacePricingSnapshot(snapshot, replacement);
+                }
             }
 
             var itemSnapshot = snapshot.Items.SingleOrDefault(item =>
@@ -375,6 +404,7 @@ public sealed class PriceRequirementTechnicalProposalService(
                     RepriceRequirementTechnicalProposalItemFailure.QueryError);
             }
 
+            var previousCommercialState = CurrentCommercialState(proposalItem);
             var baseConfiguration = EffectiveConfiguration(proposalItem);
             var newSystemId = command.SystemId ?? baseConfiguration.SystemId;
             var newGlassTypeId = command.GlassTypeId ?? baseConfiguration.GlassTypeId;
@@ -392,6 +422,12 @@ public sealed class PriceRequirementTechnicalProposalService(
                 newFinishTypeId,
                 userId,
                 now);
+            var commercialStateChanged = previousCommercialState
+                != CurrentCommercialState(proposalItem);
+            if (commercialStateChanged)
+            {
+                proposal.MarkCommerciallyChanged();
+            }
 
             var commercialLine = proposal.Requirement?.CommercialLine is { } line
                 ? line.ToString().ToUpperInvariant()
@@ -409,6 +445,19 @@ public sealed class PriceRequirementTechnicalProposalService(
             TechnicalProposalPricingItemReadModel responseItem;
             if (!hasNewEstimate && hasLastValidCurrent)
             {
+                itemSnapshot.UpdateCurrent(
+                    newSystemId,
+                    newGlassTypeId,
+                    newFinishTypeId,
+                    itemSnapshot.CurrentStatus,
+                    itemSnapshot.CurrentUnitMinimum,
+                    itemSnapshot.CurrentUnitExpected,
+                    itemSnapshot.CurrentUnitMaximum,
+                    itemSnapshot.CurrentLineMinimum,
+                    itemSnapshot.CurrentLineExpected,
+                    itemSnapshot.CurrentLineMaximum,
+                    now);
+                snapshot.RecalculateCurrentGrandTotal(now);
                 responseItem = ApplySnapshot(
                     PreserveLastValidCurrent(repriced),
                     itemSnapshot);
@@ -438,6 +487,13 @@ public sealed class PriceRequirementTechnicalProposalService(
                             : FirstReason(repriced)
                     },
                     itemSnapshot);
+            }
+
+            if (commercialStateChanged)
+            {
+                snapshot.MarkForCommercialRevision(
+                    proposal.CommercialRevision,
+                    now);
             }
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
@@ -716,6 +772,7 @@ public sealed class PriceRequirementTechnicalProposalService(
         var snapshot = RequirementPricingSnapshot.Create(
             proposal.RequirementId,
             proposal.Id,
+            proposal.CommercialRevision,
             pricing.Currency,
             pricing.PricingBasis,
             pricing.EstimatedSubtotal.Expected,
@@ -744,6 +801,13 @@ public sealed class PriceRequirementTechnicalProposalService(
 
         return snapshot;
     }
+
+    private static bool IsCurrentSnapshot(
+        RequirementTechnicalProposal proposal,
+        RequirementPricingSnapshot snapshot) =>
+        snapshot.TechnicalProposalId == proposal.Id
+        && snapshot.TechnicalProposalCommercialRevision
+            == proposal.CommercialRevision;
 
     private static RequirementTechnicalProposalPricingReadModel MapSnapshot(
         RequirementTechnicalProposal proposal,
@@ -1052,6 +1116,27 @@ public sealed class PriceRequirementTechnicalProposalService(
                 * proposalItem.EffectiveHeightMillimeters.Value
                 / 1_000_000m
             : proposalItem.ExtractedItem.AreaSquareMeters;
+
+    private static CommercialState CurrentCommercialState(
+        RequirementTechnicalProposalItem proposalItem)
+    {
+        var configuration = EffectiveConfiguration(proposalItem);
+        return new CommercialState(
+            configuration.SystemId,
+            configuration.GlassTypeId,
+            configuration.FinishTypeId,
+            proposalItem.EffectiveQuantity,
+            proposalItem.EffectiveWidthMillimeters,
+            proposalItem.EffectiveHeightMillimeters);
+    }
+
+    private sealed record CommercialState(
+        Guid? SystemId,
+        Guid? GlassTypeId,
+        Guid? FinishTypeId,
+        int? Quantity,
+        int? WidthMillimeters,
+        int? HeightMillimeters);
 
     private sealed record EffectiveTechnicalConfiguration(
         string Source,

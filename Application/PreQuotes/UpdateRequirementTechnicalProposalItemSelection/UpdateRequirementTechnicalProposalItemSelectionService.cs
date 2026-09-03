@@ -217,6 +217,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
             var selectedSystemId = command.SystemId ?? baseSystemId;
             var selectedGlassId = command.GlassId ?? baseGlassId;
             var selectedFinishId = command.FinishId ?? baseFinishId;
+            var previousCommercialState = CurrentCommercialState(item);
 
             item.ApplyManualDataOverride(
                 command.Quantity,
@@ -229,6 +230,11 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                 selectedFinishId,
                 userId,
                 timeProvider.GetUtcNow());
+            if (previousCommercialState != CurrentCommercialState(item))
+            {
+                proposal.MarkCommerciallyChanged();
+            }
+
             proposal.InvalidateCommercialConfirmation();
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
@@ -330,6 +336,42 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
             ? UpdateRequirementTechnicalProposalItemSelectionFailure.None
             : UpdateRequirementTechnicalProposalItemSelectionFailure.InactiveClient;
     }
+
+    private static CommercialState CurrentCommercialState(
+        RequirementTechnicalProposalItem item) =>
+        new(
+            EffectiveSystemId(item),
+            EffectiveGlassTypeId(item),
+            EffectiveFinishTypeId(item),
+            item.EffectiveQuantity,
+            item.EffectiveWidthMillimeters,
+            item.EffectiveHeightMillimeters);
+
+    private static Guid? EffectiveSystemId(
+        RequirementTechnicalProposalItem item) =>
+        item.HasSelectedConfiguration()
+            ? item.SelectedSystemId
+            : item.SuggestedSystemId;
+
+    private static Guid? EffectiveGlassTypeId(
+        RequirementTechnicalProposalItem item) =>
+        item.HasSelectedConfiguration()
+            ? item.SelectedGlassTypeId
+            : item.SuggestedGlassTypeId;
+
+    private static Guid? EffectiveFinishTypeId(
+        RequirementTechnicalProposalItem item) =>
+        item.HasSelectedConfiguration()
+            ? item.SelectedFinishTypeId
+            : item.SuggestedFinishTypeId;
+
+    private sealed record CommercialState(
+        Guid? SystemId,
+        Guid? GlassTypeId,
+        Guid? FinishTypeId,
+        int? Quantity,
+        int? WidthMillimeters,
+        int? HeightMillimeters);
 
     private static RequirementTechnicalProposalItemSelectionReadModel MapSelection(
         Guid technicalProposalId,

@@ -407,6 +407,90 @@ public sealed class RequirementRepositoryTests(
             repository.SaveChangesAsync(cancellationToken));
     }
 
+    [Fact]
+    public async Task ReplacePricingSnapshot_WithNewTechnicalProposal_ReusesCurrentRequirementSnapshotRow()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedPricedRequirementAsync();
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var repository = new RequirementRepository(context);
+            var attempt = RequirementProcessingAttempt.Create(
+                seeded.RequirementId,
+                seeded.UserId,
+                Guid.NewGuid(),
+                At.AddMinutes(10));
+            attempt.Start(At.AddMinutes(11));
+            attempt.Complete(DocumentProcessingOutcome.Completed, At.AddMinutes(12));
+            var extraction = RequirementExtractionResult.Create(
+                attempt.Id,
+                "3.0",
+                "AI2",
+                "{}",
+                1,
+                0,
+                0,
+                0,
+                "test",
+                100,
+                At.AddMinutes(13));
+            var extracted = CreateExtractedItem(extraction.Id, 3, "C");
+            var proposal = RequirementTechnicalProposal.Create(
+                seeded.RequirementId,
+                extraction.Id,
+                attempt.Id,
+                false,
+                At.AddMinutes(14));
+            var proposalItem = CreateProposalItem(proposal.Id, extracted.Id);
+            proposal.AddItem(proposalItem);
+            context.RequirementProcessingAttempts.Add(attempt);
+            context.RequirementExtractionResults.Add(extraction);
+            context.RequirementExtractedItems.Add(extracted);
+            context.RequirementTechnicalProposals.Add(proposal);
+            await context.SaveChangesAsync(cancellationToken);
+
+            var current = await repository.FindCurrentPricingSnapshotAsync(
+                seeded.RequirementId,
+                cancellationToken);
+            Assert.NotNull(current);
+            var currentSnapshotId = current!.Id;
+            var replacement = RequirementPricingSnapshot.Create(
+                seeded.RequirementId,
+                proposal.Id,
+                proposal.CommercialRevision,
+                "COP",
+                "HISTORICAL_COMPARABLES",
+                500m,
+                500m,
+                At.AddMinutes(15));
+            replacement.AddItem(CreatePricingItem(
+                replacement.Id,
+                proposalItem.Id,
+                500m));
+
+            repository.ReplacePricingSnapshot(current, replacement);
+            await repository.SaveChangesAsync(cancellationToken);
+
+            Assert.Equal(currentSnapshotId, current.Id);
+        }
+
+        await using var verification = fixture.CreateDbContext();
+        var snapshots = await verification.RequirementPricingSnapshots
+            .AsNoTracking()
+            .Include(snapshot => snapshot.Items)
+            .Where(snapshot => snapshot.RequirementId == seeded.RequirementId)
+            .ToArrayAsync(cancellationToken);
+
+        var snapshot = Assert.Single(snapshots);
+        Assert.Equal(500m, snapshot.CurrentGrandTotal);
+        Assert.Equal(1, snapshot.TechnicalProposalCommercialRevision);
+        var item = Assert.Single(snapshot.Items);
+        Assert.NotEqual(seeded.FirstProposalItemId, item.TechnicalProposalItemId);
+        Assert.NotEqual(seeded.SecondProposalItemId, item.TechnicalProposalItemId);
+        Assert.Equal(500m, item.CurrentLineExpected);
+    }
+
     private async Task<SeededPricedRequirement> SeedPricedRequirementAsync()
     {
         var seeded = await SeedPreQuoteAsync();
@@ -450,6 +534,7 @@ public sealed class RequirementRepositoryTests(
         var snapshot = RequirementPricingSnapshot.Create(
             requirement.Id,
             proposal.Id,
+            proposal.CommercialRevision,
             "COP",
             "HISTORICAL_COMPARABLES",
             300m,
@@ -467,6 +552,7 @@ public sealed class RequirementRepositoryTests(
         context.RequirementPricingSnapshots.Add(snapshot);
         await context.SaveChangesAsync(cancellationToken);
         return new SeededPricedRequirement(
+            seeded.UserId,
             requirement.Id,
             firstProposalItem.Id,
             secondProposalItem.Id);
@@ -655,6 +741,7 @@ public sealed class RequirementRepositoryTests(
     private sealed record SeededPreQuote(Guid UserId, Guid PreQuoteId);
 
     private sealed record SeededPricedRequirement(
+        Guid UserId,
         Guid RequirementId,
         Guid FirstProposalItemId,
         Guid SecondProposalItemId);

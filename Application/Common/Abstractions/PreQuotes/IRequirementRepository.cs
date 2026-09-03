@@ -74,6 +74,10 @@ public interface IRequirementRepository
 
     void AddPricingSnapshot(RequirementPricingSnapshot snapshot);
 
+    void ReplacePricingSnapshot(
+        RequirementPricingSnapshot current,
+        RequirementPricingSnapshot replacement);
+
     Task<RequirementExtractionResult?> GetLatestSuccessfulExtractionAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
@@ -91,6 +95,10 @@ public interface IRequirementRepository
         CancellationToken cancellationToken);
 
     Task<RequirementPricingSnapshot?> GetCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
+    Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
 

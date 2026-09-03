@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -385,6 +385,47 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithSnapshotRevisionMismatch_RecalculatesAndReplacesSnapshot()
+    {
+        var proposalItem = ProposalItem(Item(quantity: 2));
+        var context = CreateContext(
+            [proposalItem],
+            TechnicalEstimate(150m, 250m, 350m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(proposalItem, 100m, 100m)]);
+        context.Proposal.MarkCommerciallyChanged();
+        context.Requirements.GetCurrentPricingSnapshotAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+        context.Requirements.FindCurrentPricingSnapshotAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(500m, result.Pricing!.OriginalGrandTotal);
+        Assert.Equal(500m, result.Pricing.CurrentGrandTotal);
+        Assert.Equal(0m, result.Pricing.DeltaGrandTotal);
+        context.Requirements.Received(1).ReplacePricingSnapshot(
+            snapshot,
+            Arg.Is<RequirementPricingSnapshot>(replacement =>
+                replacement.TechnicalProposalId == context.Proposal.Id
+                && replacement.TechnicalProposalCommercialRevision
+                    == context.Proposal.CommercialRevision
+                && replacement.CurrentGrandTotal == 500m));
+        await context.TechnicalEstimator.Received().EstimateAsync(
+            Arg.Any<HistoricalCandidateQuery>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Execute_WhenRegisteredPricingIsCancelled_DoesNotPersistSnapshot()
     {
         var cancellation = new CancellationTokenSource();
@@ -416,6 +457,82 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             result.Failure);
         context.Requirements.DidNotReceive().AddPricingSnapshot(
             Arg.Any<RequirementPricingSnapshot>());
+    }
+
+    [Fact]
+    public async Task RepriceItem_WithCommercialChange_SynchronizesProposalAndSnapshotRevision()
+    {
+        var item = ProposalItem(Item(reference: "PV-06"));
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(200m, 200m, 200m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 100m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                SystemLsa9060Id,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
+        Assert.Equal(
+            context.Proposal.CommercialRevision,
+            snapshot.TechnicalProposalCommercialRevision);
+        Assert.Equal(200m, snapshot.CurrentGrandTotal);
+    }
+
+    [Fact]
+    public async Task RepriceItem_WithoutEffectiveCommercialChange_KeepsRevision()
+    {
+        var item = ProposalItem(Item(reference: "PV-06"));
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(200m, 200m, 200m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 100m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                item.SelectedSystemId,
+                item.SelectedGlassTypeId,
+                item.SelectedFinishTypeId,
+                item.EffectiveQuantity,
+                item.EffectiveWidthMillimeters,
+                item.EffectiveHeightMillimeters),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+        Assert.Equal(initialRevision, snapshot.TechnicalProposalCommercialRevision);
     }
 
     [Fact]
@@ -752,6 +869,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var snapshot = RequirementPricingSnapshot.Create(
             context.Requirement.Id,
             context.Proposal.Id,
+            context.Proposal.CommercialRevision,
             "COP",
             "PUBLIC_QUOTED_ITEM_PRICES",
             null,
@@ -1006,6 +1124,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var snapshot = RequirementPricingSnapshot.Create(
             requirementId,
             proposalId,
+            1,
             "COP",
             "PUBLIC_QUOTED_ITEM_PRICES",
             items.Sum(item => item.Original),

@@ -92,6 +92,100 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         Assert.Equal(context.SuggestedFinish.Id, context.Item.SelectedFinishTypeId);
     }
 
+    [Theory]
+    [InlineData("System")]
+    [InlineData("Glass")]
+    [InlineData("Finish")]
+    [InlineData("Quantity")]
+    [InlineData("Width")]
+    [InlineData("Height")]
+    public async Task Execute_WithEffectiveCommercialChange_IncrementsRevisionOnce(
+        string change)
+    {
+        var context = CreateContext();
+        context.Proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(-5));
+        var initialRevision = context.Proposal.CommercialRevision;
+        var command = change switch
+        {
+            "System" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                context.AlternativeSystem.Id, null, null),
+            "Glass" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                null, context.AlternativeGlass.GlassTypeId, null),
+            "Finish" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                null, null, context.AlternativeFinish.Id),
+            "Quantity" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                null, null, null, 2),
+            "Width" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                null, null, null, null, 1200),
+            "Height" => new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id, context.Item.Id, false,
+                null, null, null, null, null, 1300),
+            _ => throw new InvalidOperationException(change)
+        };
+
+        var result = await context.Service.ExecuteAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
+        Assert.False(context.Proposal.IsCommerciallyConfirmed);
+    }
+
+    [Fact]
+    public async Task Execute_WithoutEffectiveCommercialChange_DoesNotIncrementRevision()
+    {
+        var context = CreateContext();
+        context.Proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(-5));
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                true,
+                null,
+                null,
+                null,
+                1,
+                3740,
+                2500),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+        Assert.False(context.Proposal.IsCommerciallyConfirmed);
+    }
+
+    [Fact]
+    public async Task Execute_WithMultipleCommercialFields_IncrementsRevisionOnce()
+    {
+        var context = CreateContext();
+        context.Proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(-5));
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                context.AlternativeGlass.GlassTypeId,
+                context.AlternativeFinish.Id,
+                2,
+                1200,
+                1300),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
+    }
+
     [Fact]
     public async Task Execute_WithUnselectableGlass_ReturnsInvalidGlassSelection()
     {
@@ -397,7 +491,8 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             suggestedGlass,
             alternativeGlass,
             unselectableGlass,
-            suggestedFinish);
+            suggestedFinish,
+            alternativeFinish);
     }
 
     private static ProductSystemCatalogReadModel ProductSystem(
@@ -474,5 +569,6 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         GlassTypeCatalogReadModel SuggestedGlass,
         GlassTypeCatalogReadModel AlternativeGlass,
         GlassTypeCatalogReadModel UnselectableGlass,
-        FinishTypeCatalogReadModel SuggestedFinish);
+        FinishTypeCatalogReadModel SuggestedFinish,
+        FinishTypeCatalogReadModel AlternativeFinish);
 }

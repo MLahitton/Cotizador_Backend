@@ -56,6 +56,21 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
     }
 
     [Fact]
+    public async Task Execute_DoesNotIncrementCommercialRevision()
+    {
+        var context = CreateContext();
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.ExecuteAsync(
+            new ConfirmRequirementTechnicalProposalSelectionCommand(
+                context.Proposal.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+    }
+
+    [Fact]
     public async Task Execute_WithExistingSelectedConfiguration_DoesNotOverwriteSelection()
     {
         var context = CreateContext();

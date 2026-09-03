@@ -423,6 +423,55 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementPricingSnapshots.Add(snapshot);
     }
 
+    public void ReplacePricingSnapshot(
+        RequirementPricingSnapshot current,
+        RequirementPricingSnapshot replacement)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        var previousItems = current.Items.ToArray();
+        dbContext.RequirementPricingItemSnapshots.RemoveRange(previousItems);
+        current.Reinitialize(
+            replacement.TechnicalProposalId,
+            replacement.TechnicalProposalCommercialRevision,
+            replacement.Currency,
+            replacement.PricingBasis,
+            replacement.OriginalGrandTotal,
+            replacement.CurrentGrandTotal,
+            replacement.UpdatedAtUtc);
+        foreach (var item in replacement.Items)
+        {
+            var replacementItem = RequirementPricingItemSnapshot.Create(
+                current.Id,
+                item.TechnicalProposalItemId,
+                item.OriginalSystemId,
+                item.OriginalGlassTypeId,
+                item.OriginalFinishTypeId,
+                item.OriginalStatus,
+                item.OriginalUnitMinimum,
+                item.OriginalUnitExpected,
+                item.OriginalUnitMaximum,
+                item.OriginalLineMinimum,
+                item.OriginalLineExpected,
+                item.OriginalLineMaximum,
+                item.CreatedAtUtc);
+            replacementItem.UpdateCurrent(
+                item.CurrentSystemId,
+                item.CurrentGlassTypeId,
+                item.CurrentFinishTypeId,
+                item.CurrentStatus,
+                item.CurrentUnitMinimum,
+                item.CurrentUnitExpected,
+                item.CurrentUnitMaximum,
+                item.CurrentLineMinimum,
+                item.CurrentLineExpected,
+                item.CurrentLineMaximum,
+                item.UpdatedAtUtc);
+            current.AddItem(replacementItem);
+        }
+    }
+
     public async Task<RequirementExtractionResult?>
         GetLatestSuccessfulExtractionAsync(
             Guid requirementId,
@@ -570,12 +619,23 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
     {
         try
         {
-            return await dbContext.RequirementPricingSnapshots
+            return await QueryCurrentPricingSnapshot(requirementId)
                 .AsNoTracking()
-                .Include(snapshot => snapshot.Items)
-                .Where(snapshot => snapshot.RequirementId == requirementId)
-                .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
-                .ThenByDescending(snapshot => snapshot.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await QueryCurrentPricingSnapshot(requirementId)
                 .FirstOrDefaultAsync(cancellationToken);
         }
         catch (DbException exception)
@@ -637,6 +697,14 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             throw new RequirementPersistenceException(exception);
         }
     }
+
+    private IQueryable<RequirementPricingSnapshot> QueryCurrentPricingSnapshot(
+        Guid requirementId) =>
+        dbContext.RequirementPricingSnapshots
+            .Include(snapshot => snapshot.Items)
+            .Where(snapshot => snapshot.RequirementId == requirementId)
+            .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
+            .ThenByDescending(snapshot => snapshot.Id);
 
     private async Task<Guid?> LockCurrentTechnicalProposalIdAsync(
         Guid requirementId,

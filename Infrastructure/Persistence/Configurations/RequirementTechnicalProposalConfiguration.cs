@@ -51,6 +51,11 @@ public sealed class RequirementTechnicalProposalConfiguration
             .HasColumnType("timestamp with time zone")
             .IsRequired();
 
+        builder.Property(proposal => proposal.CommercialRevision)
+            .HasColumnName("commercial_revision")
+            .HasDefaultValue(1L)
+            .IsRequired();
+
         builder.Property(proposal => proposal.CommercialConfirmedAtUtc)
             .HasColumnName("commercial_confirmed_at_utc")
             .HasColumnType("timestamp with time zone")

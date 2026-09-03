@@ -1069,6 +1069,7 @@ public sealed class RequirementTechnicalProposal
     public Guid RequirementProcessingAttemptId { get; private set; }
     public RequirementTechnicalProposalStatus Status { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public long CommercialRevision { get; private set; }
     public DateTimeOffset? CommercialConfirmedAtUtc { get; private set; }
     public Guid? CommercialConfirmedByUserId { get; private set; }
     public Requirement Requirement { get; private set; } = null!;
@@ -1125,7 +1126,8 @@ public sealed class RequirementTechnicalProposal
             Status = requiresReview
                 ? RequirementTechnicalProposalStatus.RequiresReview
                 : RequirementTechnicalProposalStatus.Completed,
-            CreatedAtUtc = createdAtUtc
+            CreatedAtUtc = createdAtUtc,
+            CommercialRevision = 1
         };
     }
 
@@ -1189,6 +1191,14 @@ public sealed class RequirementTechnicalProposal
     {
         CommercialConfirmedAtUtc = null;
         CommercialConfirmedByUserId = null;
+    }
+
+    public void MarkCommerciallyChanged()
+    {
+        checked
+        {
+            CommercialRevision++;
+        }
     }
 }
 
@@ -1636,6 +1646,7 @@ public sealed class RequirementPricingSnapshot
     public Guid Id { get; private set; }
     public Guid RequirementId { get; private set; }
     public Guid TechnicalProposalId { get; private set; }
+    public long TechnicalProposalCommercialRevision { get; private set; }
     public string Currency { get; private set; } = string.Empty;
     public string PricingBasis { get; private set; } = string.Empty;
     public decimal? OriginalGrandTotal { get; private set; }
@@ -1653,6 +1664,7 @@ public sealed class RequirementPricingSnapshot
     public static RequirementPricingSnapshot Create(
         Guid requirementId,
         Guid technicalProposalId,
+        long technicalProposalCommercialRevision,
         string currency,
         string pricingBasis,
         decimal? originalGrandTotal,
@@ -1673,6 +1685,7 @@ public sealed class RequirementPricingSnapshot
                 nameof(technicalProposalId));
         }
 
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
         Requirement.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
 
         return new RequirementPricingSnapshot
@@ -1680,6 +1693,7 @@ public sealed class RequirementPricingSnapshot
             Id = Guid.NewGuid(),
             RequirementId = requirementId,
             TechnicalProposalId = technicalProposalId,
+            TechnicalProposalCommercialRevision = technicalProposalCommercialRevision,
             Currency = Requirement.NormalizeRequired(currency, nameof(currency), 10),
             PricingBasis = Requirement.NormalizeRequired(
                 pricingBasis,
@@ -1690,6 +1704,44 @@ public sealed class RequirementPricingSnapshot
             CreatedAtUtc = createdAtUtc,
             UpdatedAtUtc = createdAtUtc
         };
+    }
+
+    public void Reinitialize(
+        Guid technicalProposalId,
+        long technicalProposalCommercialRevision,
+        string currency,
+        string pricingBasis,
+        decimal? originalGrandTotal,
+        decimal? currentGrandTotal,
+        DateTimeOffset updatedAtUtc)
+    {
+        if (technicalProposalId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La propuesta tecnica es obligatoria.",
+                nameof(technicalProposalId));
+        }
+
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        TechnicalProposalId = technicalProposalId;
+        TechnicalProposalCommercialRevision = technicalProposalCommercialRevision;
+        Currency = Requirement.NormalizeRequired(currency, nameof(currency), 10);
+        PricingBasis = Requirement.NormalizeRequired(
+            pricingBasis,
+            nameof(pricingBasis),
+            80);
+        OriginalGrandTotal = EnsureMoney(originalGrandTotal, nameof(originalGrandTotal));
+        CurrentGrandTotal = EnsureMoney(currentGrandTotal, nameof(currentGrandTotal));
+        UpdatedAtUtc = updatedAtUtc;
+        _items.Clear();
     }
 
     public void AddItem(RequirementPricingItemSnapshot item)
@@ -1733,6 +1785,23 @@ public sealed class RequirementPricingSnapshot
         UpdateCurrentGrandTotal(currentGrandTotal, updatedAtUtc);
     }
 
+    public void MarkForCommercialRevision(
+        long technicalProposalCommercialRevision,
+        DateTimeOffset updatedAtUtc)
+    {
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        TechnicalProposalCommercialRevision = technicalProposalCommercialRevision;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     internal static decimal? EnsureMoney(decimal? value, string parameterName)
     {
         if (value is < 0m)
@@ -1743,6 +1812,16 @@ public sealed class RequirementPricingSnapshot
         }
 
         return value;
+    }
+
+    private static void EnsureCommercialRevision(long value)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentException(
+                "La revision comercial debe ser mayor o igual a uno.",
+                nameof(value));
+        }
     }
 }
 
