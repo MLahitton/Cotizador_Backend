@@ -242,12 +242,28 @@ public sealed class GetRequirementTechnicalProposalService(
                 proposal.CommercialConfirmedByUserId),
             proposal.CreatedAtUtc,
             items.Length,
-            items.Count(item => item.RequiresReview),
-            items.Count(item => item.IsTechnicallyComplete),
-            items.Count(item => item.IsPriceable),
+            items.Count(item => RequiresReview(item.Readiness)),
+            items.Count(item => IsTechnicallyComplete(item.Readiness)),
+            items.Count(item => IsPriceable(item.Readiness)),
             readiness,
             items);
     }
+
+    private static bool IsTechnicallyComplete(
+        RequirementTechnicalProposalItemReadinessReadModel readiness) =>
+        readiness.PendingDefinitions.All(definition =>
+            !definition.BlocksConfirmation);
+
+    private static bool IsPriceable(
+        RequirementTechnicalProposalItemReadinessReadModel readiness) =>
+        readiness.PendingDefinitions.All(definition => !definition.BlocksPricing);
+
+    private static bool RequiresReview(
+        RequirementTechnicalProposalItemReadinessReadModel readiness) =>
+        readiness.State != "READY"
+        || readiness.BlockingCount > 0
+        || readiness.WarningCount > 0
+        || readiness.PendingDefinitions.Count > 0;
 
     private static RequirementTechnicalProposalItemReadModel MapItem(
         RequirementTechnicalProposalItem item,
