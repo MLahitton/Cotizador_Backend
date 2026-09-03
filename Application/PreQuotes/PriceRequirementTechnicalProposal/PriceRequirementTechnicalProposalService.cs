@@ -35,6 +35,7 @@ public enum PriceRequirementTechnicalProposalFailure
     InactiveClient,
     TechnicalProposalNotFound,
     TechnicalProposalNotConfirmed,
+    TechnicalProposalNoIncludedItems,
     QueryError,
     Cancelled
 }
@@ -54,6 +55,7 @@ public enum RepriceRequirementTechnicalProposalItemFailure
     TechnicalProposalNotFound,
     TechnicalProposalNotConfirmed,
     TechnicalProposalItemNotFound,
+    TechnicalProposalItemExcluded,
     InvalidSystemSelection,
     InvalidGlassSelection,
     InvalidFinishSelection,
@@ -150,6 +152,12 @@ public sealed class PriceRequirementTechnicalProposalService(
             {
                 return PriceRequirementTechnicalProposalResult.Failed(
                     PriceRequirementTechnicalProposalFailure.TechnicalProposalNotFound);
+            }
+
+            if (proposal.IncludedItems.Count == 0)
+            {
+                return PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.TechnicalProposalNoIncludedItems);
             }
 
             if (!proposal.IsCommerciallyConfirmed)
@@ -313,13 +321,6 @@ public sealed class PriceRequirementTechnicalProposalService(
                         .TechnicalProposalNotFound);
             }
 
-            if (!proposal.IsCommerciallyConfirmed)
-            {
-                return RepriceRequirementTechnicalProposalItemResult.Failed(
-                    RepriceRequirementTechnicalProposalItemFailure
-                        .TechnicalProposalNotConfirmed);
-            }
-
             var proposalItem = proposal.Items.SingleOrDefault(item =>
                 item.Id == command.TechnicalProposalItemId);
             if (proposalItem is null)
@@ -327,6 +328,20 @@ public sealed class PriceRequirementTechnicalProposalService(
                 return RepriceRequirementTechnicalProposalItemResult.Failed(
                     RepriceRequirementTechnicalProposalItemFailure
                         .TechnicalProposalItemNotFound);
+            }
+
+            if (!proposalItem.IsIncluded)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .TechnicalProposalItemExcluded);
+            }
+
+            if (!proposal.IsCommerciallyConfirmed)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .TechnicalProposalNotConfirmed);
             }
 
             var systems = (await productSystemCatalog.ListActiveAsync(cancellationToken))
@@ -535,7 +550,7 @@ public sealed class PriceRequirementTechnicalProposalService(
         var commercialLine = proposal.Requirement?.CommercialLine is { } line
             ? line.ToString().ToUpperInvariant()
             : null;
-        foreach (var item in proposal.Items.OrderBy(value => value.ExtractedItem.Sequence).ThenBy(value => value.Id))
+        foreach (var item in proposal.IncludedItems.OrderBy(value => value.ExtractedItem.Sequence).ThenBy(value => value.Id))
         {
             cancellationToken.ThrowIfCancellationRequested();
             items.Add(await PriceItemAsync(

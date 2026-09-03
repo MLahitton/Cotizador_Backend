@@ -224,8 +224,9 @@ public sealed class GetRequirementTechnicalProposalService(
                 finishById,
                 sourcesById))
             .ToArray();
+        var includedItems = items.Where(item => item.IsIncluded).ToArray();
         var readiness = TechnicalProposalReadinessEvaluator.EvaluateProposal(
-            items.Select(item => item.Readiness).ToArray());
+            includedItems.Select(item => item.Readiness).ToArray());
 
         return new RequirementTechnicalProposalReadModel(
             proposal.RequirementId,
@@ -292,6 +293,10 @@ public sealed class GetRequirementTechnicalProposalService(
             item.EffectiveWidthMillimeters,
             item.EffectiveHeightMillimeters,
             extracted.AreaSquareMeters,
+            item.IsIncluded,
+            item.ExcludedAtUtc,
+            item.ExcludedByUserId,
+            item.ExclusionReason,
             extracted.Confidence,
             extracted.ExtractionStatus.ToString(),
             new RequirementTechnicalProposalSuggestedReadModel(
@@ -635,6 +640,10 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     int? EffectiveWidthMm,
     int? EffectiveHeightMm,
     decimal? AreaM2,
+    bool IsIncluded,
+    DateTimeOffset? ExcludedAtUtc,
+    Guid? ExcludedByUserId,
+    string? ExclusionReason,
     decimal? ExtractionConfidence,
     string ExtractionStatus,
     RequirementTechnicalProposalSuggestedReadModel Suggested,

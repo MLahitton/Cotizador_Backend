@@ -41,6 +41,12 @@ public enum RequirementTechnicalProposalCommercialConfirmationState
     Confirmed = 2
 }
 
+public enum TechnicalProposalItemInclusionState
+{
+    Included = 1,
+    Excluded = 2
+}
+
 public sealed class Requirement
 {
     private Requirement() { }
@@ -1076,6 +1082,8 @@ public sealed class RequirementTechnicalProposal
     public RequirementExtractionResult ExtractionResult { get; private set; } = null!;
     public RequirementProcessingAttempt ProcessingAttempt { get; private set; } = null!;
     public IReadOnlyCollection<RequirementTechnicalProposalItem> Items => _items;
+    public IReadOnlyCollection<RequirementTechnicalProposalItem> IncludedItems =>
+        _items.Where(item => item.IsIncluded).ToArray();
     public RequirementTechnicalProposalCommercialConfirmationState
         CommercialConfirmationState =>
             CommercialConfirmedAtUtc is null || CommercialConfirmedByUserId is null
@@ -1161,19 +1169,20 @@ public sealed class RequirementTechnicalProposal
 
         Requirement.EnsureUtc(confirmedAtUtc, nameof(confirmedAtUtc));
 
-        if (_items.Count == 0)
+        var includedItems = IncludedItems;
+        if (includedItems.Count == 0)
         {
             throw new InvalidOperationException(
-                "La propuesta tecnica no tiene items para confirmar.");
+                "La propuesta tecnica no tiene items incluidos para confirmar.");
         }
 
-        if (_items.Any(item => !item.HasCompleteCommercialConfiguration()))
+        if (includedItems.Any(item => !item.HasCompleteCommercialConfiguration()))
         {
             throw new InvalidOperationException(
                 "La propuesta tecnica tiene items sin configuracion completa.");
         }
 
-        foreach (var item in _items.Where(item => !item.HasSelectedConfiguration()))
+        foreach (var item in includedItems.Where(item => !item.HasSelectedConfiguration()))
         {
             item.Select(
                 item.SuggestedSystemId,
@@ -1229,6 +1238,10 @@ public sealed class RequirementTechnicalProposalItem
     public int? ManualQuantityOverride { get; private set; }
     public int? ManualWidthMillimetersOverride { get; private set; }
     public int? ManualHeightMillimetersOverride { get; private set; }
+    public TechnicalProposalItemInclusionState InclusionState { get; private set; }
+    public DateTimeOffset? ExcludedAtUtc { get; private set; }
+    public Guid? ExcludedByUserId { get; private set; }
+    public string? ExclusionReason { get; private set; }
     public decimal OverallConfidence { get; private set; }
     public decimal SystemConfidence { get; private set; }
     public decimal GlassConfidence { get; private set; }
@@ -1255,6 +1268,8 @@ public sealed class RequirementTechnicalProposalItem
         FinishAlternatives => _finishAlternatives;
     public IReadOnlyCollection<RequirementTechnicalProposalHistoricalExample>
         HistoricalExamples => _historicalExamples;
+    public bool IsIncluded =>
+        InclusionState == TechnicalProposalItemInclusionState.Included;
     public int? EffectiveQuantity =>
         ManualQuantityOverride ?? ExtractedItem?.Quantity;
     public int? EffectiveWidthMillimeters =>
@@ -1346,6 +1361,7 @@ public sealed class RequirementTechnicalProposalItem
                 historicalSimilarityStatus,
                 nameof(historicalSimilarityStatus),
                 50),
+            InclusionState = TechnicalProposalItemInclusionState.Included,
             CreatedAtUtc = createdAtUtc
         };
     }
@@ -1407,6 +1423,45 @@ public sealed class RequirementTechnicalProposalItem
             widthMillimeters ?? ManualWidthMillimetersOverride;
         ManualHeightMillimetersOverride =
             heightMillimeters ?? ManualHeightMillimetersOverride;
+    }
+
+    public bool Exclude(
+        Guid excludedByUserId,
+        DateTimeOffset excludedAtUtc,
+        string? reason)
+    {
+        if (excludedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario que excluye es obligatorio.",
+                nameof(excludedByUserId));
+        }
+
+        Requirement.EnsureUtc(excludedAtUtc, nameof(excludedAtUtc));
+        if (InclusionState == TechnicalProposalItemInclusionState.Excluded)
+        {
+            return false;
+        }
+
+        InclusionState = TechnicalProposalItemInclusionState.Excluded;
+        ExcludedAtUtc = excludedAtUtc;
+        ExcludedByUserId = excludedByUserId;
+        ExclusionReason = RequirementExtractedItem.NormalizeOptional(reason, 500);
+        return true;
+    }
+
+    public bool Reactivate()
+    {
+        if (InclusionState == TechnicalProposalItemInclusionState.Included)
+        {
+            return false;
+        }
+
+        InclusionState = TechnicalProposalItemInclusionState.Included;
+        ExcludedAtUtc = null;
+        ExcludedByUserId = null;
+        ExclusionReason = null;
+        return true;
     }
 
     public bool HasSelectedConfiguration() =>

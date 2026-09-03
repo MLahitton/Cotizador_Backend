@@ -230,12 +230,15 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                 selectedFinishId,
                 userId,
                 timeProvider.GetUtcNow());
-            if (previousCommercialState != CurrentCommercialState(item))
+            if (item.IsIncluded)
             {
-                proposal.MarkCommerciallyChanged();
-            }
+                if (previousCommercialState != CurrentCommercialState(item))
+                {
+                    proposal.MarkCommerciallyChanged();
+                }
 
-            proposal.InvalidateCommercialConfirmation();
+                proposal.InvalidateCommercialConfirmation();
+            }
 
             await requirementRepository.SaveChangesAsync(cancellationToken);
 

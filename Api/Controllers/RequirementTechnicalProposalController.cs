@@ -169,6 +169,10 @@ public sealed class RequirementTechnicalProposalController(
             item.EffectiveWidthMm,
             item.EffectiveHeightMm,
             item.AreaM2,
+            item.IsIncluded,
+            item.ExcludedAtUtc,
+            item.ExcludedByUserId,
+            item.ExclusionReason,
             item.ExtractionConfidence,
             item.ExtractionStatus,
             new RequirementTechnicalProposalSuggestedResponse(

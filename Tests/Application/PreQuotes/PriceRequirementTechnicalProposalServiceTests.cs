@@ -95,6 +95,28 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithAllItemsExcluded_ReturnsNoIncludedItems()
+    {
+        var item = ProposalItem(Item());
+        item.Exclude(UserId, At.AddMinutes(1), null);
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(100m, 200m, 300m),
+            confirmProposal: false);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            PriceRequirementTechnicalProposalFailure.TechnicalProposalNoIncludedItems,
+            result.Failure);
+        await context.TechnicalEstimator.DidNotReceive().EstimateAsync(
+            Arg.Any<HistoricalCandidateQuery>(),
+            Arg.Any<CancellationToken>());
+    }
+    [Fact]
     public async Task Execute_WithQuantityFour_MultipliesLineOnceAndDoesNotReapplyAiu()
     {
         HistoricalCandidateQuery? captured = null;
@@ -518,6 +540,37 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             Arg.Any<RequirementPricingSnapshot>());
     }
 
+    [Fact]
+    public async Task RepriceItem_WithExcludedItem_ReturnsItemExcluded()
+    {
+        var item = ProposalItem(Item(reference: "PV-06"));
+        item.Exclude(UserId, At.AddMinutes(1), null);
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(200m, 200m, 200m),
+            confirmProposal: false);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                SystemLsa9060Id,
+                GlassTemp8Id,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            RepriceRequirementTechnicalProposalItemFailure.TechnicalProposalItemExcluded,
+            result.Failure);
+        await context.TechnicalEstimator.DidNotReceive().EstimateAsync(
+            Arg.Any<HistoricalCandidateQuery>(),
+            Arg.Any<CancellationToken>());
+    }
     [Fact]
     public async Task RepriceItem_WithCommercialChange_SynchronizesProposalAndSnapshotRevision()
     {

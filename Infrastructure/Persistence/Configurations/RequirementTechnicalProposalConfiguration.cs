@@ -18,6 +18,8 @@ public sealed class RequirementTechnicalProposalConfiguration
 
         builder.HasKey(proposal => proposal.Id);
 
+        builder.Ignore(proposal => proposal.IncludedItems);
+
         builder.Property(proposal => proposal.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")

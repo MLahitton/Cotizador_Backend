@@ -103,6 +103,29 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .HasColumnName("manual_height_millimeters_override")
             .IsRequired(false);
 
+        builder.Property(item => item.InclusionState)
+            .HasColumnName("inclusion_state")
+            .HasColumnType("varchar(20)")
+            .HasMaxLength(20)
+            .HasConversion<string>()
+            .IsRequired();
+
+        builder.Property(item => item.ExcludedAtUtc)
+            .HasColumnName("excluded_at_utc")
+            .HasColumnType("timestamp with time zone")
+            .IsRequired(false);
+
+        builder.Property(item => item.ExcludedByUserId)
+            .HasColumnName("excluded_by_user_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.ExclusionReason)
+            .HasColumnName("exclusion_reason")
+            .HasColumnType("varchar(500)")
+            .HasMaxLength(500)
+            .IsRequired(false);
+
         builder.Property(item => item.OverallConfidence)
             .HasColumnName("overall_confidence")
             .HasColumnType("numeric(5,4)")
@@ -220,6 +243,11 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .HasForeignKey(item => item.SelectedByUserId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne<Domain.Identity.User>()
+            .WithMany()
+            .HasForeignKey(item => item.ExcludedByUserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasMany(item => item.SystemAlternatives)
             .WithOne(alternative => alternative.ProposalItem)
             .HasForeignKey(alternative => alternative.ProposalItemId)
@@ -273,5 +301,9 @@ public sealed class RequirementTechnicalProposalItemConfiguration
         builder.HasIndex(item => item.SelectedByUserId)
             .HasDatabaseName(
                 "ix_requirement_technical_proposal_items_selected_by_user_id");
+
+        builder.HasIndex(item => item.ExcludedByUserId)
+            .HasDatabaseName(
+                "ix_requirement_technical_proposal_items_excluded_by_user_id");
     }
 }

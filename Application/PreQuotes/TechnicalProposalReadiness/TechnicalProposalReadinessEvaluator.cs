@@ -104,11 +104,11 @@ public static class TechnicalProposalReadinessEvaluator
     }
 
     public static bool BlocksConfirmation(RequirementTechnicalProposal proposal) =>
-        proposal.Items.Any(item => EvaluateItem(item).PendingDefinitions
+        proposal.IncludedItems.Any(item => EvaluateItem(item).PendingDefinitions
             .Any(definition => definition.BlocksConfirmation));
 
     public static bool BlocksPricing(RequirementTechnicalProposal proposal) =>
-        proposal.Items.Any(item => EvaluateItem(item).PendingDefinitions
+        proposal.IncludedItems.Any(item => EvaluateItem(item).PendingDefinitions
             .Any(definition => definition.BlocksPricing));
 
     private static void AddReason(

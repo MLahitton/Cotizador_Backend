@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
@@ -113,6 +113,26 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
             .SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+
+    [Fact]
+    public async Task Execute_WithAllItemsExcluded_ReturnsNoIncludedItems()
+    {
+        var context = CreateContext();
+        context.Item.Exclude(UserId, At.AddMinutes(-5), null);
+
+        var result = await context.Service.ExecuteAsync(
+            new ConfirmRequirementTechnicalProposalSelectionCommand(
+                context.Proposal.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            ConfirmRequirementTechnicalProposalSelectionFailure.NoIncludedItems,
+            result.Failure);
+        Assert.False(context.Proposal.IsCommerciallyConfirmed);
+        await context.Requirements.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
     private static Context CreateContext(bool withoutSuggestedGlass = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();

@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -186,6 +186,35 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
     }
 
+
+    [Fact]
+    public async Task Execute_WithExcludedItemCommercialChange_DoesNotIncrementRevision()
+    {
+        var context = CreateContext();
+        context.Item.Exclude(UserId, At.AddMinutes(-5), null);
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                context.AlternativeGlass.GlassTypeId,
+                context.AlternativeFinish.Id,
+                2,
+                1200,
+                1300),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+        Assert.Equal(context.AlternativeSystem.Id, context.Item.SelectedSystemId);
+        Assert.Equal(
+            context.AlternativeGlass.GlassTypeId,
+            context.Item.SelectedGlassTypeId);
+        Assert.Equal(context.AlternativeFinish.Id, context.Item.SelectedFinishTypeId);
+    }
     [Fact]
     public async Task Execute_WithUnselectableGlass_ReturnsInvalidGlassSelection()
     {

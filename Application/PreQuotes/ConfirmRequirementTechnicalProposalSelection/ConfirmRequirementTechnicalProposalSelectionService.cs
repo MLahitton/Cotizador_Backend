@@ -24,6 +24,7 @@ public enum ConfirmRequirementTechnicalProposalSelectionFailure
     ClientNotFound,
     InactiveClient,
     IncompleteTechnicalProposal,
+    NoIncludedItems,
     QueryError,
     PersistenceError
 }
@@ -103,6 +104,12 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionService(
             if (access != ConfirmRequirementTechnicalProposalSelectionFailure.None)
             {
                 return ConfirmRequirementTechnicalProposalSelectionResult.Failed(access);
+            }
+
+            if (proposal.IncludedItems.Count == 0)
+            {
+                return ConfirmRequirementTechnicalProposalSelectionResult.Failed(
+                    ConfirmRequirementTechnicalProposalSelectionFailure.NoIncludedItems);
             }
 
             if (TechnicalProposalReadinessEvaluator.BlocksConfirmation(proposal))
