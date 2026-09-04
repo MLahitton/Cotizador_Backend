@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
@@ -56,6 +56,21 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
     }
 
     [Fact]
+    public async Task Execute_DoesNotIncrementCommercialRevision()
+    {
+        var context = CreateContext();
+        var initialRevision = context.Proposal.CommercialRevision;
+
+        var result = await context.Service.ExecuteAsync(
+            new ConfirmRequirementTechnicalProposalSelectionCommand(
+                context.Proposal.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+    }
+
+    [Fact]
     public async Task Execute_WithExistingSelectedConfiguration_DoesNotOverwriteSelection()
     {
         var context = CreateContext();
@@ -98,6 +113,26 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
             .SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
+
+    [Fact]
+    public async Task Execute_WithAllItemsExcluded_ReturnsNoIncludedItems()
+    {
+        var context = CreateContext();
+        context.Item.Exclude(UserId, At.AddMinutes(-5), null);
+
+        var result = await context.Service.ExecuteAsync(
+            new ConfirmRequirementTechnicalProposalSelectionCommand(
+                context.Proposal.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            ConfirmRequirementTechnicalProposalSelectionFailure.NoIncludedItems,
+            result.Failure);
+        Assert.False(context.Proposal.IsCommerciallyConfirmed);
+        await context.Requirements.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
     private static Context CreateContext(bool withoutSuggestedGlass = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
@@ -195,6 +230,13 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
             SuggestedSystemId,
             SuggestedGlassId,
             SuggestedFinishId,
+            extracted.Sequence,
+            extracted.Reference,
+            extracted.Description,
+            extracted.ElementType,
+            extracted.Quantity,
+            extracted.WidthMillimeters,
+            extracted.HeightMillimeters,
             0.90m,
             0.90m,
             0.90m,

@@ -50,7 +50,8 @@ public sealed record TechnicalProposalPricingComparableReadModel(
 
 public sealed record TechnicalProposalPricingItemReadModel(
     Guid ProposalItemId,
-    Guid ExtractedItemId,
+    Guid? ExtractedItemId,
+    string Source,
     string? ElementId,
     int Sequence,
     string? Reference,

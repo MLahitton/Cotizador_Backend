@@ -74,6 +74,10 @@ public interface IRequirementRepository
 
     void AddPricingSnapshot(RequirementPricingSnapshot snapshot);
 
+    void ReplacePricingSnapshot(
+        RequirementPricingSnapshot current,
+        RequirementPricingSnapshot replacement);
+
     Task<RequirementExtractionResult?> GetLatestSuccessfulExtractionAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
@@ -94,8 +98,15 @@ public interface IRequirementRepository
         Guid requirementId,
         CancellationToken cancellationToken);
 
+    Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken);
+
     Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotForUpdateAsync(
         Guid requirementId,
+        CancellationToken cancellationToken);
+
+    Task<IRequirementPersistenceTransaction> BeginPricingUpdateTransactionAsync(
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RequirementExtractedItem>> GetExtractedItemsAsync(
@@ -103,6 +114,11 @@ public interface IRequirementRepository
         CancellationToken cancellationToken);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
+}
+
+public interface IRequirementPersistenceTransaction : IAsyncDisposable
+{
+    Task CommitAsync(CancellationToken cancellationToken);
 }
 
 public sealed record RequirementProcessingFailureFinalization(

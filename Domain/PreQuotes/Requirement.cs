@@ -41,6 +41,18 @@ public enum RequirementTechnicalProposalCommercialConfirmationState
     Confirmed = 2
 }
 
+public enum TechnicalProposalItemInclusionState
+{
+    Included = 1,
+    Excluded = 2
+}
+
+public enum TechnicalProposalItemSource
+{
+    AiExtracted = 1,
+    Manual = 2
+}
+
 public sealed class Requirement
 {
     private Requirement() { }
@@ -957,6 +969,7 @@ public sealed class RequirementExtractedItemEvidence
 
     public Guid Id { get; private set; }
     public Guid RequirementExtractedItemId { get; private set; }
+
     public int? PageNumber { get; private set; }
     public EvidenceSourceType SourceType { get; private set; }
     public string Text { get; private set; } = string.Empty;
@@ -1069,12 +1082,15 @@ public sealed class RequirementTechnicalProposal
     public Guid RequirementProcessingAttemptId { get; private set; }
     public RequirementTechnicalProposalStatus Status { get; private set; }
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public long CommercialRevision { get; private set; }
     public DateTimeOffset? CommercialConfirmedAtUtc { get; private set; }
     public Guid? CommercialConfirmedByUserId { get; private set; }
     public Requirement Requirement { get; private set; } = null!;
     public RequirementExtractionResult ExtractionResult { get; private set; } = null!;
     public RequirementProcessingAttempt ProcessingAttempt { get; private set; } = null!;
     public IReadOnlyCollection<RequirementTechnicalProposalItem> Items => _items;
+    public IReadOnlyCollection<RequirementTechnicalProposalItem> IncludedItems =>
+        _items.Where(item => item.IsIncluded).ToArray();
     public RequirementTechnicalProposalCommercialConfirmationState
         CommercialConfirmationState =>
             CommercialConfirmedAtUtc is null || CommercialConfirmedByUserId is null
@@ -1125,7 +1141,8 @@ public sealed class RequirementTechnicalProposal
             Status = requiresReview
                 ? RequirementTechnicalProposalStatus.RequiresReview
                 : RequirementTechnicalProposalStatus.Completed,
-            CreatedAtUtc = createdAtUtc
+            CreatedAtUtc = createdAtUtc,
+            CommercialRevision = 1
         };
     }
 
@@ -1137,6 +1154,12 @@ public sealed class RequirementTechnicalProposal
             throw new ArgumentException(
                 "El item no pertenece a la propuesta.",
                 nameof(item));
+        }
+
+        if (_items.Any(current => current.Sequence == item.Sequence))
+        {
+            throw new InvalidOperationException(
+                "Ya existe un item con la misma secuencia en la propuesta.");
         }
 
         _items.Add(item);
@@ -1159,19 +1182,20 @@ public sealed class RequirementTechnicalProposal
 
         Requirement.EnsureUtc(confirmedAtUtc, nameof(confirmedAtUtc));
 
-        if (_items.Count == 0)
+        var includedItems = IncludedItems;
+        if (includedItems.Count == 0)
         {
             throw new InvalidOperationException(
-                "La propuesta tecnica no tiene items para confirmar.");
+                "La propuesta tecnica no tiene items incluidos para confirmar.");
         }
 
-        if (_items.Any(item => !item.HasCompleteCommercialConfiguration()))
+        if (includedItems.Any(item => !item.HasCompleteCommercialConfiguration()))
         {
             throw new InvalidOperationException(
                 "La propuesta tecnica tiene items sin configuracion completa.");
         }
 
-        foreach (var item in _items.Where(item => !item.HasSelectedConfiguration()))
+        foreach (var item in includedItems.Where(item => !item.HasSelectedConfiguration()))
         {
             item.Select(
                 item.SuggestedSystemId,
@@ -1190,6 +1214,14 @@ public sealed class RequirementTechnicalProposal
         CommercialConfirmedAtUtc = null;
         CommercialConfirmedByUserId = null;
     }
+
+    public void MarkCommerciallyChanged()
+    {
+        checked
+        {
+            CommercialRevision++;
+        }
+    }
 }
 
 public sealed class RequirementTechnicalProposalItem
@@ -1207,7 +1239,16 @@ public sealed class RequirementTechnicalProposalItem
 
     public Guid Id { get; private set; }
     public Guid TechnicalProposalId { get; private set; }
-    public Guid RequirementExtractedItemId { get; private set; }
+    public Guid? RequirementExtractedItemId { get; private set; }
+    public TechnicalProposalItemSource Source { get; private set; }
+    public int Sequence { get; private set; }
+    public string? Reference { get; private set; }
+    public string Description { get; private set; } = string.Empty;
+    public StructuredElementType ElementType { get; private set; }
+    public int? BaseQuantity { get; private set; }
+    public int? BaseWidthMillimeters { get; private set; }
+    public int? BaseHeightMillimeters { get; private set; }
+    public string? ManualNote { get; private set; }
     public Guid? SuggestedSystemId { get; private set; }
     public Guid? SuggestedGlassTypeId { get; private set; }
     public Guid? SuggestedFinishTypeId { get; private set; }
@@ -1219,6 +1260,10 @@ public sealed class RequirementTechnicalProposalItem
     public int? ManualQuantityOverride { get; private set; }
     public int? ManualWidthMillimetersOverride { get; private set; }
     public int? ManualHeightMillimetersOverride { get; private set; }
+    public TechnicalProposalItemInclusionState InclusionState { get; private set; }
+    public DateTimeOffset? ExcludedAtUtc { get; private set; }
+    public Guid? ExcludedByUserId { get; private set; }
+    public string? ExclusionReason { get; private set; }
     public decimal OverallConfidence { get; private set; }
     public decimal SystemConfidence { get; private set; }
     public decimal GlassConfidence { get; private set; }
@@ -1236,7 +1281,7 @@ public sealed class RequirementTechnicalProposalItem
     public string HistoricalSimilarityStatus { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public RequirementTechnicalProposal TechnicalProposal { get; private set; } = null!;
-    public RequirementExtractedItem ExtractedItem { get; private set; } = null!;
+    public RequirementExtractedItem? ExtractedItem { get; private set; }
     public IReadOnlyCollection<RequirementTechnicalProposalSystemAlternative>
         SystemAlternatives => _systemAlternatives;
     public IReadOnlyCollection<RequirementTechnicalProposalGlassAlternative>
@@ -1245,12 +1290,14 @@ public sealed class RequirementTechnicalProposalItem
         FinishAlternatives => _finishAlternatives;
     public IReadOnlyCollection<RequirementTechnicalProposalHistoricalExample>
         HistoricalExamples => _historicalExamples;
+    public bool IsIncluded =>
+        InclusionState == TechnicalProposalItemInclusionState.Included;
     public int? EffectiveQuantity =>
-        ManualQuantityOverride ?? ExtractedItem?.Quantity;
+        ManualQuantityOverride ?? BaseQuantity;
     public int? EffectiveWidthMillimeters =>
-        ManualWidthMillimetersOverride ?? ExtractedItem?.WidthMillimeters;
+        ManualWidthMillimetersOverride ?? BaseWidthMillimeters;
     public int? EffectiveHeightMillimeters =>
-        ManualHeightMillimetersOverride ?? ExtractedItem?.HeightMillimeters;
+        ManualHeightMillimetersOverride ?? BaseHeightMillimeters;
 
     public static RequirementTechnicalProposalItem Create(
         Guid technicalProposalId,
@@ -1258,6 +1305,13 @@ public sealed class RequirementTechnicalProposalItem
         Guid? suggestedSystemId,
         Guid? suggestedGlassTypeId,
         Guid? suggestedFinishTypeId,
+        int sequence,
+        string? reference,
+        string description,
+        StructuredElementType elementType,
+        int? quantity,
+        int? widthMillimeters,
+        int? heightMillimeters,
         decimal overallConfidence,
         decimal systemConfidence,
         decimal glassConfidence,
@@ -1289,6 +1343,7 @@ public sealed class RequirementTechnicalProposalItem
                 nameof(requirementExtractedItemId));
         }
 
+        EnsureBaseFields(sequence, description, elementType, quantity, widthMillimeters, heightMillimeters);
         EnsureConfidence(overallConfidence, nameof(overallConfidence));
         EnsureConfidence(systemConfidence, nameof(systemConfidence));
         EnsureConfidence(glassConfidence, nameof(glassConfidence));
@@ -1309,6 +1364,14 @@ public sealed class RequirementTechnicalProposalItem
             Id = Guid.NewGuid(),
             TechnicalProposalId = technicalProposalId,
             RequirementExtractedItemId = requirementExtractedItemId,
+            Source = TechnicalProposalItemSource.AiExtracted,
+            Sequence = sequence,
+            Reference = RequirementExtractedItem.NormalizeOptional(reference, 200),
+            Description = Requirement.NormalizeRequired(description, nameof(description), 1000),
+            ElementType = elementType,
+            BaseQuantity = quantity,
+            BaseWidthMillimeters = widthMillimeters,
+            BaseHeightMillimeters = heightMillimeters,
             SuggestedSystemId = EmptyToNull(suggestedSystemId),
             SuggestedGlassTypeId = EmptyToNull(suggestedGlassTypeId),
             SuggestedFinishTypeId = EmptyToNull(suggestedFinishTypeId),
@@ -1336,7 +1399,106 @@ public sealed class RequirementTechnicalProposalItem
                 historicalSimilarityStatus,
                 nameof(historicalSimilarityStatus),
                 50),
+            InclusionState = TechnicalProposalItemInclusionState.Included,
             CreatedAtUtc = createdAtUtc
+        };
+    }
+
+
+    public static RequirementTechnicalProposalItem CreateManual(
+        Guid technicalProposalId,
+        int sequence,
+        string? reference,
+        string? description,
+        StructuredElementType elementType,
+        int quantity,
+        int widthMillimeters,
+        int heightMillimeters,
+        Guid systemId,
+        Guid glassTypeId,
+        Guid finishTypeId,
+        Guid selectedByUserId,
+        DateTimeOffset selectedAtUtc,
+        string? manualNote)
+    {
+        if (technicalProposalId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La propuesta tecnica es obligatoria.",
+                nameof(technicalProposalId));
+        }
+
+        if (systemId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El sistema seleccionado es obligatorio.",
+                nameof(systemId));
+        }
+
+        if (glassTypeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El vidrio seleccionado es obligatorio.",
+                nameof(glassTypeId));
+        }
+
+        if (finishTypeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El acabado seleccionado es obligatorio.",
+                nameof(finishTypeId));
+        }
+
+        if (selectedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario que selecciona es obligatorio.",
+                nameof(selectedByUserId));
+        }
+
+        var normalizedReference = RequirementExtractedItem.NormalizeOptional(reference, 200);
+        var normalizedDescription = string.IsNullOrWhiteSpace(description)
+            ? normalizedReference ?? string.Empty
+            : description;
+        EnsureBaseFields(sequence, normalizedDescription, elementType, quantity, widthMillimeters, heightMillimeters);
+        Requirement.EnsureUtc(selectedAtUtc, nameof(selectedAtUtc));
+
+        return new RequirementTechnicalProposalItem
+        {
+            Id = Guid.NewGuid(),
+            TechnicalProposalId = technicalProposalId,
+            RequirementExtractedItemId = null,
+            Source = TechnicalProposalItemSource.Manual,
+            Sequence = sequence,
+            Reference = normalizedReference,
+            Description = Requirement.NormalizeRequired(normalizedDescription, nameof(description), 1000),
+            ElementType = elementType,
+            BaseQuantity = quantity,
+            BaseWidthMillimeters = widthMillimeters,
+            BaseHeightMillimeters = heightMillimeters,
+            SelectedSystemId = systemId,
+            SelectedGlassTypeId = glassTypeId,
+            SelectedFinishTypeId = finishTypeId,
+            SelectedByUserId = selectedByUserId,
+            SelectedAtUtc = selectedAtUtc,
+            OverallConfidence = 1m,
+            SystemConfidence = 1m,
+            GlassConfidence = 1m,
+            FinishConfidence = 1m,
+            RequiresReview = false,
+            IsTechnicallyComplete = true,
+            IsPriceable = true,
+            ReviewReasons = [],
+            SystemResolutionReasons = [],
+            GlassResolutionReasons = [],
+            FinishResolutionReasons = [],
+            HistoricalSupportCount = 0,
+            HistoricalBestSimilarity = null,
+            HistoricalAverageSimilarity = null,
+            HistoricalSimilarityStatus = "NO_COMPARABLES",
+            InclusionState = TechnicalProposalItemInclusionState.Included,
+            ManualNote = RequirementExtractedItem.NormalizeOptional(manualNote, 1000),
+            CreatedAtUtc = selectedAtUtc
         };
     }
 
@@ -1413,6 +1575,45 @@ public sealed class RequirementTechnicalProposalItem
             heightMillimeters ?? ManualHeightMillimetersOverride;
     }
 
+    public bool Exclude(
+        Guid excludedByUserId,
+        DateTimeOffset excludedAtUtc,
+        string? reason)
+    {
+        if (excludedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario que excluye es obligatorio.",
+                nameof(excludedByUserId));
+        }
+
+        Requirement.EnsureUtc(excludedAtUtc, nameof(excludedAtUtc));
+        if (InclusionState == TechnicalProposalItemInclusionState.Excluded)
+        {
+            return false;
+        }
+
+        InclusionState = TechnicalProposalItemInclusionState.Excluded;
+        ExcludedAtUtc = excludedAtUtc;
+        ExcludedByUserId = excludedByUserId;
+        ExclusionReason = RequirementExtractedItem.NormalizeOptional(reason, 500);
+        return true;
+    }
+
+    public bool Reactivate()
+    {
+        if (InclusionState == TechnicalProposalItemInclusionState.Included)
+        {
+            return false;
+        }
+
+        InclusionState = TechnicalProposalItemInclusionState.Included;
+        ExcludedAtUtc = null;
+        ExcludedByUserId = null;
+        ExclusionReason = null;
+        return true;
+    }
+
     public bool HasSelectedConfiguration() =>
         SelectedAtUtc is not null
         && SelectedByUserId is not null;
@@ -1429,6 +1630,34 @@ public sealed class RequirementTechnicalProposalItem
         return SuggestedSystemId is not null
             && SuggestedGlassTypeId is not null
             && SuggestedFinishTypeId is not null;
+    }
+
+    private static void EnsureBaseFields(
+        int sequence,
+        string description,
+        StructuredElementType elementType,
+        int? quantity,
+        int? widthMillimeters,
+        int? heightMillimeters)
+    {
+        if (sequence < 1)
+        {
+            throw new ArgumentException(
+                "La secuencia del item debe ser positiva.",
+                nameof(sequence));
+        }
+
+        _ = Requirement.NormalizeRequired(description, nameof(description), 1000);
+        if (!Enum.IsDefined(elementType))
+        {
+            throw new ArgumentException(
+                "El tipo de elemento no es valido.",
+                nameof(elementType));
+        }
+
+        RequirementExtractedItem.EnsurePositive(quantity, nameof(quantity));
+        RequirementExtractedItem.EnsurePositive(widthMillimeters, nameof(widthMillimeters));
+        RequirementExtractedItem.EnsurePositive(heightMillimeters, nameof(heightMillimeters));
     }
 
     private void AddAlternative<T>(T value, List<T> target)
@@ -1650,6 +1879,7 @@ public sealed class RequirementPricingSnapshot
     public Guid Id { get; private set; }
     public Guid RequirementId { get; private set; }
     public Guid TechnicalProposalId { get; private set; }
+    public long TechnicalProposalCommercialRevision { get; private set; }
     public string Currency { get; private set; } = string.Empty;
     public string PricingBasis { get; private set; } = string.Empty;
     public decimal? OriginalGrandTotal { get; private set; }
@@ -1667,6 +1897,7 @@ public sealed class RequirementPricingSnapshot
     public static RequirementPricingSnapshot Create(
         Guid requirementId,
         Guid technicalProposalId,
+        long technicalProposalCommercialRevision,
         string currency,
         string pricingBasis,
         decimal? originalGrandTotal,
@@ -1687,6 +1918,7 @@ public sealed class RequirementPricingSnapshot
                 nameof(technicalProposalId));
         }
 
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
         Requirement.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
 
         return new RequirementPricingSnapshot
@@ -1694,6 +1926,7 @@ public sealed class RequirementPricingSnapshot
             Id = Guid.NewGuid(),
             RequirementId = requirementId,
             TechnicalProposalId = technicalProposalId,
+            TechnicalProposalCommercialRevision = technicalProposalCommercialRevision,
             Currency = Requirement.NormalizeRequired(currency, nameof(currency), 10),
             PricingBasis = Requirement.NormalizeRequired(
                 pricingBasis,
@@ -1704,6 +1937,44 @@ public sealed class RequirementPricingSnapshot
             CreatedAtUtc = createdAtUtc,
             UpdatedAtUtc = createdAtUtc
         };
+    }
+
+    public void Reinitialize(
+        Guid technicalProposalId,
+        long technicalProposalCommercialRevision,
+        string currency,
+        string pricingBasis,
+        decimal? originalGrandTotal,
+        decimal? currentGrandTotal,
+        DateTimeOffset updatedAtUtc)
+    {
+        if (technicalProposalId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La propuesta tecnica es obligatoria.",
+                nameof(technicalProposalId));
+        }
+
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        TechnicalProposalId = technicalProposalId;
+        TechnicalProposalCommercialRevision = technicalProposalCommercialRevision;
+        Currency = Requirement.NormalizeRequired(currency, nameof(currency), 10);
+        PricingBasis = Requirement.NormalizeRequired(
+            pricingBasis,
+            nameof(pricingBasis),
+            80);
+        OriginalGrandTotal = EnsureMoney(originalGrandTotal, nameof(originalGrandTotal));
+        CurrentGrandTotal = EnsureMoney(currentGrandTotal, nameof(currentGrandTotal));
+        UpdatedAtUtc = updatedAtUtc;
+        _items.Clear();
     }
 
     public void AddItem(RequirementPricingItemSnapshot item)
@@ -1735,6 +2006,35 @@ public sealed class RequirementPricingSnapshot
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    public void RecalculateCurrentGrandTotal(DateTimeOffset updatedAtUtc)
+    {
+        var currentValues = _items
+            .Select(item => item.CurrentLineExpected)
+            .ToArray();
+        decimal? currentGrandTotal = currentValues.Any(value => value is null)
+            ? null
+            : currentValues.Sum(value => value!.Value);
+
+        UpdateCurrentGrandTotal(currentGrandTotal, updatedAtUtc);
+    }
+
+    public void MarkForCommercialRevision(
+        long technicalProposalCommercialRevision,
+        DateTimeOffset updatedAtUtc)
+    {
+        EnsureCommercialRevision(technicalProposalCommercialRevision);
+        Requirement.EnsureUtc(updatedAtUtc, nameof(updatedAtUtc));
+        if (updatedAtUtc < UpdatedAtUtc)
+        {
+            throw new ArgumentException(
+                "La fecha de actualizacion no puede ser anterior a la ultima actualizacion.",
+                nameof(updatedAtUtc));
+        }
+
+        TechnicalProposalCommercialRevision = technicalProposalCommercialRevision;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     internal static decimal? EnsureMoney(decimal? value, string parameterName)
     {
         if (value is < 0m)
@@ -1745,6 +2045,16 @@ public sealed class RequirementPricingSnapshot
         }
 
         return value;
+    }
+
+    private static void EnsureCommercialRevision(long value)
+    {
+        if (value < 1)
+        {
+            throw new ArgumentException(
+                "La revision comercial debe ser mayor o igual a uno.",
+                nameof(value));
+        }
     }
 }
 

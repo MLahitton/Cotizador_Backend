@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -113,6 +113,175 @@ public sealed class GetRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithReadyReadinessAndLegacyStaleFlags_UsesCurrentReadinessForSummaryCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty(item, "RequiresReview", true);
+                SetPrivateProperty(item, "IsTechnicallyComplete", false);
+                SetPrivateProperty(item, "IsPriceable", false);
+                SetPrivateProperty(item, "ReviewReasons", Array.Empty<string>());
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(1, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(1, result.Proposal.PriceableItems);
+        Assert.Equal("READY", Assert.Single(result.Proposal.Items).Readiness.State);
+    }
+
+    [Fact]
+    public async Task Execute_WithBlockedReadiness_UsesCurrentBlockersForSummaryCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty<Guid?>(item, "SuggestedSystemId", null);
+                SetPrivateProperty(item, "RequiresReview", false);
+                SetPrivateProperty(item, "IsTechnicallyComplete", true);
+                SetPrivateProperty(item, "IsPriceable", true);
+                SetPrivateProperty(item, "ReviewReasons", Array.Empty<string>());
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(0, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(0, result.Proposal.PriceableItems);
+        Assert.Equal("BLOCKED", Assert.Single(result.Proposal.Items).Readiness.State);
+    }
+
+    [Fact]
+    public async Task Execute_WithWarningReadiness_CountsReviewWithoutBlockingTechnicalCompletenessOrPricing()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty(item, "RequiresReview", false);
+                SetPrivateProperty(item, "IsTechnicallyComplete", false);
+                SetPrivateProperty(item, "IsPriceable", false);
+                SetPrivateProperty(
+                    item,
+                    "ReviewReasons",
+                    new[] { "INVALID_EVIDENCE_LOCATION" });
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(1, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(1, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(1, result.Proposal.PriceableItems);
+        Assert.Equal("REVIEW_REQUIRED", Assert.Single(result.Proposal.Items).Readiness.State);
+    }
+
+    [Fact]
+    public async Task Execute_WithQuantityOverrideRestoringReadiness_UsesEffectiveQuantityForSummaryCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty<int?>(item.ExtractedItem, "Quantity", null);
+                item.ApplyManualDataOverride(2, null, null);
+                SetPrivateProperty(item, "RequiresReview", true);
+                SetPrivateProperty(item, "IsTechnicallyComplete", false);
+                SetPrivateProperty(item, "IsPriceable", false);
+                SetPrivateProperty(item, "ReviewReasons", Array.Empty<string>());
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(1, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(1, result.Proposal.PriceableItems);
+        Assert.Equal(2, Assert.Single(result.Proposal.Items).EffectiveQuantity);
+    }
+
+    [Fact]
+    public async Task Execute_WithDimensionOverrideRestoringReadiness_UsesEffectiveMeasurementsForSummaryCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty<int?>(item.ExtractedItem, "WidthMillimeters", null);
+                item.ApplyManualDataOverride(null, 1200, null);
+                SetPrivateProperty(item, "RequiresReview", true);
+                SetPrivateProperty(item, "IsTechnicallyComplete", false);
+                SetPrivateProperty(item, "IsPriceable", false);
+                SetPrivateProperty(item, "ReviewReasons", Array.Empty<string>());
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(1, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(1, result.Proposal.PriceableItems);
+        Assert.Equal(1200, Assert.Single(result.Proposal.Items).EffectiveWidthMm);
+    }
+
+    [Fact]
+    public async Task Execute_WithConfigurationChangeRestoringReadiness_UsesCurrentSelectionForSummaryCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                var selectedSystemId = item.SystemAlternatives.Single().ProductSystemId;
+                SetPrivateProperty<Guid?>(item, "SuggestedSystemId", null);
+                SetPrivateProperty(item, "RequiresReview", true);
+                SetPrivateProperty(item, "IsTechnicallyComplete", false);
+                SetPrivateProperty(item, "IsPriceable", false);
+                SetPrivateProperty(
+                    item,
+                    "ReviewReasons",
+                    new[] { "SYSTEM_NOT_RESOLVED" });
+                item.Select(
+                    selectedSystemId,
+                    item.SuggestedGlassTypeId,
+                    item.SuggestedFinishTypeId,
+                    UserId,
+                    At.AddMinutes(10));
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(0, result.Proposal!.ItemsRequiringReview);
+        Assert.Equal(1, result.Proposal.TechnicallyCompleteItems);
+        Assert.Equal(1, result.Proposal.PriceableItems);
+        Assert.Equal("READY", Assert.Single(result.Proposal.Items).Readiness.State);
+    }
+
+    [Fact]
     public async Task Execute_WithSelectedProposal_ReturnsSelectedSeparatelyFromSuggested()
     {
         var context = CreateContext(withProposal: true, withSelected: true);
@@ -198,7 +367,8 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                 || name.Contains("Expected", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("Maximum", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("UnitPrice", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("Total", StringComparison.OrdinalIgnoreCase))
+                || (name.Contains("Total", StringComparison.OrdinalIgnoreCase)
+                    && name != "TotalProposalItemCount"))
             .ToArray();
 
         Assert.Empty(forbidden);
@@ -208,7 +378,8 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         bool withProposal,
         bool withSelected = false,
         int extractedQuantity = 1,
-        int? manualQuantityOverride = null)
+        int? manualQuantityOverride = null,
+        Action<RequirementTechnicalProposal>? configureProposal = null)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -284,23 +455,29 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             .Returns(user);
         requirements.FindByIdAsync(requirement.Id, Arg.Any<CancellationToken>())
             .Returns(requirement);
+        var proposal = withProposal
+            ? CreateProposal(
+                requirement,
+                requirement.Id,
+                system.Id,
+                alternativeSystem.Id,
+                glass.GlassTypeId,
+                alternativeGlass.GlassTypeId,
+                finish.Id,
+                alternativeFinish.Id,
+                withSelected,
+                extractedQuantity,
+                manualQuantityOverride)
+            : null;
+        if (proposal is not null)
+        {
+            configureProposal?.Invoke(proposal);
+        }
+
         requirements.GetCurrentTechnicalProposalAsync(
                 requirement.Id,
                 Arg.Any<CancellationToken>())
-            .Returns(withProposal
-                ? CreateProposal(
-                    requirement,
-                    requirement.Id,
-                    system.Id,
-                    alternativeSystem.Id,
-                    glass.GlassTypeId,
-                    alternativeGlass.GlassTypeId,
-                    finish.Id,
-                    alternativeFinish.Id,
-                    withSelected,
-                    extractedQuantity,
-                    manualQuantityOverride)
-                : null);
+            .Returns(proposal);
         requirements.ListFilesByRequirementIdAsync(
                 requirement.Id,
                 Arg.Any<CancellationToken>())
@@ -349,7 +526,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             glasses,
             finishes);
 
-        return new Context(service, requirement);
+        return new Context(service, requirement, proposal);
     }
 
     private static RequirementTechnicalProposal CreateProposal(
@@ -452,6 +629,13 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             systemId,
             glassId,
             finishId,
+            item.Sequence,
+            item.Reference,
+            item.Description,
+            item.ElementType,
+            item.Quantity,
+            item.WidthMillimeters,
+            item.HeightMillimeters,
             0.83m,
             0.90m,
             0.88m,
@@ -607,5 +791,6 @@ public sealed class GetRequirementTechnicalProposalServiceTests
 
     private sealed record Context(
         GetRequirementTechnicalProposalService Service,
-        Requirement Requirement);
+        Requirement Requirement,
+        RequirementTechnicalProposal? Proposal);
 }

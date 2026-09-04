@@ -154,6 +154,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.TechnicalProposalNotConfirmed,
                     "Propuesta tecnica no lista para pricing",
                     "Confirma la propuesta y resuelve definiciones bloqueantes antes de calcular el precio. Consulta readiness.pendingDefinitions en la propuesta tecnica."),
+            PriceRequirementTechnicalProposalFailure.TechnicalProposalNoIncludedItems =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalNoIncludedItems,
+                    "Propuesta tecnica sin items incluidos",
+                    "No hay elementos incluidos en la propuesta tecnica para calcular pricing."),
             PriceRequirementTechnicalProposalFailure.Cancelled =>
                 RequirementProblem(StatusCodes.Status409Conflict,
                     RequirementErrorCodes.PricingCancelled,
@@ -191,6 +196,7 @@ public sealed class RequirementPricingController(
         new(
             item.ProposalItemId,
             item.ExtractedItemId,
+            item.Source,
             item.ElementId,
             item.Sequence,
             item.Reference,
@@ -249,6 +255,12 @@ public sealed class RequirementPricingController(
                 pricing.Item.OriginalLine?.Expected,
                 pricing.Item.CurrentLine?.Expected,
                 pricing.Item.DeltaLine?.Expected,
+                pricing.Item.OriginalUnit is null ? null : Map(pricing.Item.OriginalUnit),
+                pricing.Item.CurrentUnit is null ? null : Map(pricing.Item.CurrentUnit),
+                pricing.Item.DeltaUnit is null ? null : Map(pricing.Item.DeltaUnit),
+                pricing.Item.OriginalLine is null ? null : Map(pricing.Item.OriginalLine),
+                pricing.Item.CurrentLine is null ? null : Map(pricing.Item.CurrentLine),
+                pricing.Item.DeltaLine is null ? null : Map(pricing.Item.DeltaLine),
                 pricing.Item.Status,
                 pricing.Item.PriceSource,
                 pricing.Item.RepriceAttemptState,
@@ -324,6 +336,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.TechnicalProposalNotConfirmed,
                     "Propuesta tecnica no lista para pricing",
                     "Confirma la propuesta tecnica antes de repricing."),
+            RepriceRequirementTechnicalProposalItemFailure.TechnicalProposalItemExcluded =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalItemExcluded,
+                    "Item excluido",
+                    "El item indicado esta excluido del alcance comercial actual."),
             RepriceRequirementTechnicalProposalItemFailure.InvalidSystemSelection =>
                 RequirementProblem(StatusCodes.Status400BadRequest,
                     RequirementErrorCodes.InvalidRequest,

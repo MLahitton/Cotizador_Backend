@@ -25,16 +25,16 @@ public sealed class PriceRequirementExtractionServiceTests
         Assert.Equal(3, result.ItemCount);
         Assert.Equal(2, result.PricedItemCount);
         Assert.Equal(1, result.NotPriceableItemCount);
-        Assert.Equal(300m, result.CommercialMinimum);
+        Assert.Equal(330m - Sqrt(500m), result.CommercialMinimum);
         Assert.Equal(330m, result.CommercialExpected);
-        Assert.Equal(360m, result.CommercialMaximum);
+        Assert.Equal(330m + Sqrt(500m), result.CommercialMaximum);
         Assert.True(result.IsPartial);
         Assert.True(result.RequiresReview);
         Assert.Equal("COP", result.Currency);
     }
 
     [Fact]
-    public async Task PriceAsync_WithMultiplePriceableItems_SumsEachFinalRangeOnce()
+    public async Task PriceAsync_WithMultiplePriceableItems_CombinesUncertaintyWithoutLinearExtremes()
     {
         var service = Service(
             Priceable(1, "A", 10m, 20m, 30m, 0.90m),
@@ -44,10 +44,33 @@ public sealed class PriceRequirementExtractionServiceTests
             [Item(1, "A", 1), Item(2, "B", 1)], [],
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(50m, result.CommercialMinimum);
+        Assert.Equal(70m - Sqrt(200m), result.CommercialMinimum);
         Assert.Equal(70m, result.CommercialExpected);
-        Assert.Equal(90m, result.CommercialMaximum);
+        Assert.Equal(70m + Sqrt(200m), result.CommercialMaximum);
         Assert.False(result.IsPartial);
+    }
+
+    [Fact]
+    public async Task PriceAsync_WithLowConfidenceItems_UsesMoreConservativeGlobalUncertainty()
+    {
+        var high = await Service(
+                Priceable(1, "A", 10m, 20m, 30m, 0.90m),
+                Priceable(2, "B", 40m, 50m, 60m, 0.90m))
+            .PriceAsync(
+                [Item(1, "A", 1), Item(2, "B", 1)], [],
+                TestContext.Current.CancellationToken);
+        var low = await Service(
+                Priceable(1, "A", 10m, 20m, 30m, 0.30m),
+                Priceable(2, "B", 40m, 50m, 60m, 0.30m))
+            .PriceAsync(
+                [Item(1, "A", 1), Item(2, "B", 1)], [],
+                TestContext.Current.CancellationToken);
+
+        var highWidth = high.CommercialMaximum!.Value - high.CommercialMinimum!.Value;
+        var lowWidth = low.CommercialMaximum!.Value - low.CommercialMinimum!.Value;
+        Assert.True(lowWidth >= highWidth);
+        Assert.Equal(50m, low.CommercialMinimum);
+        Assert.Equal(90m, low.CommercialMaximum);
     }
 
     [Fact]
@@ -258,6 +281,9 @@ public sealed class PriceRequirementExtractionServiceTests
         Assert.True(result.IsPartial);
         Assert.True(result.RequiresReview);
     }
+
+    private static decimal Sqrt(decimal value) =>
+        (decimal)Math.Sqrt((double)value);
 
     private static PriceRequirementExtractionService Service(params object[] outcomes) =>
         new(

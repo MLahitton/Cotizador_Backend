@@ -134,15 +134,9 @@ public sealed class PriceRequirementExtractionService(
             priced.Length,
             notPriceableCount,
             reviewCount,
-            priced.Length == 0
-                ? null
-                : priced.Sum(item => item.LineMinimum!.Value),
-            priced.Length == 0
-                ? null
-                : priced.Sum(item => item.LineExpected!.Value),
-            priced.Length == 0
-                ? null
-                : priced.Sum(item => item.LineMaximum!.Value),
+            AggregateMinimum(priced),
+            AggregateExpected(priced),
+            AggregateMaximum(priced),
             currency,
             confidence,
             ConfidenceLevel(confidence),
@@ -153,6 +147,80 @@ public sealed class PriceRequirementExtractionService(
             warnings,
             items);
     }
+
+    private static decimal? AggregateMinimum(
+        IReadOnlyList<PricedRequirementExtractionItem> priced)
+    {
+        var expected = AggregateExpected(priced);
+        if (expected is null)
+        {
+            return null;
+        }
+
+        var downside = CombineUncertainty(
+            priced,
+            item => item.LineExpected is null || item.LineMinimum is null
+                ? (decimal?)null
+                : item.LineExpected.Value - item.LineMinimum.Value,
+            expected.Value);
+        return downside is null
+            ? null
+            : expected.Value - downside.Value;
+    }
+
+    private static decimal? AggregateExpected(
+        IReadOnlyList<PricedRequirementExtractionItem> priced) =>
+        priced.Count == 0
+            ? null
+            : priced.Sum(item => item.LineExpected!.Value);
+
+    private static decimal? AggregateMaximum(
+        IReadOnlyList<PricedRequirementExtractionItem> priced)
+    {
+        var expected = AggregateExpected(priced);
+        if (expected is null)
+        {
+            return null;
+        }
+
+        var upside = CombineUncertainty(
+            priced,
+            item => item.LineExpected is null || item.LineMaximum is null
+                ? (decimal?)null
+                : item.LineMaximum.Value - item.LineExpected.Value,
+            expected.Value);
+        return upside is null
+            ? null
+            : expected.Value + upside.Value;
+    }
+
+    private static decimal? CombineUncertainty(
+        IReadOnlyList<PricedRequirementExtractionItem> priced,
+        Func<PricedRequirementExtractionItem, decimal?> spreadSelector,
+        decimal expectedTotal)
+    {
+        var values = priced.Select(spreadSelector).ToArray();
+        if (values.Any(value => value is null))
+        {
+            return null;
+        }
+
+        var sumOfSquares = values.Sum(value => value!.Value * value.Value);
+        var rootSumSquare = (decimal)Math.Sqrt((double)sumOfSquares);
+        var linear = values.Sum(value => value!.Value);
+        var weakExpected = priced
+            .Where(IsWeakGlobalEvidence)
+            .Sum(item => item.LineExpected!.Value);
+        var weakShare = expectedTotal <= 0m
+            ? 1m
+            : Math.Clamp(weakExpected / expectedTotal, 0m, 1m);
+        return rootSumSquare + (linear - rootSumSquare) * weakShare;
+    }
+
+    private static bool IsWeakGlobalEvidence(PricedRequirementExtractionItem item) =>
+        item.RequiresReview
+        || item.CommercialEstimate?.ConfidenceLevel is HistoricalPriceConfidenceLevel.Low
+            or HistoricalPriceConfidenceLevel.Medium;
 
     private static bool HasCompleteLineRange(PricedRequirementElement estimate) =>
         estimate.LineMinimum is not null

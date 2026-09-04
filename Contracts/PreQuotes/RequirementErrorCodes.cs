@@ -19,6 +19,10 @@ public static class RequirementErrorCodes
         "REQUIREMENT_TECHNICAL_PROPOSAL_INCOMPLETE";
     public const string TechnicalProposalNotConfirmed =
         "REQUIREMENT_TECHNICAL_PROPOSAL_NOT_CONFIRMED";
+    public const string TechnicalProposalNoIncludedItems =
+        "TECHNICAL_PROPOSAL_NO_INCLUDED_ITEMS";
+    public const string TechnicalProposalItemExcluded =
+        "TECHNICAL_PROPOSAL_ITEM_EXCLUDED";
     public const string ProjectInactive = "REQUIREMENT_PROJECT_INACTIVE";
     public const string ClientInactive = "REQUIREMENT_CLIENT_INACTIVE";
     public const string ProcessingAlreadyActive =

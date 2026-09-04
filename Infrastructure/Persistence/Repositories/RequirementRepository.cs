@@ -2,6 +2,7 @@ using System.Data.Common;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -422,6 +423,55 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementPricingSnapshots.Add(snapshot);
     }
 
+    public void ReplacePricingSnapshot(
+        RequirementPricingSnapshot current,
+        RequirementPricingSnapshot replacement)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        var previousItems = current.Items.ToArray();
+        dbContext.RequirementPricingItemSnapshots.RemoveRange(previousItems);
+        current.Reinitialize(
+            replacement.TechnicalProposalId,
+            replacement.TechnicalProposalCommercialRevision,
+            replacement.Currency,
+            replacement.PricingBasis,
+            replacement.OriginalGrandTotal,
+            replacement.CurrentGrandTotal,
+            replacement.UpdatedAtUtc);
+        foreach (var item in replacement.Items)
+        {
+            var replacementItem = RequirementPricingItemSnapshot.Create(
+                current.Id,
+                item.TechnicalProposalItemId,
+                item.OriginalSystemId,
+                item.OriginalGlassTypeId,
+                item.OriginalFinishTypeId,
+                item.OriginalStatus,
+                item.OriginalUnitMinimum,
+                item.OriginalUnitExpected,
+                item.OriginalUnitMaximum,
+                item.OriginalLineMinimum,
+                item.OriginalLineExpected,
+                item.OriginalLineMaximum,
+                item.CreatedAtUtc);
+            replacementItem.UpdateCurrent(
+                item.CurrentSystemId,
+                item.CurrentGlassTypeId,
+                item.CurrentFinishTypeId,
+                item.CurrentStatus,
+                item.CurrentUnitMinimum,
+                item.CurrentUnitExpected,
+                item.CurrentUnitMaximum,
+                item.CurrentLineMinimum,
+                item.CurrentLineExpected,
+                item.CurrentLineMaximum,
+                item.UpdatedAtUtc);
+            current.AddItem(replacementItem);
+        }
+    }
+
     public async Task<RequirementExtractionResult?>
         GetLatestSuccessfulExtractionAsync(
             Guid requirementId,
@@ -541,16 +591,21 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
     {
         try
         {
+            var proposalId = await LockCurrentTechnicalProposalIdAsync(
+                requirementId,
+                cancellationToken);
+            if (proposalId is null)
+            {
+                return null;
+            }
+
             return await dbContext.RequirementTechnicalProposals
                 .Include(proposal => proposal.Requirement)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.ExtractedItem)
-                .Where(proposal => proposal.RequirementId == requirementId)
-                .OrderByDescending(proposal =>
-                    proposal.ProcessingAttempt.CompletedAtUtc)
-                .ThenByDescending(proposal => proposal.CreatedAtUtc)
-                .ThenByDescending(proposal => proposal.Id)
-                .FirstOrDefaultAsync(cancellationToken);
+                .SingleOrDefaultAsync(
+                    proposal => proposal.Id == proposalId.Value,
+                    cancellationToken);
         }
         catch (DbException exception)
         {
@@ -564,12 +619,23 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
     {
         try
         {
-            return await dbContext.RequirementPricingSnapshots
+            return await QueryCurrentPricingSnapshot(requirementId)
                 .AsNoTracking()
-                .Include(snapshot => snapshot.Items)
-                .Where(snapshot => snapshot.RequirementId == requirementId)
-                .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
-                .ThenByDescending(snapshot => snapshot.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementPricingSnapshot?> FindCurrentPricingSnapshotAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await QueryCurrentPricingSnapshot(requirementId)
                 .FirstOrDefaultAsync(cancellationToken);
         }
         catch (DbException exception)
@@ -585,16 +651,38 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
     {
         try
         {
+            var snapshotId = await LockCurrentPricingSnapshotIdAsync(
+                requirementId,
+                cancellationToken);
+            if (snapshotId is null)
+            {
+                return null;
+            }
+
             return await dbContext.RequirementPricingSnapshots
                 .Include(snapshot => snapshot.Items)
-                .Where(snapshot => snapshot.RequirementId == requirementId)
-                .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
-                .ThenByDescending(snapshot => snapshot.Id)
-                .FirstOrDefaultAsync(cancellationToken);
+                .SingleOrDefaultAsync(
+                    snapshot => snapshot.Id == snapshotId.Value,
+                    cancellationToken);
         }
         catch (DbException exception)
         {
             throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<IRequirementPersistenceTransaction>
+        BeginPricingUpdateTransactionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var transaction = await dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+            return new EfRequirementPersistenceTransaction(transaction);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementPersistenceException(exception);
         }
     }
 
@@ -608,6 +696,85 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         {
             throw new RequirementPersistenceException(exception);
         }
+    }
+
+    private IQueryable<RequirementPricingSnapshot> QueryCurrentPricingSnapshot(
+        Guid requirementId) =>
+        dbContext.RequirementPricingSnapshots
+            .Include(snapshot => snapshot.Items)
+            .Where(snapshot => snapshot.RequirementId == requirementId)
+            .OrderByDescending(snapshot => snapshot.UpdatedAtUtc)
+            .ThenByDescending(snapshot => snapshot.Id);
+
+    private async Task<Guid?> LockCurrentTechnicalProposalIdAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        const string commandText = """
+            SELECT proposal.id
+            FROM core.requirement_technical_proposals AS proposal
+            LEFT JOIN core.requirement_processing_attempts AS attempt
+                ON attempt.id = proposal.requirement_processing_attempt_id
+            WHERE proposal.requirement_id = @requirementId
+            ORDER BY attempt.completed_at_utc DESC NULLS LAST,
+                proposal.created_at_utc DESC,
+                proposal.id DESC
+            LIMIT 1
+            FOR UPDATE OF proposal;
+            """;
+
+        return await ExecuteLockedIdAsync(
+            commandText,
+            requirementId,
+            cancellationToken);
+    }
+
+    private async Task<Guid?> LockCurrentPricingSnapshotIdAsync(
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        const string commandText = """
+            SELECT snapshot.id
+            FROM core.requirement_pricing_snapshots AS snapshot
+            WHERE snapshot.requirement_id = @requirementId
+            ORDER BY snapshot.updated_at_utc DESC,
+                snapshot.id DESC
+            LIMIT 1
+            FOR UPDATE OF snapshot;
+            """;
+
+        return await ExecuteLockedIdAsync(
+            commandText,
+            requirementId,
+            cancellationToken);
+    }
+
+    private async Task<Guid?> ExecuteLockedIdAsync(
+        string commandText,
+        Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        var currentTransaction = dbContext.Database.CurrentTransaction
+            ?? throw new InvalidOperationException(
+                "La lectura ForUpdate requiere una transaccion activa.");
+        var connection = dbContext.Database.GetDbConnection();
+        using var command = connection.CreateCommand();
+        command.Transaction = currentTransaction.GetDbTransaction();
+        command.CommandText = commandText;
+
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "requirementId";
+        parameter.Value = requirementId;
+        command.Parameters.Add(parameter);
+
+        var scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return scalar switch
+        {
+            null => null,
+            DBNull => null,
+            Guid id => id,
+            _ => Guid.Parse(Convert.ToString(scalar)!)
+        };
     }
 
     private static RequirementProcessingFailureFinalization
@@ -639,6 +806,15 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             attempt.Outcome ?? DocumentProcessingOutcome.Cancelled,
             attempt.StartedAtUtc!.Value,
             attempt.CompletedAtUtc!.Value);
+    }
+
+    private sealed class EfRequirementPersistenceTransaction(
+        IDbContextTransaction transaction) : IRequirementPersistenceTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken) =>
+            transaction.CommitAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => transaction.DisposeAsync();
     }
 
     private sealed record CurrentRequirementProjection(

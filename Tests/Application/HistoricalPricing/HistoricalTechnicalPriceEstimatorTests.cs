@@ -74,6 +74,81 @@ public sealed class HistoricalTechnicalPriceEstimatorTests
     }
 
     [Fact]
+    public async Task EstimateAsync_WithTwoSimilarCandidates_KeepsRangeTight()
+    {
+        var estimate = await Estimate([
+            Evaluated(Candidate("a", 100m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("b", 105m, 10m), 0.9m, "HIGH")]);
+
+        Assert.Equal(100m, estimate.Expected);
+        Assert.Equal(100m, estimate.Minimum);
+        Assert.Equal(105m, estimate.Maximum);
+    }
+
+    [Fact]
+    public async Task EstimateAsync_WithThreeCandidates_LowWeightExtremeDoesNotDominateRange()
+    {
+        var estimate = await Estimate([
+            Evaluated(Candidate("a", 100m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("b", 102m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("extreme", 180m, 10m, preliminaryScore: 1m), 0.9m, "HIGH")]);
+
+        Assert.Equal(102m, estimate.Expected);
+        Assert.True(estimate.Maximum < 180m);
+        Assert.Contains("extreme", estimate.UsedComparableIds);
+    }
+
+    [Fact]
+    public async Task EstimateAsync_WithFiveCoherentCandidates_UsesObservedQuartileBand()
+    {
+        var estimate = await Estimate([
+            Evaluated(Candidate("a", 98m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("b", 100m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("c", 101m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("d", 103m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("e", 105m, 10m), 0.9m, "HIGH")]);
+
+        Assert.Equal(101m, estimate.Expected);
+        Assert.Equal(100m, estimate.Minimum);
+        Assert.Equal(103m, estimate.Maximum);
+    }
+
+    [Fact]
+    public async Task EstimateAsync_WithFiveCandidates_ExcludesHighOutlierBeforeRange()
+    {
+        var estimate = await Estimate([
+            Evaluated(Candidate("a", 98m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("b", 100m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("c", 101m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("d", 103m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("outlier", 220m, 10m), 0.9m, "HIGH")]);
+
+        Assert.DoesNotContain("outlier", estimate.UsedComparableIds);
+        Assert.True(estimate.Maximum < 220m);
+    }
+
+    [Fact]
+    public async Task EstimateAsync_LowConfidenceDoesNotProduceNarrowerRangeThanHighConfidence()
+    {
+        var candidates = new[]
+        {
+            Evaluated(Candidate("a", 98m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("b", 100m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("c", 101m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("d", 103m, 10m), 0.9m, "HIGH"),
+            Evaluated(Candidate("e", 105m, 10m), 0.9m, "HIGH")
+        };
+        var high = await Estimate(candidates);
+        var low = await Estimate(
+            candidates.Select(value => value with { Similarity = null }).ToArray(),
+            HistoricalSimilarityStatus.TechnicalFailure);
+
+        var highWidth = high.Maximum!.Value - high.Minimum!.Value;
+        var lowWidth = low.Maximum!.Value - low.Minimum!.Value;
+        Assert.True(lowWidth >= highWidth);
+    }
+
+    [Fact]
     public async Task EstimateAsync_ExcludesEconomicOutlierWithoutUsingAi2RejectedAsEconomicFilter()
     {
         var estimate = await Estimate([
@@ -232,8 +307,9 @@ public sealed class HistoricalTechnicalPriceEstimatorTests
         decimal? width = null,
         decimal? height = null,
         bool mismatch = false,
-        string? system = "3831") =>
+        string? system = "3831",
+        decimal preliminaryScore = 100m) =>
         new("quote", id, id, "description", price, price * quantity,
             "PUERTA", system, "TEMPLADO", 6m, null, "CORREDIZA",
-            width, height, area, quantity, null, 100m, ["category"], [], mismatch);
+            width, height, area, quantity, null, preliminaryScore, ["category"], [], mismatch);
 }

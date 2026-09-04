@@ -29,6 +29,11 @@ public sealed class RequirementPricingSnapshotConfiguration
             .HasColumnType("uuid")
             .IsRequired();
 
+        builder.Property(snapshot => snapshot.TechnicalProposalCommercialRevision)
+            .HasColumnName("technical_proposal_commercial_revision")
+            .HasDefaultValue(1L)
+            .IsRequired();
+
         builder.Property(snapshot => snapshot.Currency)
             .HasColumnName("currency")
             .HasColumnType("varchar(10)")

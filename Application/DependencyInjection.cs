@@ -1,4 +1,4 @@
-﻿using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Abstractions.PreQuotes;
 using Application.HistoricalPricing;
 using Application.Authentication.GetCurrentUser;
@@ -30,12 +30,14 @@ using Application.PreQuotes.UpdatePreQuoteDraft;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.BuildRequirementTechnicalProposal;
 using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
+using Application.PreQuotes.CreateManualRequirementTechnicalProposalItem;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.GetCurrentRequirement;
 using Application.PreQuotes.GetRequirementDetails;
 using Application.PreQuotes.ManageRequirementDocuments;
 using Application.PreQuotes.RequirementChat;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
@@ -93,6 +95,10 @@ public static class DependencyInjection
         services.AddScoped<ManageRequirementDocumentsService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemSelectionService>();
+        services.AddScoped<
+            CreateManualRequirementTechnicalProposalItemService>();
+        services.AddScoped<
+            UpdateRequirementTechnicalProposalItemInclusionService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
         services.AddSingleton<ITechnicalProposalItemToHistoricalPricingMapper,
             TechnicalProposalItemToHistoricalPricingMapper>();

@@ -18,6 +18,8 @@ public sealed class RequirementTechnicalProposalConfiguration
 
         builder.HasKey(proposal => proposal.Id);
 
+        builder.Ignore(proposal => proposal.IncludedItems);
+
         builder.Property(proposal => proposal.Id)
             .HasColumnName("id")
             .HasColumnType("uuid")
@@ -49,6 +51,11 @@ public sealed class RequirementTechnicalProposalConfiguration
         builder.Property(proposal => proposal.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .HasColumnType("timestamp with time zone")
+            .IsRequired();
+
+        builder.Property(proposal => proposal.CommercialRevision)
+            .HasColumnName("commercial_revision")
+            .HasDefaultValue(1L)
             .IsRequired();
 
         builder.Property(proposal => proposal.CommercialConfirmedAtUtc)

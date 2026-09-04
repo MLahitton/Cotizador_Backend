@@ -26,7 +26,8 @@ public sealed record RequirementPricingRangeResponse(
 
 public sealed record RequirementPricingItemResponse(
     Guid ProposalItemId,
-    Guid ExtractedItemId,
+    Guid? ExtractedItemId,
+    string Source,
     string? ElementId,
     int Sequence,
     string? Reference,
@@ -99,6 +100,12 @@ public sealed record RepriceRequirementPricingItemPriceResponse(
     decimal? OriginalLineTotal,
     decimal? CurrentLineTotal,
     decimal? DeltaLineTotal,
+    RequirementPricingRangeResponse? OriginalUnit,
+    RequirementPricingRangeResponse? CurrentUnit,
+    RequirementPricingRangeResponse? DeltaUnit,
+    RequirementPricingRangeResponse? OriginalLine,
+    RequirementPricingRangeResponse? CurrentLine,
+    RequirementPricingRangeResponse? DeltaLine,
     string State,
     string? PriceSource,
     string? RepriceAttemptState,

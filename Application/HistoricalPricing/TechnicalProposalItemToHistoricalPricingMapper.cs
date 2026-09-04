@@ -22,7 +22,7 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
         ArgumentNullException.ThrowIfNull(glass);
         ArgumentNullException.ThrowIfNull(finish);
 
-        var item = proposalItem.ExtractedItem;
+        var extracted = proposalItem.ExtractedItem;
         var warnings = new List<string>();
         var area = ResolvePricingArea(proposalItem, warnings);
         var quantity = proposalItem.EffectiveQuantity is > 0
@@ -34,18 +34,18 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
         }
 
         var query = new HistoricalCandidateQuery(
-            Category(item.ElementType),
+            Category(proposalItem.ElementType),
             SystemValue(system),
             GlassValue(glass),
-            GlassThickness(glass) ?? item.GlassThicknessMm,
-            item.Arrangement ?? item.Operation ?? item.FunctionalType,
+            GlassThickness(glass) ?? extracted?.GlassThicknessMm,
+            extracted?.Arrangement ?? extracted?.Operation ?? extracted?.FunctionalType,
             proposalItem.EffectiveWidthMillimeters,
             proposalItem.EffectiveHeightMillimeters,
             area,
             FinishValue(finish),
             quantity > 0 ? quantity : null,
             10,
-            GlassComposition: glass.Composition ?? item.GlassComposition);
+            GlassComposition: glass.Composition ?? extracted?.GlassComposition);
 
         return new TechnicalProposalItemHistoricalPricingMapping(
             query,
@@ -59,11 +59,13 @@ public sealed class TechnicalProposalItemToHistoricalPricingMapper
         RequirementTechnicalProposalItem proposalItem,
         ICollection<string> warnings)
     {
-        var item = proposalItem.ExtractedItem;
+        var extracted = proposalItem.ExtractedItem;
         var geometry = GeometryArea(
             proposalItem.EffectiveWidthMillimeters,
             proposalItem.EffectiveHeightMillimeters);
-        var reported = item.AreaSquareMeters;
+        var reported = proposalItem.Source == TechnicalProposalItemSource.AiExtracted
+            ? extracted?.AreaSquareMeters
+            : null;
         if (geometry is > 0 && reported is > 0)
         {
             var difference = Math.Abs(geometry.Value - reported.Value)
