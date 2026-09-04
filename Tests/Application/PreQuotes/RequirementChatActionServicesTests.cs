@@ -395,6 +395,202 @@ public sealed class RequirementChatActionServicesTests
     }
 
     [Fact]
+    public async Task RequirementChatAction_MultiTargetExcludeCreatesOnePlanWithTwoActionsAndNoWritesBeforeConfirm()
+    {
+        var context = CreateContext(hasPricing: true);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "EXCLUDE_ITEM",
+                scope: "REQUIREMENT",
+                targetReferences: ["V-01", "V-02"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan!.Status);
+        Assert.True(result.Plan.RequiresConfirmation);
+        Assert.Equal(2, result.Plan.Actions.Count);
+        Assert.Equal([ItemAId, ItemBId], result.Plan.Actions.Select(action => action.TargetTechnicalProposalItemId).ToArray());
+        Assert.All(result.Plan.Actions, action => Assert.Equal("EXCLUDE_ITEM", action.ActionType));
+        Assert.Equal(0, context.Inclusion.Count);
+        Assert.Equal(0, context.Pricing.PriceRequirementCount);
+        Assert.True(context.Reader.Item(ItemAId).IsIncluded);
+        Assert.True(context.Reader.Item(ItemBId).IsIncluded);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_ConfirmMultiTargetExcludeAppliesBothAndPricesOnce()
+    {
+        var context = CreateContext(hasPricing: true);
+        var plan = await ReadyPlanAsync(
+            context,
+            "EXCLUDE_ITEM",
+            ["V-01", "V-02"],
+            null);
+
+        var result = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, plan.PlanId),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("EXECUTED", result.Plan!.Status);
+        Assert.Equal("PRICING_UPDATED", result.Plan.PricingStatus);
+        Assert.Equal(2, context.Inclusion.Count);
+        Assert.Equal(1, context.Pricing.PriceRequirementCount);
+        Assert.Equal(0, context.Pricing.RepriceCount);
+        Assert.False(context.Reader.Item(ItemAId).IsIncluded);
+        Assert.False(context.Reader.Item(ItemBId).IsIncluded);
+        Assert.Contains("PRICING_MODE=FULL", result.Plan.ExecutionReasons);
+        Assert.Contains("ACTION_COUNT=2", result.Plan.ExecutionReasons);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_MultiTargetChangeSystemCreatesOneActionPerTarget()
+    {
+        var context = CreateContext(
+            systemValues:
+            [
+                System("K70", SystemAId),
+                System("S50", SystemBId)
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_SYSTEM",
+                scope: "REQUIREMENT",
+                targetReferences: ["V-01", "V-02"],
+                requestedValue: "S50"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan!.Status);
+        Assert.Equal(2, result.Plan.Actions.Count);
+        Assert.All(result.Plan.Actions, action =>
+        {
+            Assert.Equal("CHANGE_SYSTEM", action.ActionType);
+            Assert.Equal(SystemBId, action.ResolvedCatalogEntity!.Id);
+        });
+        Assert.Equal(0, context.Selection.Count);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_MultiTargetChangeGlassCreatesOneActionPerTarget()
+    {
+        var context = CreateContext();
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_GLASS",
+                scope: "REQUIREMENT",
+                targetReferences: ["V-01", "V-02"],
+                requestedValue: "vidrio templado de 8 mm",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Glass: new RequirementChatRequestedGlassAttributes(
+                        Composition: "TEMPERED",
+                        OuterThicknessMm: 8m))),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan!.Status);
+        Assert.Equal(2, result.Plan.Actions.Count);
+        Assert.All(result.Plan.Actions, action => Assert.Equal(GlassBId, action.ResolvedCatalogEntity!.Id));
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_MultiTargetMissingReferenceDoesNotCreateConfirmablePartialPlan()
+    {
+        var context = CreateContext(hasPricing: true);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "EXCLUDE_ITEM",
+                scope: "REQUIREMENT",
+                targetReferences: ["V-01", "V-99"]),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("NEEDS_CLARIFICATION", result.Plan!.Status);
+        Assert.False(result.Plan.RequiresConfirmation);
+        Assert.Equal(2, result.Plan.Actions.Count);
+        Assert.Contains(result.Plan.Actions, action => action.TargetTechnicalProposalItemId == ItemAId);
+        Assert.Contains(result.Plan.Actions, action => action.ValidationReasons.Contains("TARGET_REFERENCE_NOT_FOUND"));
+        Assert.Equal(0, context.Inclusion.Count);
+        Assert.Equal(0, context.Selection.Count);
+        Assert.Equal(0, context.Pricing.PriceRequirementCount);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_ConfirmMultiTargetSystemBatchPricesOnceAndIsIdempotent()
+    {
+        var context = CreateContext(
+            hasPricing: true,
+            systemValues:
+            [
+                System("K70", SystemAId),
+                System("S50", SystemBId)
+            ]);
+        var plan = await ReadyPlanAsync(
+            context,
+            "CHANGE_SYSTEM",
+            ["V-01", "V-02"],
+            "S50");
+
+        var first = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, plan.PlanId),
+            TestContext.Current.CancellationToken);
+        var second = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, plan.PlanId),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("EXECUTED", first.Plan!.Status);
+        Assert.Equal("EXECUTED", second.Plan!.Status);
+        Assert.Equal(2, context.Selection.Count);
+        Assert.Equal(1, context.Pricing.PriceRequirementCount);
+        Assert.Equal(0, context.Pricing.RepriceCount);
+        Assert.Equal(SystemBId, context.Reader.Item(ItemAId).Selected!.System!.Id);
+        Assert.Equal(SystemBId, context.Reader.Item(ItemBId).Selected!.System!.Id);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_ConcurrentConfirmMultiTargetBatchDoesNotDuplicateSideEffects()
+    {
+        var context = CreateContext(hasPricing: true, priceRequirementDelay: TimeSpan.FromMilliseconds(75));
+        var plan = await ReadyPlanAsync(
+            context,
+            "EXCLUDE_ITEM",
+            ["V-01", "V-02"],
+            null);
+        var command = new ConfirmRequirementChatActionCommand(RequirementId, plan.PlanId);
+
+        await Task.WhenAll(
+            context.Confirm.ExecuteAsync(command, TestContext.Current.CancellationToken),
+            context.Confirm.ExecuteAsync(command, TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, context.Inclusion.Count);
+        Assert.Equal(1, context.Pricing.PriceRequirementCount);
+        Assert.False(context.Reader.Item(ItemAId).IsIncluded);
+        Assert.False(context.Reader.Item(ItemBId).IsIncluded);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_MultiTargetPricingFailureLeavesExecutedWithPricingPending()
+    {
+        var context = CreateContext(hasPricing: true, priceRequirementFailure: true);
+        var plan = await ReadyPlanAsync(
+            context,
+            "EXCLUDE_ITEM",
+            ["V-01", "V-02"],
+            null);
+
+        var result = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, plan.PlanId),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("EXECUTED_WITH_PRICING_PENDING", result.Plan!.Status);
+        Assert.Equal("PRICING_PENDING", result.Plan.PricingStatus);
+        Assert.Contains("PRICING_FAILED_QueryError", result.Plan.ExecutionReasons);
+        Assert.Equal(2, context.Inclusion.Count);
+        Assert.Equal(1, context.Pricing.PriceRequirementCount);
+    }
+
+    [Fact]
     public async Task RequirementChatAction_RepriceFailureAppliesSelectionAndLeavesPricingPending()
     {
         var context = CreateContext(hasPricing: true, repriceFailure: true);
@@ -452,6 +648,7 @@ public sealed class RequirementChatActionServicesTests
         int? quantity = null,
         int? widthMm = null,
         int? heightMm = null,
+        IReadOnlyList<string>? targetReferences = null,
         RequirementChatRequestedAttributes? requestedAttributes = null) =>
         new(
             RequirementId,
@@ -462,6 +659,7 @@ public sealed class RequirementChatActionServicesTests
             actionType,
             null,
             targetReference,
+            targetReferences,
             requestedValue,
             quantity,
             widthMm,
@@ -483,11 +681,31 @@ public sealed class RequirementChatActionServicesTests
         return result.Plan;
     }
 
+    private static async Task<ChatActionPlanReadModel> ReadyPlanAsync(
+        Context context,
+        string actionType,
+        IReadOnlyList<string> targetReferences,
+        string? requestedValue)
+    {
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                actionType,
+                scope: "REQUIREMENT",
+                targetReferences: targetReferences,
+                requestedValue: requestedValue),
+            TestContext.Current.CancellationToken);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan!.Status);
+        return result.Plan;
+    }
+
     private static Context CreateContext(
         bool hasPricing = false,
         bool duplicateReference = false,
         bool repriceFailure = false,
+        bool priceRequirementFailure = false,
         TimeSpan? repriceDelay = null,
+        TimeSpan? priceRequirementDelay = null,
         IReadOnlyList<ProductSystemCatalogReadModel>? systemValues = null,
         IReadOnlyList<GlassTypeCatalogReadModel>? glassValues = null,
         IReadOnlyList<FinishTypeCatalogReadModel>? finishValues = null)
@@ -498,7 +716,9 @@ public sealed class RequirementChatActionServicesTests
         var pricing = new FakePricingExecutor(reader)
         {
             FailReprice = repriceFailure,
-            RepriceDelay = repriceDelay ?? TimeSpan.Zero
+            FailPriceRequirement = priceRequirementFailure,
+            RepriceDelay = repriceDelay ?? TimeSpan.Zero,
+            PriceRequirementDelay = priceRequirementDelay ?? TimeSpan.Zero
         };
         var store = new InMemoryRequirementChatActionPlanStore(new FixedTimeProvider(At));
         var repository = Substitute.For<IRequirementRepository>();
@@ -818,15 +1038,40 @@ public sealed class RequirementChatActionServicesTests
         public int PriceRequirementCount { get; private set; }
         public int RepriceCount { get; private set; }
         public bool FailReprice { get; init; }
+        public bool FailPriceRequirement { get; init; }
         public TimeSpan RepriceDelay { get; init; }
+        public TimeSpan PriceRequirementDelay { get; init; }
 
         public Task<PriceRequirementTechnicalProposalResult> PriceRequirementAsync(
             PriceRequirementTechnicalProposalCommand command,
             CancellationToken cancellationToken)
         {
             PriceRequirementCount++;
+            if (PriceRequirementDelay > TimeSpan.Zero)
+            {
+                return DelayedPriceRequirementAsync(command, cancellationToken);
+            }
+
+            if (FailPriceRequirement)
+            {
+                return Task.FromResult(PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.QueryError));
+            }
+
             return Task.FromResult(PriceRequirementTechnicalProposalResult.Success(
                 PricingReadModel(command.RequirementId)));
+        }
+
+        private async Task<PriceRequirementTechnicalProposalResult> DelayedPriceRequirementAsync(
+            PriceRequirementTechnicalProposalCommand command,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(PriceRequirementDelay, cancellationToken);
+            return FailPriceRequirement
+                ? PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.QueryError)
+                : PriceRequirementTechnicalProposalResult.Success(
+                    PricingReadModel(command.RequirementId));
         }
 
         public async Task<RepriceRequirementTechnicalProposalItemResult> RepriceItemAsync(

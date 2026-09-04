@@ -125,6 +125,48 @@ public sealed class CotizadorAi2RequirementChatClientTests
     }
 
     [Fact]
+    public async Task InterpretActionAsync_WithTargetReferences_DeserializesMultiTargetIntent()
+    {
+        var handler = new CaptureHandler(
+            HttpStatusCode.OK,
+            """
+            {
+              "isAction": true,
+              "actionType": "EXCLUDE_ITEM",
+              "scope": "REQUIREMENT",
+              "targetReference": "C-4b",
+              "targetReferences": ["C-4b", "C-4c"],
+              "targetCount": 2,
+              "requestedValue": null,
+              "requestedQuantity": null,
+              "requestedWidthMm": null,
+              "requestedHeightMm": null,
+              "confidence": 0.93,
+              "requiresClarification": false,
+              "clarificationReason": null,
+              "rawUserMessage": "Excluye C-4b y C-4c"
+            }
+            """);
+        using var httpClient = CreateHttpClient(handler);
+        var client = CreateClient(httpClient);
+
+        var intent = await client.InterpretActionAsync(
+            new RequirementChatActionInterpretationRequest(
+                "Excluye C-4b y C-4c",
+                "REQUIREMENT",
+                null,
+                [],
+                new { }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("EXCLUDE_ITEM", intent.ActionType);
+        Assert.Equal("C-4b", intent.TargetReference);
+        Assert.Equal(["C-4b", "C-4c"], intent.TargetReferences);
+        Assert.Equal(2, intent.TargetCount);
+    }
+
+
+    [Fact]
     public async Task InterpretActionAsync_WithLegacyBackendShape_WouldMissAi2RequiredUserMessage()
     {
         var json = JsonSerializer.Serialize(

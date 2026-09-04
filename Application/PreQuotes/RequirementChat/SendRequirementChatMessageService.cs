@@ -265,7 +265,7 @@ public sealed class SendRequirementChatMessageService(
         }
         else
         {
-            var pendingAction = pendingPlan?.Actions.SingleOrDefault();
+            var pendingAction = pendingPlan?.Actions.FirstOrDefault();
             var planResult = await planActionService.ExecuteAsync(
                 new PlanRequirementChatActionCommand(
                     command.RequirementId,
@@ -277,6 +277,7 @@ public sealed class SendRequirementChatMessageService(
                     intent.ActionType ?? pendingAction?.ActionType!,
                     null,
                     intent.TargetReference ?? pendingAction?.TargetReference,
+                    intent.TargetReferences,
                     intent.RequestedValue
                         ?? pendingAction?.RequestedValue
                         ?? command.Message.Trim(),
@@ -588,7 +589,7 @@ public sealed class SendRequirementChatMessageService(
     private static RequirementChatInteractionReadModel ToInteraction(
         ChatActionPlanReadModel plan)
     {
-        var action = plan.Actions.Single();
+        var action = plan.Actions.First();
         var messageType = plan.Status == "READY_FOR_CONFIRMATION"
             ? "ACTION_PLAN"
             : "CLARIFICATION";
@@ -606,12 +607,15 @@ public sealed class SendRequirementChatMessageService(
                 action.ValidationReasons.Concat(plan.ExecutionReasons)
                     .Distinct(StringComparer.Ordinal)
                     .ToArray(),
-                action.AvailableOptions.Select(ToInteractionOption).ToArray());
+                plan.Actions
+                    .SelectMany(value => value.AvailableOptions)
+                    .Select(ToInteractionOption)
+                    .ToArray());
     }
 
     private static object WithPendingAction(object context, ChatActionPlanReadModel plan)
     {
-        var action = plan.Actions.Single();
+        var action = plan.Actions.First();
         return new
         {
             originalContext = context,
@@ -621,6 +625,8 @@ public sealed class SendRequirementChatMessageService(
                 plan.RequirementId,
                 plan.TechnicalProposalId,
                 plan.Scope,
+                actionCount = plan.Actions.Count,
+                actions = plan.Actions,
                 action.ActionType,
                 action.TargetTechnicalProposalItemId,
                 action.TargetReference,

@@ -46,7 +46,9 @@ public sealed record RequirementChatActionIntent(
     bool RequiresClarification,
     string? ClarificationReason,
     string? RawUserMessage,
-    RequirementChatRequestedAttributes? RequestedAttributes = null);
+    RequirementChatRequestedAttributes? RequestedAttributes = null,
+    IReadOnlyList<string>? TargetReferences = null,
+    int? TargetCount = null);
 
 public sealed record RequirementChatRequestedAttributes(
     RequirementChatRequestedSystemAttributes? System = null,

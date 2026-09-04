@@ -19,6 +19,7 @@ public sealed record PlanRequirementChatActionCommand(
     string ActionType,
     Guid? TargetTechnicalProposalItemId,
     string? TargetReference,
+    IReadOnlyList<string>? TargetReferences,
     string? RequestedValue,
     int? Quantity,
     int? WidthMillimeters,
@@ -186,14 +187,9 @@ public sealed class InMemoryRequirementChatActionPlanStore(TimeProvider timeProv
                     plan!.Scope,
                     scope,
                     StringComparison.OrdinalIgnoreCase))
-                .Where(plan =>
-                {
-                    var action = plan!.Actions.SingleOrDefault();
-                    return action is not null
-                        && (scope != "ITEM"
-                            || action.TargetTechnicalProposalItemId
-                                == technicalProposalItemId);
-                })
+                .Where(plan => scope != "ITEM"
+                    || plan!.Actions.Any(action =>
+                        action.TargetTechnicalProposalItemId == technicalProposalItemId))
                 .OrderByDescending(plan => plan!.CreatedAtUtc)
                 .FirstOrDefault();
         }
@@ -316,15 +312,49 @@ public sealed class PlanRequirementChatActionService(
         var scope = NormalizeScope(command.Scope, command.ContextTechnicalProposalItemId);
         var actionType = Normalize(command.ActionType);
         var now = timeProvider.GetUtcNow();
-        var action = await BuildActionAsync(
-            command,
-            proposal,
-            scope,
-            actionType,
-            cancellationToken);
-        var status = action.ValidationState == "VALID"
+        var actions = new List<ChatActionPlanActionReadModel>();
+        foreach (var targetReference in TargetReferences(command, scope))
+        {
+            actions.Add(await BuildActionAsync(
+                command with { TargetReference = targetReference },
+                proposal,
+                scope,
+                actionType,
+                cancellationToken));
+        }
+
+        if (actions.Count == 0)
+        {
+            actions.Add(await BuildActionAsync(
+                command,
+                proposal,
+                scope,
+                actionType,
+                cancellationToken));
+        }
+
+        var status = actions.All(action => action.ValidationState == "VALID")
             ? "READY_FOR_CONFIRMATION"
-            : action.ValidationState;
+            : actions.Any(action => action.ValidationState == "INVALID")
+                ? "INVALID"
+                : "NEEDS_CLARIFICATION";
+        var actionReferences = actions
+            .Select(action => action.TargetReference)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+        var actionIds = actions
+            .Select(action => action.TargetTechnicalProposalItemId)
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+        var executionReasons = new List<string>();
+        if (actions.Count > 1)
+        {
+            executionReasons.Add($"TARGET_COUNT={actions.Count}");
+            executionReasons.Add($"TARGET_REFERENCES={string.Join(",", actionReferences)}");
+            executionReasons.Add($"RESOLVED_ITEM_IDS={string.Join(",", actionIds)}");
+        }
+
         var plan = new ChatActionPlanReadModel(
             command.ExistingPlanId ?? Guid.NewGuid(),
             command.RequirementId,
@@ -335,11 +365,31 @@ public sealed class PlanRequirementChatActionService(
             now,
             now.AddMinutes(15),
             null,
-            [],
-            [action],
+            executionReasons,
+            actions,
             command.ChatThreadId);
         store.Save(plan);
         return RequirementChatActionPlanResult.Success(plan);
+    }
+
+    private static IReadOnlyList<string?> TargetReferences(
+        PlanRequirementChatActionCommand command,
+        string scope)
+    {
+        if (scope == "ITEM" || command.ContextTechnicalProposalItemId is not null)
+        {
+            return [command.TargetReference];
+        }
+
+        var references = command.TargetReferences?
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<string?>()
+            .ToArray();
+        return references is { Length: > 0 }
+            ? references
+            : [command.TargetReference];
     }
 
     private async Task<ChatActionPlanActionReadModel> BuildActionAsync(
@@ -1046,18 +1096,39 @@ public sealed class ConfirmRequirementChatActionService(
             return RequirementChatActionPlanResult.Success(plan);
         }
 
-        var action = plan.Actions.Single();
+        var actions = plan.Actions;
+        if (actions.Count == 0
+            || actions.Select(action => action.ActionType)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != 1
+            || actions.Any(action => action.TargetTechnicalProposalItemId is null))
+        {
+            var invalid = plan with
+            {
+                Status = "INVALID",
+                RequiresConfirmation = false,
+                ExecutionReasons = ["BATCH_ACTIONS_INVALID"]
+            };
+            store.Save(invalid);
+            return RequirementChatActionPlanResult.Success(invalid);
+        }
+
+        var actionType = actions[0].ActionType;
+        var isBatch = actions.Count > 1;
         var pricingExisted = await requirementRepository.GetCurrentPricingSnapshotAsync(
             command.RequirementId,
             cancellationToken) is not null;
         var pricingStatus = pricingExisted ? "PRICING_UPDATED" : "NOT_YET_PRICED";
         var reasons = new List<string>();
         var executed = false;
+        reasons.Add(isBatch ? "PRICING_MODE=FULL" : "PRICING_MODE=ITEM");
+        reasons.Add($"ACTION_COUNT={actions.Count}");
 
-        if (action.ActionType is "CHANGE_SYSTEM" or "CHANGE_GLASS" or "CHANGE_FINISH" or "CHANGE_QUANTITY" or "CHANGE_DIMENSIONS")
+        if (actionType is "CHANGE_SYSTEM" or "CHANGE_GLASS" or "CHANGE_FINISH" or "CHANGE_QUANTITY" or "CHANGE_DIMENSIONS")
         {
-            if (pricingExisted)
+            if (pricingExisted && !isBatch)
             {
+                var action = actions[0];
                 var reprice = await pricingExecutor.RepriceItemAsync(
                     ToRepriceCommand(command.RequirementId, action),
                     cancellationToken);
@@ -1081,31 +1152,54 @@ public sealed class ConfirmRequirementChatActionService(
             }
             else
             {
-                var selection = await selectionExecutor.ExecuteAsync(
-                    ToSelectionCommand(plan.TechnicalProposalId, action),
-                    cancellationToken);
-                executed = selection.IsSuccess;
-                if (!selection.IsSuccess)
+                executed = true;
+                foreach (var action in actions)
                 {
-                    reasons.Add($"SELECTION_FAILED_{selection.Failure}");
+                    var selection = await selectionExecutor.ExecuteAsync(
+                        ToSelectionCommand(plan.TechnicalProposalId, action),
+                        cancellationToken);
+                    if (!selection.IsSuccess)
+                    {
+                        executed = false;
+                        reasons.Add($"SELECTION_FAILED_{selection.Failure}");
+                        break;
+                    }
+                }
+
+                if (executed && pricingExisted && isBatch)
+                {
+                    var pricing = await pricingExecutor.PriceRequirementAsync(
+                        new PriceRequirementTechnicalProposalCommand(command.RequirementId),
+                        cancellationToken);
+                    if (!pricing.IsSuccess)
+                    {
+                        pricingStatus = "PRICING_PENDING";
+                        reasons.Add($"PRICING_FAILED_{pricing.Failure}");
+                    }
                 }
             }
         }
-        else if (action.ActionType is "EXCLUDE_ITEM" or "INCLUDE_ITEM")
+        else if (actionType is "EXCLUDE_ITEM" or "INCLUDE_ITEM")
         {
-            var inclusion = await inclusionExecutor.ExecuteAsync(
-                new UpdateRequirementTechnicalProposalItemInclusionCommand(
-                    command.RequirementId,
-                    action.TargetTechnicalProposalItemId!.Value,
-                    action.ActionType == "INCLUDE_ITEM",
-                    "CHAT_ACTION"),
-                cancellationToken);
-            executed = inclusion.IsSuccess;
-            if (!inclusion.IsSuccess)
+            executed = true;
+            foreach (var action in actions)
             {
-                reasons.Add($"INCLUSION_FAILED_{inclusion.Failure}");
+                var inclusion = await inclusionExecutor.ExecuteAsync(
+                    new UpdateRequirementTechnicalProposalItemInclusionCommand(
+                        command.RequirementId,
+                        action.TargetTechnicalProposalItemId!.Value,
+                        action.ActionType == "INCLUDE_ITEM",
+                        "CHAT_ACTION"),
+                    cancellationToken);
+                if (!inclusion.IsSuccess)
+                {
+                    executed = false;
+                    reasons.Add($"INCLUSION_FAILED_{inclusion.Failure}");
+                    break;
+                }
             }
-            else if (pricingExisted)
+
+            if (executed && pricingExisted)
             {
                 var pricing = await pricingExecutor.PriceRequirementAsync(
                     new PriceRequirementTechnicalProposalCommand(command.RequirementId),

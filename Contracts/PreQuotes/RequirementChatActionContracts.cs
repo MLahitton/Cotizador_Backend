@@ -5,6 +5,7 @@ public sealed record PlanRequirementChatActionRequest(
     string ActionType,
     Guid? TargetTechnicalProposalItemId,
     string? TargetReference,
+    IReadOnlyList<string>? TargetReferences,
     string? RequestedValue,
     int? Quantity = null,
     int? WidthMm = null,
