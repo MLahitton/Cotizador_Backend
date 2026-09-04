@@ -30,6 +30,7 @@ using Application.PreQuotes.UpdatePreQuoteDraft;
 using Application.PreQuotes.ApprovePreQuoteDraft;
 using Application.PreQuotes.BuildRequirementTechnicalProposal;
 using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
+using Application.PreQuotes.CreateManualRequirementTechnicalProposalItem;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.GetCurrentRequirement;
 using Application.PreQuotes.GetRequirementDetails;
@@ -94,6 +95,8 @@ public static class DependencyInjection
         services.AddScoped<ManageRequirementDocumentsService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemSelectionService>();
+        services.AddScoped<
+            CreateManualRequirementTechnicalProposalItemService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemInclusionService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();

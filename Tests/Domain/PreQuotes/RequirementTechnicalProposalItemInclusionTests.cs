@@ -1,4 +1,4 @@
-﻿using Domain.PreQuotes;
+using Domain.PreQuotes;
 using Xunit;
 
 namespace CotizadorBackend.Tests.Domain.PreQuotes;
@@ -84,6 +84,44 @@ public sealed class RequirementTechnicalProposalItemInclusionTests
         Assert.True(item.IsIncluded);
     }
 
+    [Fact]
+    public void CreateManual_SetsManualSourceAndEffectiveValues()
+    {
+        var systemId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var glassId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var finishId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+        var item = RequirementTechnicalProposalItem.CreateManual(
+            Guid.NewGuid(),
+            2,
+            " M-02 ",
+            " Ventana manual ",
+            StructuredElementType.Window,
+            3,
+            1500,
+            2400,
+            systemId,
+            glassId,
+            finishId,
+            UserId,
+            At,
+            " Agregada por plano ");
+
+        Assert.Equal(TechnicalProposalItemSource.Manual, item.Source);
+        Assert.Null(item.RequirementExtractedItemId);
+        Assert.Equal(2, item.Sequence);
+        Assert.Equal("M-02", item.Reference);
+        Assert.Equal("Ventana manual", item.Description);
+        Assert.Equal(3, item.EffectiveQuantity);
+        Assert.Equal(1500, item.EffectiveWidthMillimeters);
+        Assert.Equal(2400, item.EffectiveHeightMillimeters);
+        Assert.Equal(systemId, item.SelectedSystemId);
+        Assert.Equal(glassId, item.SelectedGlassTypeId);
+        Assert.Equal(finishId, item.SelectedFinishTypeId);
+        Assert.True(item.IsIncluded);
+        Assert.Equal("Agregada por plano", item.ManualNote);
+    }
+
     private static RequirementTechnicalProposalItem Item() =>
         RequirementTechnicalProposalItem.Create(
             Guid.NewGuid(),
@@ -91,6 +129,13 @@ public sealed class RequirementTechnicalProposalItemInclusionTests
             Guid.NewGuid(),
             Guid.NewGuid(),
             Guid.NewGuid(),
+            1,
+            "A",
+            "Ventana",
+            StructuredElementType.Window,
+            1,
+            1000,
+            1000,
             1m,
             1m,
             1m,

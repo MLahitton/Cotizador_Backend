@@ -196,6 +196,7 @@ public sealed class RequirementPricingController(
         new(
             item.ProposalItemId,
             item.ExtractedItemId,
+            item.Source,
             item.ElementId,
             item.Sequence,
             item.Reference,

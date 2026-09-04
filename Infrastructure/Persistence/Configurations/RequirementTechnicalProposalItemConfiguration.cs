@@ -26,7 +26,16 @@ public sealed class RequirementTechnicalProposalItemConfiguration
                     "(\"historical_average_similarity\" >= 0 AND \"historical_average_similarity\" <= 1)) " +
                     "AND (\"manual_quantity_override\" IS NULL OR \"manual_quantity_override\" > 0) " +
                     "AND (\"manual_width_millimeters_override\" IS NULL OR \"manual_width_millimeters_override\" > 0) " +
-                    "AND (\"manual_height_millimeters_override\" IS NULL OR \"manual_height_millimeters_override\" > 0)");
+                    "AND (\"manual_height_millimeters_override\" IS NULL OR \"manual_height_millimeters_override\" > 0) " +
+                    "AND (\"base_quantity\" IS NULL OR \"base_quantity\" > 0) " +
+                    "AND (\"base_width_millimeters\" IS NULL OR \"base_width_millimeters\" > 0) " +
+                    "AND (\"base_height_millimeters\" IS NULL OR \"base_height_millimeters\" > 0) " +
+                    "AND \"sequence\" > 0");
+
+                tableBuilder.HasCheckConstraint(
+                    "ck_requirement_technical_proposal_items_source_extracted_item",
+                    "(\"source\" = 'AiExtracted' AND \"requirement_extracted_item_id\" IS NOT NULL) OR " +
+                    "(\"source\" = 'Manual' AND \"requirement_extracted_item_id\" IS NULL)");
 
                 tableBuilder.HasCheckConstraint(
                     "ck_requirement_technical_proposal_items_historical_support",
@@ -49,7 +58,55 @@ public sealed class RequirementTechnicalProposalItemConfiguration
         builder.Property(item => item.RequirementExtractedItemId)
             .HasColumnName("requirement_extracted_item_id")
             .HasColumnType("uuid")
+            .IsRequired(false);
+
+        builder.Property(item => item.Source)
+            .HasColumnName("source")
+            .HasColumnType("varchar(30)")
+            .HasMaxLength(30)
+            .HasConversion<string>()
             .IsRequired();
+
+        builder.Property(item => item.Sequence)
+            .HasColumnName("sequence")
+            .IsRequired();
+
+        builder.Property(item => item.Reference)
+            .HasColumnName("reference")
+            .HasColumnType("varchar(200)")
+            .HasMaxLength(200)
+            .IsRequired(false);
+
+        builder.Property(item => item.Description)
+            .HasColumnName("description")
+            .HasColumnType("varchar(1000)")
+            .HasMaxLength(1000)
+            .IsRequired();
+
+        builder.Property(item => item.ElementType)
+            .HasColumnName("element_type")
+            .HasColumnType("varchar(50)")
+            .HasMaxLength(50)
+            .HasConversion<string>()
+            .IsRequired();
+
+        builder.Property(item => item.BaseQuantity)
+            .HasColumnName("base_quantity")
+            .IsRequired(false);
+
+        builder.Property(item => item.BaseWidthMillimeters)
+            .HasColumnName("base_width_millimeters")
+            .IsRequired(false);
+
+        builder.Property(item => item.BaseHeightMillimeters)
+            .HasColumnName("base_height_millimeters")
+            .IsRequired(false);
+
+        builder.Property(item => item.ManualNote)
+            .HasColumnName("manual_note")
+            .HasColumnType("varchar(1000)")
+            .HasMaxLength(1000)
+            .IsRequired(false);
 
         builder.Property(item => item.SuggestedSystemId)
             .HasColumnName("suggested_system_id")
@@ -285,6 +342,11 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .IsUnique()
             .HasDatabaseName(
                 "ux_requirement_technical_proposal_items_extracted_item_id");
+
+        builder.HasIndex(item => new { item.TechnicalProposalId, item.Sequence })
+            .IsUnique()
+            .HasDatabaseName(
+                "ux_requirement_technical_proposal_items_proposal_sequence");
 
         builder.HasIndex(item => item.SelectedSystemId)
             .HasDatabaseName(

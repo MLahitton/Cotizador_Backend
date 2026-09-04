@@ -14,6 +14,7 @@ public sealed class RequirementPricingControllerTests
         var item = new TechnicalProposalPricingItemReadModel(
             Guid.NewGuid(),
             Guid.NewGuid(),
+            "AI_EXTRACTED",
             "element-1",
             1,
             "A",

@@ -550,7 +550,7 @@ public sealed class PriceRequirementTechnicalProposalService(
         var commercialLine = proposal.Requirement?.CommercialLine is { } line
             ? line.ToString().ToUpperInvariant()
             : null;
-        foreach (var item in proposal.IncludedItems.OrderBy(value => value.ExtractedItem.Sequence).ThenBy(value => value.Id))
+        foreach (var item in proposal.IncludedItems.OrderBy(value => value.Sequence).ThenBy(value => value.Id))
         {
             cancellationToken.ThrowIfCancellationRequested();
             items.Add(await PriceItemAsync(
@@ -597,7 +597,6 @@ public sealed class PriceRequirementTechnicalProposalService(
         bool requireSystemMatchedComparable,
         CancellationToken cancellationToken)
     {
-        var item = proposalItem.ExtractedItem;
         var missing = new List<string>();
         ProductSystemCatalogReadModel? system = null;
         GlassTypeCatalogReadModel? glass = null;
@@ -688,11 +687,12 @@ public sealed class PriceRequirementTechnicalProposalService(
 
         return new TechnicalProposalPricingItemReadModel(
             proposalItem.Id,
-            item.Id,
-            item.Ai2ElementId,
-            item.Sequence,
-            item.Reference,
-            item.Description,
+            proposalItem.RequirementExtractedItemId,
+            ToContract(proposalItem.Source),
+            proposalItem.ExtractedItem?.Ai2ElementId,
+            proposalItem.Sequence,
+            proposalItem.Reference,
+            proposalItem.Description,
             status,
             effective.Source,
             mapping.Quantity,
@@ -747,11 +747,12 @@ public sealed class PriceRequirementTechnicalProposalService(
         var item = proposalItem.ExtractedItem;
         return new TechnicalProposalPricingItemReadModel(
             proposalItem.Id,
-            item.Id,
-            item.Ai2ElementId,
-            item.Sequence,
-            item.Reference,
-            item.Description,
+            proposalItem.RequirementExtractedItemId,
+            ToContract(proposalItem.Source),
+            proposalItem.ExtractedItem?.Ai2ElementId,
+            proposalItem.Sequence,
+            proposalItem.Reference,
+            proposalItem.Description,
             status,
             configurationSource,
             proposalItem.EffectiveQuantity,
@@ -828,7 +829,7 @@ public sealed class PriceRequirementTechnicalProposalService(
         var itemsById = proposal.Items.ToDictionary(item => item.Id);
         var items = snapshot.Items
             .OrderBy(value => itemsById[value.TechnicalProposalItemId]
-                .ExtractedItem.Sequence)
+                .Sequence)
             .ThenBy(value => value.TechnicalProposalItemId)
             .Select(itemSnapshot =>
             {
@@ -1169,6 +1170,11 @@ public sealed class PriceRequirementTechnicalProposalService(
     private static decimal? Multiply(decimal? value, decimal quantity) =>
         value is null ? null : value.Value * quantity;
 
+    private static string ToContract(TechnicalProposalItemSource source) =>
+        source == TechnicalProposalItemSource.Manual
+            ? "MANUAL"
+            : "AI_EXTRACTED";
+
     private static decimal? DisplayPricingArea(
         RequirementTechnicalProposalItem proposalItem) =>
         proposalItem.EffectiveWidthMillimeters is > 0
@@ -1176,7 +1182,9 @@ public sealed class PriceRequirementTechnicalProposalService(
             ? proposalItem.EffectiveWidthMillimeters.Value
                 * proposalItem.EffectiveHeightMillimeters.Value
                 / 1_000_000m
-            : proposalItem.ExtractedItem.AreaSquareMeters;
+            : proposalItem.Source == TechnicalProposalItemSource.AiExtracted
+                ? proposalItem.ExtractedItem?.AreaSquareMeters
+                : null;
 
     private static CommercialState CurrentCommercialState(
         RequirementTechnicalProposalItem proposalItem)

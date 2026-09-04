@@ -26,7 +26,8 @@ public sealed record RequirementPricingRangeResponse(
 
 public sealed record RequirementPricingItemResponse(
     Guid ProposalItemId,
-    Guid ExtractedItemId,
+    Guid? ExtractedItemId,
+    string Source,
     string? ElementId,
     int Sequence,
     string? Reference,

@@ -241,6 +241,13 @@ public sealed class BuildRequirementTechnicalProposalService(
             suggestedSystemId,
             suggestedGlassId,
             suggestedFinishId,
+            item.Sequence,
+            item.Reference,
+            item.Description,
+            item.ElementType,
+            item.Quantity,
+            item.WidthMillimeters,
+            item.HeightMillimeters,
             overallConfidence,
             systemConfidence,
             glassConfidence,
@@ -643,7 +650,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             var match = System.Text.RegularExpressions.Regex.Match(
                 text,
-                @"\b(?<count>\d{1,2})\s*(?:hojas|leafs|leaves|naves|panel(?:es)?\s+m[oÃ³]vil(?:es)?)\s*(?:de|=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                @"\b(?<count>\d{1,2})\s*(?:hojas|leafs|leaves|naves|panel(?:es)?\s+m[oÃƒÂ³]vil(?:es)?)\s*(?:de|=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!match.Success)
             {
@@ -672,7 +679,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             var match = System.Text.RegularExpressions.Regex.Match(
                 text,
-                @"\b(?:(?:ancho|width)\s+(?:de\s+)?(?:hoja|leaf|nave|panel\s+m[oÃ³]vil|abertura|opening|vano\s+[uÃº]til|luz)|(?:hoja|leaf|nave|panel\s+m[oÃ³]vil|abertura|opening|vano\s+[uÃº]til|luz)\s+(?:width|ancho))\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                @"\b(?:(?:ancho|width)\s+(?:de\s+)?(?:hoja|leaf|nave|panel\s+m[oÃƒÂ³]vil|abertura|opening|vano\s+[uÃƒÂº]til|luz)|(?:hoja|leaf|nave|panel\s+m[oÃƒÂ³]vil|abertura|opening|vano\s+[uÃƒÂº]til|luz)\s+(?:width|ancho))\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             return match.Success
                 ? ToMillimeters(
@@ -958,7 +965,7 @@ public sealed class BuildRequirementTechnicalProposalService(
             var count = System.Text.RegularExpressions.Regex
                 .Match(
                     text,
-                    @"(?<count>\d{1,2})\s*(tramos|panos|paÃ±os|paños|cuerpos|segmentos)",
+                    @"(?<count>\d{1,2})\s*(tramos|panos|paÃƒÂ±os|paÃ±os|cuerpos|segmentos)",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!count.Success)
             {
@@ -1100,7 +1107,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         || Contains(item.FunctionalType, "SHOWER_DIVISION")
         || Contains(item.FunctionalType, "BATHROOM_DIVISION")
         || Contains(item.Description, "DIVISION DE BANO")
-        || Contains(item.Description, "DIVISION DE BAÑO");
+        || Contains(item.Description, "DIVISION DE BAÃ‘O");
 
     private static bool IsRailingOrGuardrail(RequirementExtractedItem item) =>
         item.ElementType == StructuredElementType.Railing

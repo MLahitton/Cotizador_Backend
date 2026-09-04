@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
@@ -329,7 +329,8 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                 || name.Contains("Expected", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("Maximum", StringComparison.OrdinalIgnoreCase)
                 || name.Contains("UnitPrice", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("Total", StringComparison.OrdinalIgnoreCase))
+                || (name.Contains("Total", StringComparison.OrdinalIgnoreCase)
+                    && name != "TotalProposalItemCount"))
             .ToArray();
 
         Assert.Empty(forbidden);
@@ -584,6 +585,13 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             systemId,
             glassId,
             finishId,
+            item.Sequence,
+            item.Reference,
+            item.Description,
+            item.ElementType,
+            item.Quantity,
+            item.WidthMillimeters,
+            item.HeightMillimeters,
             0.83m,
             0.90m,
             0.88m,

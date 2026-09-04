@@ -1173,9 +1173,10 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
         var proposal = RequirementTechnicalProposal.Create(requirement.Id, Guid.NewGuid(), Guid.NewGuid(), false, At);
         SetPrivateProperty(proposal, "Requirement", requirement);
-        foreach (var item in items)
+        foreach (var (item, index) in items.Select((item, index) => (item, index)))
         {
             SetPrivateProperty(item, "TechnicalProposalId", proposal.Id);
+            SetPrivateProperty(item, "Sequence", index + 1);
             proposal.AddItem(item);
         }
         if (confirmProposal)
@@ -1343,6 +1344,13 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             SystemNapolesId,
             GlassTemp6Id,
             FinishBlackId,
+            item.Sequence,
+            item.Reference,
+            item.Description,
+            item.ElementType,
+            item.Quantity,
+            item.WidthMillimeters,
+            item.HeightMillimeters,
             0.90m,
             0.90m,
             0.90m,

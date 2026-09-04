@@ -143,6 +143,9 @@ public sealed class RequirementTechnicalProposalController(
                 proposal.CommercialConfirmation.ConfirmedByUserId),
             proposal.CreatedAtUtc,
             proposal.ItemCount,
+            proposal.DetectedItemCount,
+            proposal.ManualItemCount,
+            proposal.TotalProposalItemCount,
             proposal.ItemsRequiringReview,
             proposal.TechnicallyCompleteItems,
             proposal.PriceableItems,
@@ -154,6 +157,7 @@ public sealed class RequirementTechnicalProposalController(
         new(
             item.ItemId,
             item.ExtractedItemId,
+            item.Source,
             item.ElementId,
             item.Sequence,
             item.Reference,
@@ -175,6 +179,7 @@ public sealed class RequirementTechnicalProposalController(
             item.ExclusionReason,
             item.ExtractionConfidence,
             item.ExtractionStatus,
+            item.ManualNote,
             new RequirementTechnicalProposalSuggestedResponse(
                 Map(item.Suggested.System),
                 Map(item.Suggested.Glass),

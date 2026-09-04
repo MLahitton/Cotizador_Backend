@@ -1,4 +1,4 @@
-﻿using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.PreQuotes;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -662,6 +662,13 @@ public sealed class RequirementRepositoryTests(
             null,
             null,
             null,
+            1,
+            "A",
+            "Ventana",
+            StructuredElementType.Window,
+            1,
+            1000,
+            1000,
             0.9m,
             0.9m,
             0.9m,

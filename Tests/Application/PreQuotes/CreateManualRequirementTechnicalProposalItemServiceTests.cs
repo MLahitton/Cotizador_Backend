@@ -1,126 +1,89 @@
 using System.Reflection;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
-using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
+using Application.PreQuotes.CreateManualRequirementTechnicalProposalItem;
 using CotizadorBackend.Tests.TestDoubles;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
-using FluentValidation;
 using NSubstitute;
 using Xunit;
 using ProjectEntity = Domain.Projects.Project;
 
 namespace CotizadorBackend.Tests.Application.PreQuotes;
 
-public sealed class UpdateRequirementTechnicalProposalItemInclusionServiceTests
+public sealed class CreateManualRequirementTechnicalProposalItemServiceTests
 {
     private static readonly Guid UserId =
         Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid SystemId =
+        Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid GlassId =
+        Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid FinishId =
+        Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly DateTimeOffset At =
-        new(2026, 9, 3, 12, 0, 0, TimeSpan.Zero);
+        new(2026, 9, 4, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task Execute_WithIncludedItemExclusion_OpensTransactionAndInvalidatesConfirmation()
+    public async Task Execute_WithValidRequest_AddsManualIncludedItemAndInvalidatesConfirmation()
     {
         var context = CreateContext(confirmProposal: true);
         var initialRevision = context.Proposal.CommercialRevision;
 
         var result = await context.Service.ExecuteAsync(
-            new UpdateRequirementTechnicalProposalItemInclusionCommand(
+            new CreateManualRequirementTechnicalProposalItemCommand(
                 context.Requirement.Id,
-                context.Item.Id,
-                false,
-                "Fuera de alcance"),
+                "M-02",
+                "Ventana manual",
+                "WINDOW",
+                2,
+                1500,
+                2400,
+                SystemId,
+                GlassId,
+                FinishId,
+                "Agregada por plano"),
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        Assert.False(context.Item.IsIncluded);
-        Assert.Equal(UserId, context.Item.ExcludedByUserId);
-        Assert.Equal(At, context.Item.ExcludedAtUtc);
-        Assert.Equal("Fuera de alcance", context.Item.ExclusionReason);
-        Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
+        Assert.NotNull(result.Item);
+        Assert.Equal("Manual", result.Item!.Source);
+        Assert.Equal(2, result.Item.Sequence);
+        Assert.Equal(initialRevision + 1, result.Item.CommercialRevision);
         Assert.False(context.Proposal.IsCommerciallyConfirmed);
         Assert.Equal(["begin", "find", "save", "commit"], context.Calls);
-    }
 
-    [Fact]
-    public async Task Execute_WithExcludedItemReactivation_IncrementsRevision()
-    {
-        var context = CreateContext();
-        context.Item.Exclude(UserId, At.AddMinutes(-5), "Fuera de alcance");
-        var initialRevision = context.Proposal.CommercialRevision;
-
-        var result = await context.Service.ExecuteAsync(
-            new UpdateRequirementTechnicalProposalItemInclusionCommand(
-                context.Requirement.Id,
-                context.Item.Id,
-                true),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsSuccess);
-        Assert.True(context.Item.IsIncluded);
-        Assert.Null(context.Item.ExcludedAtUtc);
-        Assert.Null(context.Item.ExcludedByUserId);
-        Assert.Null(context.Item.ExclusionReason);
-        Assert.Equal(initialRevision + 1, context.Proposal.CommercialRevision);
-        Assert.Equal(["begin", "find", "save", "commit"], context.Calls);
-    }
-
-    [Fact]
-    public async Task Execute_WithAlreadyExcludedItem_DoesNotIncrementRevision()
-    {
-        var context = CreateContext();
-        context.Item.Exclude(UserId, At.AddMinutes(-5), "Fuera de alcance");
-        var initialRevision = context.Proposal.CommercialRevision;
-
-        var result = await context.Service.ExecuteAsync(
-            new UpdateRequirementTechnicalProposalItemInclusionCommand(
-                context.Requirement.Id,
-                context.Item.Id,
-                false,
-                "Otro motivo"),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsSuccess);
-        Assert.False(context.Item.IsIncluded);
-        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
-        Assert.Equal("Fuera de alcance", context.Item.ExclusionReason);
-        Assert.Equal(["begin", "find", "save", "commit"], context.Calls);
-    }
-
-    [Fact]
-    public async Task Execute_WithAlreadyIncludedItem_DoesNotIncrementRevision()
-    {
-        var context = CreateContext(confirmProposal: true);
-        var initialRevision = context.Proposal.CommercialRevision;
-
-        var result = await context.Service.ExecuteAsync(
-            new UpdateRequirementTechnicalProposalItemInclusionCommand(
-                context.Requirement.Id,
-                context.Item.Id,
-                true),
-            TestContext.Current.CancellationToken);
-
-        Assert.True(result.IsSuccess);
-        Assert.True(context.Item.IsIncluded);
-        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
-        Assert.True(context.Proposal.IsCommerciallyConfirmed);
-        Assert.Equal(["begin", "find", "save", "commit"], context.Calls);
+        var manual = Assert.Single(
+            context.Proposal.Items,
+            item => item.Source == TechnicalProposalItemSource.Manual);
+        Assert.Null(manual.RequirementExtractedItemId);
+        Assert.True(manual.IsIncluded);
+        Assert.Equal("M-02", manual.Reference);
+        Assert.Equal("Ventana manual", manual.Description);
+        Assert.Equal(2, manual.EffectiveQuantity);
+        Assert.Equal(1500, manual.EffectiveWidthMillimeters);
+        Assert.Equal(2400, manual.EffectiveHeightMillimeters);
+        Assert.Equal(SystemId, manual.SelectedSystemId);
+        Assert.Equal(GlassId, manual.SelectedGlassTypeId);
+        Assert.Equal(FinishId, manual.SelectedFinishTypeId);
+        Assert.Equal("Agregada por plano", manual.ManualNote);
     }
 
     private static Context CreateContext(bool confirmProposal = false)
     {
-        var validator =
-            new UpdateRequirementTechnicalProposalItemInclusionCommandValidator();
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var projects = Substitute.For<IProjectRepository>();
         var clients = Substitute.For<IClientRepository>();
+        var systems = Substitute.For<IProductSystemCatalogRepository>();
+        var glasses = Substitute.For<IGlassTypeCatalogRepository>();
+        var finishes = Substitute.For<IFinishTypeCatalogRepository>();
         var transaction = Substitute.For<IRequirementPersistenceTransaction>();
         var calls = new List<string>();
 
@@ -216,20 +179,19 @@ public sealed class UpdateRequirementTechnicalProposalItemInclusionServiceTests
             "MATTE",
             null,
             false,
-            At);
-        var proposal = RequirementTechnicalProposal.Create(
+            At);        var proposal = RequirementTechnicalProposal.Create(
             requirement.Id,
             extraction.Id,
             Guid.NewGuid(),
             false,
             At);
         SetPrivateProperty(proposal, "Requirement", requirement);
-        var item = RequirementTechnicalProposalItem.Create(
+        var aiItem = RequirementTechnicalProposalItem.Create(
             proposal.Id,
             extractedItem.Id,
-            Guid.NewGuid(),
-            Guid.NewGuid(),
-            Guid.NewGuid(),
+            SystemId,
+            GlassId,
+            FinishId,
             extractedItem.Sequence,
             extractedItem.Reference,
             extractedItem.Description,
@@ -253,8 +215,8 @@ public sealed class UpdateRequirementTechnicalProposalItemInclusionServiceTests
             null,
             "NotEvaluated",
             At);
-        SetPrivateProperty(item, "ExtractedItem", extractedItem);
-        proposal.AddItem(item);
+        SetPrivateProperty(aiItem, "ExtractedItem", extractedItem);
+        proposal.AddItem(aiItem);
 
         if (confirmProposal)
         {
@@ -302,26 +264,72 @@ public sealed class UpdateRequirementTechnicalProposalItemInclusionServiceTests
             .Returns(project);
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>())
             .Returns(client);
+        systems.ListActiveSelectableAsync(Arg.Any<CancellationToken>())
+            .Returns([ProductSystem()]);
+        glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
+            .Returns([Glass()]);
+        finishes.ListActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([Finish()]);
 
-        var service = new UpdateRequirementTechnicalProposalItemInclusionService(
-            validator,
+        var service = new CreateManualRequirementTechnicalProposalItemService(
+            new CreateManualRequirementTechnicalProposalItemCommandValidator(),
             currentUser,
             identity,
             requirements,
             preQuotes,
             projects,
             clients,
+            systems,
+            glasses,
+            finishes,
             new FixedTimeProvider(At));
 
-        return new Context(
-            service,
-            requirements,
-            transaction,
-            calls,
-            requirement,
-            proposal,
-            item);
+        return new Context(service, requirement, proposal, calls);
     }
+
+    private static ProductSystemCatalogReadModel ProductSystem() =>
+        new(
+            SystemId,
+            "K70",
+            "Sistema K70",
+            "Sistema tecnico K70",
+            "K70",
+            "SLIDING_DOOR",
+            "K70",
+            "SERIE 70",
+            "ESSENTIAL",
+            "STANDARD",
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
+
+    private static GlassTypeCatalogReadModel Glass() =>
+        new(
+            GlassId,
+            "TEMP_6",
+            "Templado 6 mm",
+            null,
+            true,
+            null,
+            IsSelectable: true);
+
+    private static FinishTypeCatalogReadModel Finish() =>
+        new(
+            FinishId,
+            "BLACK",
+            "Negro",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            false,
+            true);
 
     private static void SetPrivateProperty<T>(
         object target,
@@ -337,11 +345,8 @@ public sealed class UpdateRequirementTechnicalProposalItemInclusionServiceTests
     }
 
     private sealed record Context(
-        UpdateRequirementTechnicalProposalItemInclusionService Service,
-        IRequirementRepository Requirements,
-        IRequirementPersistenceTransaction Transaction,
-        List<string> Calls,
+        CreateManualRequirementTechnicalProposalItemService Service,
         Requirement Requirement,
         RequirementTechnicalProposal Proposal,
-        RequirementTechnicalProposalItem Item);
+        List<string> Calls);
 }

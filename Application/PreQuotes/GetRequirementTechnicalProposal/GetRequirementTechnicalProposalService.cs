@@ -215,7 +215,7 @@ public sealed class GetRequirementTechnicalProposalService(
         var finishById = finishes.ToDictionary(finish => finish.Id);
         var sourcesById = SourceMetadataById(files);
         var items = proposal.Items
-            .OrderBy(item => item.ExtractedItem.Sequence)
+            .OrderBy(item => item.Sequence)
             .ThenBy(item => item.Id)
             .Select(item => MapItem(
                 item,
@@ -243,9 +243,12 @@ public sealed class GetRequirementTechnicalProposalService(
                 proposal.CommercialConfirmedByUserId),
             proposal.CreatedAtUtc,
             items.Length,
-            items.Count(item => RequiresReview(item.Readiness)),
-            items.Count(item => IsTechnicallyComplete(item.Readiness)),
-            items.Count(item => IsPriceable(item.Readiness)),
+            items.Count(item => item.Source == "AI_EXTRACTED"),
+            items.Count(item => item.Source == "MANUAL"),
+            items.Length,
+            includedItems.Count(item => RequiresReview(item.Readiness)),
+            includedItems.Count(item => IsTechnicallyComplete(item.Readiness)),
+            includedItems.Count(item => IsPriceable(item.Readiness)),
             readiness,
             items);
     }
@@ -275,30 +278,38 @@ public sealed class GetRequirementTechnicalProposalService(
     {
         var extracted = item.ExtractedItem;
         var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item);
+        var area = item.EffectiveWidthMillimeters is > 0
+            && item.EffectiveHeightMillimeters is > 0
+                ? item.EffectiveWidthMillimeters.Value
+                    * item.EffectiveHeightMillimeters.Value
+                    / 1_000_000m
+                : extracted?.AreaSquareMeters;
         return new RequirementTechnicalProposalItemReadModel(
             item.Id,
             item.RequirementExtractedItemId,
-            extracted.Ai2ElementId,
-            extracted.Sequence,
-            extracted.Reference,
-            extracted.Description,
-            extracted.ElementType.ToString(),
-            extracted.Quantity,
-            extracted.WidthMillimeters,
-            extracted.HeightMillimeters,
+            ToContract(item.Source),
+            extracted?.Ai2ElementId,
+            item.Sequence,
+            item.Reference,
+            item.Description,
+            item.ElementType.ToString(),
+            item.BaseQuantity,
+            item.BaseWidthMillimeters,
+            item.BaseHeightMillimeters,
             item.ManualQuantityOverride,
             item.ManualWidthMillimetersOverride,
             item.ManualHeightMillimetersOverride,
             item.EffectiveQuantity,
             item.EffectiveWidthMillimeters,
             item.EffectiveHeightMillimeters,
-            extracted.AreaSquareMeters,
+            area,
             item.IsIncluded,
             item.ExcludedAtUtc,
             item.ExcludedByUserId,
             item.ExclusionReason,
-            extracted.Confidence,
-            extracted.ExtractionStatus.ToString(),
+            extracted?.Confidence,
+            extracted?.ExtractionStatus.ToString(),
+            item.ManualNote,
             new RequirementTechnicalProposalSuggestedReadModel(
                 MapSystem(item.SuggestedSystemId, systems),
                 MapGlass(item.SuggestedGlassTypeId, glasses),
@@ -348,21 +359,21 @@ public sealed class GetRequirementTechnicalProposalService(
                     .Select(MapHistoricalExample)
                     .ToArray()),
             new RequirementTechnicalProposalTraceReadModel(
-                extracted.RequestedSystemRaw,
-                extracted.RequestedProfileRaw,
-                extracted.FunctionalType,
-                extracted.Operation,
-                extracted.GlassRawSpecification,
-                extracted.GlassTypeRaw,
-                extracted.GlassTypeNormalized,
-                extracted.GlassThicknessMm,
-                extracted.FinishRawDescription,
-                extracted.FinishNormalizedType,
-                extracted.FinishColorRaw,
-                extracted.FinishColorNormalized,
-                extracted.SpecialFeatures,
-                extracted.GeometryType),
-            extracted.Evidence
+                extracted?.RequestedSystemRaw,
+                extracted?.RequestedProfileRaw,
+                extracted?.FunctionalType,
+                extracted?.Operation,
+                extracted?.GlassRawSpecification,
+                extracted?.GlassTypeRaw,
+                extracted?.GlassTypeNormalized,
+                extracted?.GlassThicknessMm,
+                extracted?.FinishRawDescription,
+                extracted?.FinishNormalizedType,
+                extracted?.FinishColorRaw,
+                extracted?.FinishColorNormalized,
+                extracted?.SpecialFeatures ?? [],
+                extracted?.GeometryType),
+            (extracted?.Evidence ?? [])
                 .OrderBy(evidence => evidence.PageNumber ?? int.MaxValue)
                 .ThenBy(evidence => evidence.SheetName)
                 .ThenBy(evidence => evidence.CellRange)
@@ -520,6 +531,11 @@ public sealed class GetRequirementTechnicalProposalService(
             evidence.Status.ToString());
     }
 
+    private static string ToContract(TechnicalProposalItemSource source) =>
+        source == TechnicalProposalItemSource.Manual
+            ? "MANUAL"
+            : "AI_EXTRACTED";
+
     private static string ToContract(RequirementCommercialLine commercialLine) =>
         commercialLine switch
         {
@@ -611,6 +627,9 @@ public sealed record RequirementTechnicalProposalReadModel(
         CommercialConfirmation,
     DateTimeOffset CreatedAtUtc,
     int ItemCount,
+    int DetectedItemCount,
+    int ManualItemCount,
+    int TotalProposalItemCount,
     int ItemsRequiringReview,
     int TechnicallyCompleteItems,
     int PriceableItems,
@@ -624,7 +643,8 @@ public sealed record RequirementTechnicalProposalCommercialConfirmationReadModel
 
 public sealed record RequirementTechnicalProposalItemReadModel(
     Guid ItemId,
-    Guid ExtractedItemId,
+    Guid? ExtractedItemId,
+    string Source,
     string? ElementId,
     int Sequence,
     string? Reference,
@@ -645,7 +665,8 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     Guid? ExcludedByUserId,
     string? ExclusionReason,
     decimal? ExtractionConfidence,
-    string ExtractionStatus,
+    string? ExtractionStatus,
+    string? ManualNote,
     RequirementTechnicalProposalSuggestedReadModel Suggested,
     RequirementTechnicalProposalSelectedReadModel? Selected,
     string SelectionState,

@@ -47,6 +47,12 @@ public enum TechnicalProposalItemInclusionState
     Excluded = 2
 }
 
+public enum TechnicalProposalItemSource
+{
+    AiExtracted = 1,
+    Manual = 2
+}
+
 public sealed class Requirement
 {
     private Requirement() { }
@@ -963,6 +969,7 @@ public sealed class RequirementExtractedItemEvidence
 
     public Guid Id { get; private set; }
     public Guid RequirementExtractedItemId { get; private set; }
+
     public int? PageNumber { get; private set; }
     public EvidenceSourceType SourceType { get; private set; }
     public string Text { get; private set; } = string.Empty;
@@ -1149,6 +1156,12 @@ public sealed class RequirementTechnicalProposal
                 nameof(item));
         }
 
+        if (_items.Any(current => current.Sequence == item.Sequence))
+        {
+            throw new InvalidOperationException(
+                "Ya existe un item con la misma secuencia en la propuesta.");
+        }
+
         _items.Add(item);
         if (item.RequiresReview)
         {
@@ -1226,7 +1239,16 @@ public sealed class RequirementTechnicalProposalItem
 
     public Guid Id { get; private set; }
     public Guid TechnicalProposalId { get; private set; }
-    public Guid RequirementExtractedItemId { get; private set; }
+    public Guid? RequirementExtractedItemId { get; private set; }
+    public TechnicalProposalItemSource Source { get; private set; }
+    public int Sequence { get; private set; }
+    public string? Reference { get; private set; }
+    public string Description { get; private set; } = string.Empty;
+    public StructuredElementType ElementType { get; private set; }
+    public int? BaseQuantity { get; private set; }
+    public int? BaseWidthMillimeters { get; private set; }
+    public int? BaseHeightMillimeters { get; private set; }
+    public string? ManualNote { get; private set; }
     public Guid? SuggestedSystemId { get; private set; }
     public Guid? SuggestedGlassTypeId { get; private set; }
     public Guid? SuggestedFinishTypeId { get; private set; }
@@ -1259,7 +1281,7 @@ public sealed class RequirementTechnicalProposalItem
     public string HistoricalSimilarityStatus { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; private set; }
     public RequirementTechnicalProposal TechnicalProposal { get; private set; } = null!;
-    public RequirementExtractedItem ExtractedItem { get; private set; } = null!;
+    public RequirementExtractedItem? ExtractedItem { get; private set; }
     public IReadOnlyCollection<RequirementTechnicalProposalSystemAlternative>
         SystemAlternatives => _systemAlternatives;
     public IReadOnlyCollection<RequirementTechnicalProposalGlassAlternative>
@@ -1271,11 +1293,11 @@ public sealed class RequirementTechnicalProposalItem
     public bool IsIncluded =>
         InclusionState == TechnicalProposalItemInclusionState.Included;
     public int? EffectiveQuantity =>
-        ManualQuantityOverride ?? ExtractedItem?.Quantity;
+        ManualQuantityOverride ?? BaseQuantity;
     public int? EffectiveWidthMillimeters =>
-        ManualWidthMillimetersOverride ?? ExtractedItem?.WidthMillimeters;
+        ManualWidthMillimetersOverride ?? BaseWidthMillimeters;
     public int? EffectiveHeightMillimeters =>
-        ManualHeightMillimetersOverride ?? ExtractedItem?.HeightMillimeters;
+        ManualHeightMillimetersOverride ?? BaseHeightMillimeters;
 
     public static RequirementTechnicalProposalItem Create(
         Guid technicalProposalId,
@@ -1283,6 +1305,13 @@ public sealed class RequirementTechnicalProposalItem
         Guid? suggestedSystemId,
         Guid? suggestedGlassTypeId,
         Guid? suggestedFinishTypeId,
+        int sequence,
+        string? reference,
+        string description,
+        StructuredElementType elementType,
+        int? quantity,
+        int? widthMillimeters,
+        int? heightMillimeters,
         decimal overallConfidence,
         decimal systemConfidence,
         decimal glassConfidence,
@@ -1314,6 +1343,7 @@ public sealed class RequirementTechnicalProposalItem
                 nameof(requirementExtractedItemId));
         }
 
+        EnsureBaseFields(sequence, description, elementType, quantity, widthMillimeters, heightMillimeters);
         EnsureConfidence(overallConfidence, nameof(overallConfidence));
         EnsureConfidence(systemConfidence, nameof(systemConfidence));
         EnsureConfidence(glassConfidence, nameof(glassConfidence));
@@ -1334,6 +1364,14 @@ public sealed class RequirementTechnicalProposalItem
             Id = Guid.NewGuid(),
             TechnicalProposalId = technicalProposalId,
             RequirementExtractedItemId = requirementExtractedItemId,
+            Source = TechnicalProposalItemSource.AiExtracted,
+            Sequence = sequence,
+            Reference = RequirementExtractedItem.NormalizeOptional(reference, 200),
+            Description = Requirement.NormalizeRequired(description, nameof(description), 1000),
+            ElementType = elementType,
+            BaseQuantity = quantity,
+            BaseWidthMillimeters = widthMillimeters,
+            BaseHeightMillimeters = heightMillimeters,
             SuggestedSystemId = EmptyToNull(suggestedSystemId),
             SuggestedGlassTypeId = EmptyToNull(suggestedGlassTypeId),
             SuggestedFinishTypeId = EmptyToNull(suggestedFinishTypeId),
@@ -1363,6 +1401,104 @@ public sealed class RequirementTechnicalProposalItem
                 50),
             InclusionState = TechnicalProposalItemInclusionState.Included,
             CreatedAtUtc = createdAtUtc
+        };
+    }
+
+
+    public static RequirementTechnicalProposalItem CreateManual(
+        Guid technicalProposalId,
+        int sequence,
+        string? reference,
+        string? description,
+        StructuredElementType elementType,
+        int quantity,
+        int widthMillimeters,
+        int heightMillimeters,
+        Guid systemId,
+        Guid glassTypeId,
+        Guid finishTypeId,
+        Guid selectedByUserId,
+        DateTimeOffset selectedAtUtc,
+        string? manualNote)
+    {
+        if (technicalProposalId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "La propuesta tecnica es obligatoria.",
+                nameof(technicalProposalId));
+        }
+
+        if (systemId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El sistema seleccionado es obligatorio.",
+                nameof(systemId));
+        }
+
+        if (glassTypeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El vidrio seleccionado es obligatorio.",
+                nameof(glassTypeId));
+        }
+
+        if (finishTypeId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El acabado seleccionado es obligatorio.",
+                nameof(finishTypeId));
+        }
+
+        if (selectedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "El usuario que selecciona es obligatorio.",
+                nameof(selectedByUserId));
+        }
+
+        var normalizedReference = RequirementExtractedItem.NormalizeOptional(reference, 200);
+        var normalizedDescription = string.IsNullOrWhiteSpace(description)
+            ? normalizedReference ?? string.Empty
+            : description;
+        EnsureBaseFields(sequence, normalizedDescription, elementType, quantity, widthMillimeters, heightMillimeters);
+        Requirement.EnsureUtc(selectedAtUtc, nameof(selectedAtUtc));
+
+        return new RequirementTechnicalProposalItem
+        {
+            Id = Guid.NewGuid(),
+            TechnicalProposalId = technicalProposalId,
+            RequirementExtractedItemId = null,
+            Source = TechnicalProposalItemSource.Manual,
+            Sequence = sequence,
+            Reference = normalizedReference,
+            Description = Requirement.NormalizeRequired(normalizedDescription, nameof(description), 1000),
+            ElementType = elementType,
+            BaseQuantity = quantity,
+            BaseWidthMillimeters = widthMillimeters,
+            BaseHeightMillimeters = heightMillimeters,
+            SelectedSystemId = systemId,
+            SelectedGlassTypeId = glassTypeId,
+            SelectedFinishTypeId = finishTypeId,
+            SelectedByUserId = selectedByUserId,
+            SelectedAtUtc = selectedAtUtc,
+            OverallConfidence = 1m,
+            SystemConfidence = 1m,
+            GlassConfidence = 1m,
+            FinishConfidence = 1m,
+            RequiresReview = false,
+            IsTechnicallyComplete = true,
+            IsPriceable = true,
+            ReviewReasons = [],
+            SystemResolutionReasons = [],
+            GlassResolutionReasons = [],
+            FinishResolutionReasons = [],
+            HistoricalSupportCount = 0,
+            HistoricalBestSimilarity = null,
+            HistoricalAverageSimilarity = null,
+            HistoricalSimilarityStatus = "NO_COMPARABLES",
+            InclusionState = TechnicalProposalItemInclusionState.Included,
+            ManualNote = RequirementExtractedItem.NormalizeOptional(manualNote, 1000),
+            CreatedAtUtc = selectedAtUtc
         };
     }
 
@@ -1480,6 +1616,34 @@ public sealed class RequirementTechnicalProposalItem
         return SuggestedSystemId is not null
             && SuggestedGlassTypeId is not null
             && SuggestedFinishTypeId is not null;
+    }
+
+    private static void EnsureBaseFields(
+        int sequence,
+        string description,
+        StructuredElementType elementType,
+        int? quantity,
+        int? widthMillimeters,
+        int? heightMillimeters)
+    {
+        if (sequence < 1)
+        {
+            throw new ArgumentException(
+                "La secuencia del item debe ser positiva.",
+                nameof(sequence));
+        }
+
+        _ = Requirement.NormalizeRequired(description, nameof(description), 1000);
+        if (!Enum.IsDefined(elementType))
+        {
+            throw new ArgumentException(
+                "El tipo de elemento no es valido.",
+                nameof(elementType));
+        }
+
+        RequirementExtractedItem.EnsurePositive(quantity, nameof(quantity));
+        RequirementExtractedItem.EnsurePositive(widthMillimeters, nameof(widthMillimeters));
+        RequirementExtractedItem.EnsurePositive(heightMillimeters, nameof(heightMillimeters));
     }
 
     private void AddAlternative<T>(T value, List<T> target)
