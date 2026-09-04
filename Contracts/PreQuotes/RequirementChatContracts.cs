@@ -7,7 +7,8 @@ public sealed record RequirementChatResponse(
     string Scope,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    IReadOnlyList<RequirementChatMessageResponse> Messages);
+    IReadOnlyList<RequirementChatMessageResponse> Messages,
+    RequirementChatInteractionResponse? LastInteraction = null);
 
 public sealed record RequirementChatMessageResponse(
     Guid MessageId,
@@ -17,3 +18,19 @@ public sealed record RequirementChatMessageResponse(
     DateTimeOffset CreatedAtUtc);
 
 public sealed record SendRequirementChatMessageRequest(string Message);
+
+public sealed record RequirementChatInteractionResponse(
+    string MessageType,
+    Guid? PlanId,
+    bool RequiresConfirmation,
+    string? ActionType,
+    RequirementChatActionTargetResponse? Target,
+    string? CurrentValue,
+    string? RequestedValue,
+    string? PricingImpactExpected,
+    string? PricingStatus,
+    IReadOnlyList<string> Reasons);
+
+public sealed record RequirementChatActionTargetResponse(
+    Guid? TechnicalProposalItemId,
+    string? Reference);

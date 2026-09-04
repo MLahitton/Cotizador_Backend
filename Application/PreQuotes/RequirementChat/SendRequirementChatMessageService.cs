@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.GetRequirementDetails;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
+using Application.PreQuotes.RequirementChatActions;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.RequirementChat;
@@ -14,16 +15,31 @@ public sealed record SendRequirementChatMessageCommand(
 public sealed record SendRequirementChatMessageResult(
     bool IsSuccess,
     RequirementChatFailure Failure,
-    RequirementChatThreadReadModel? Thread)
+    RequirementChatThreadReadModel? Thread,
+    RequirementChatInteractionReadModel? LastInteraction = null)
 {
     public static SendRequirementChatMessageResult Success(
-        RequirementChatThreadReadModel thread) =>
-        new(true, RequirementChatFailure.None, thread);
+        RequirementChatThreadReadModel thread,
+        RequirementChatInteractionReadModel? lastInteraction = null) =>
+        new(true, RequirementChatFailure.None, thread, lastInteraction);
 
     public static SendRequirementChatMessageResult Failed(
         RequirementChatFailure failure) =>
-        new(false, failure, null);
+        new(false, failure, null, null);
 }
+
+public sealed record RequirementChatInteractionReadModel(
+    string MessageType,
+    Guid? PlanId,
+    bool RequiresConfirmation,
+    string? ActionType,
+    Guid? TargetTechnicalProposalItemId,
+    string? TargetReference,
+    string? CurrentValue,
+    string? RequestedValue,
+    string? PricingImpactExpected,
+    string? PricingStatus,
+    IReadOnlyList<string> Reasons);
 
 public sealed class SendRequirementChatMessageService(
     ICurrentUser currentUser,
@@ -32,6 +48,7 @@ public sealed class SendRequirementChatMessageService(
     GetRequirementDetailsService getRequirementDetailsService,
     GetRequirementTechnicalProposalService getTechnicalProposalService,
     IRequirementRepository requirementRepository,
+    PlanRequirementChatActionService planActionService,
     TimeProvider timeProvider)
 {
     private const int ConversationLimit = 20;
@@ -127,13 +144,15 @@ public sealed class SendRequirementChatMessageService(
                 RequirementChatFailure.QueryError);
         }
 
-        RequirementChatAiResponse response;
+        var scopeContract = GetRequirementChatService.ToContract(scope);
+        RequirementChatActionIntent intent;
         try
         {
-            response = await aiClient.RespondAsync(
-                new RequirementChatAiRequest(
-                    GetRequirementChatService.ToContract(scope),
+            intent = await aiClient.InterpretActionAsync(
+                new RequirementChatActionInterpretationRequest(
                     command.Message.Trim(),
+                    scopeContract,
+                    command.TechnicalProposalItemId,
                     conversation.Select(message =>
                             new RequirementChatAiConversationMessage(
                                 message.Role == RequirementChatMessageRole.User
@@ -148,6 +167,94 @@ public sealed class SendRequirementChatMessageService(
         {
             return SendRequirementChatMessageResult.Failed(
                 RequirementChatFailure.Ai2Unavailable);
+        }
+
+        RequirementChatAiResponse response;
+        RequirementChatInteractionReadModel interaction;
+        if (!intent.IsAction)
+        {
+            try
+            {
+                response = await aiClient.RespondAsync(
+                    new RequirementChatAiRequest(
+                        scopeContract,
+                        command.Message.Trim(),
+                        conversation.Select(message =>
+                                new RequirementChatAiConversationMessage(
+                                    message.Role == RequirementChatMessageRole.User
+                                        ? "user"
+                                        : "assistant",
+                                    message.Content))
+                            .ToArray(),
+                        context.Context!),
+                    cancellationToken);
+            }
+            catch (RequirementChatAiUnavailableException)
+            {
+                return SendRequirementChatMessageResult.Failed(
+                    RequirementChatFailure.Ai2Unavailable);
+            }
+
+            interaction = new RequirementChatInteractionReadModel(
+                "INFORMATIONAL",
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                []);
+        }
+        else if (intent.RequiresClarification
+            || string.Equals(intent.ActionType, "UNKNOWN", StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(intent.ActionType))
+        {
+            var message = string.IsNullOrWhiteSpace(intent.ClarificationReason)
+                ? "Necesito un poco mas de informacion para preparar esa accion."
+                : intent.ClarificationReason.Trim();
+            response = new RequirementChatAiResponse(message);
+            interaction = new RequirementChatInteractionReadModel(
+                "CLARIFICATION",
+                null,
+                false,
+                intent.ActionType,
+                null,
+                intent.TargetReference,
+                null,
+                intent.RequestedValue,
+                null,
+                null,
+                string.IsNullOrWhiteSpace(intent.ClarificationReason)
+                    ? []
+                    : [intent.ClarificationReason.Trim()]);
+        }
+        else
+        {
+            var planResult = await planActionService.ExecuteAsync(
+                new PlanRequirementChatActionCommand(
+                    command.RequirementId,
+                    command.TechnicalProposalItemId,
+                    intent.Scope ?? scopeContract,
+                    intent.ActionType,
+                    null,
+                    intent.TargetReference,
+                    intent.RequestedValue,
+                    intent.RequestedQuantity,
+                    intent.RequestedWidthMm,
+                    intent.RequestedHeightMm,
+                    intent.RawUserMessage ?? command.Message.Trim()),
+                cancellationToken);
+            if (!planResult.IsSuccess || planResult.Plan is null)
+            {
+                return SendRequirementChatMessageResult.Failed(
+                    RequirementChatFailure.QueryError);
+            }
+
+            interaction = ToInteraction(planResult.Plan);
+            response = new RequirementChatAiResponse(ToAssistantMessage(planResult.Plan));
         }
 
         try
@@ -169,7 +276,8 @@ public sealed class SendRequirementChatMessageService(
                 thread.Id,
                 cancellationToken);
             return SendRequirementChatMessageResult.Success(
-                GetRequirementChatService.MapThread(thread, messages));
+                GetRequirementChatService.MapThread(thread, messages),
+                interaction);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -373,4 +481,53 @@ public sealed class SendRequirementChatMessageService(
     private sealed record ContextBuildResult(
         RequirementChatFailure Failure,
         object? Context);
+
+    private static RequirementChatInteractionReadModel ToInteraction(
+        ChatActionPlanReadModel plan)
+    {
+        var action = plan.Actions.Single();
+        var messageType = plan.Status == "READY_FOR_CONFIRMATION"
+            ? "ACTION_PLAN"
+            : "CLARIFICATION";
+        return new RequirementChatInteractionReadModel(
+            messageType,
+            plan.PlanId,
+            plan.RequiresConfirmation,
+            action.ActionType,
+            action.TargetTechnicalProposalItemId,
+            action.TargetReference,
+            action.CurrentValue,
+            action.RequestedValue,
+            plan.Status == "READY_FOR_CONFIRMATION" ? "POSSIBLE_REPRICE" : null,
+            plan.PricingStatus,
+            action.ValidationReasons.Concat(plan.ExecutionReasons)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    private static string ToAssistantMessage(ChatActionPlanReadModel plan)
+    {
+        var action = plan.Actions.Single();
+        if (plan.Status == "READY_FOR_CONFIRMATION")
+        {
+            var target = string.IsNullOrWhiteSpace(action.TargetReference)
+                ? action.TargetTechnicalProposalItemId?.ToString()
+                : action.TargetReference;
+            var requested = action.ResolvedCatalogEntity?.DisplayName
+                ?? action.RequestedValue
+                ?? "el valor solicitado";
+            return $"Voy a aplicar {action.ActionType} en {target}: {action.CurrentValue ?? "sin valor actual"} -> {requested}. Confirma para ejecutarlo.";
+        }
+
+        if (action.AvailableOptions.Count > 0)
+        {
+            var options = string.Join(
+                ", ",
+                action.AvailableOptions.Take(5).Select(option => option.DisplayName));
+            return $"Necesito confirmar la accion antes de continuar. Opciones disponibles: {options}.";
+        }
+
+        return action.ValidationReasons.FirstOrDefault()
+            ?? "No pude preparar una accion segura con ese mensaje.";
+    }
 }

@@ -10,6 +10,7 @@ public sealed class CotizadorAi2RequirementChatClient(
     : IRequirementChatAiClient
 {
     private const string ChatPath = "chat/respond";
+    private const string InterpretPath = "chat/actions/interpret";
 
     public async Task<RequirementChatAiResponse> RespondAsync(
         RequirementChatAiRequest request,
@@ -40,6 +41,52 @@ public sealed class CotizadorAi2RequirementChatClient(
             }
 
             return new RequirementChatAiResponse(body.Message.Trim());
+        }
+        catch (OperationCanceledException exception)
+            when (!cancellationToken.IsCancellationRequested
+                  && timeoutSource.IsCancellationRequested)
+        {
+            throw new RequirementChatAiUnavailableException(exception);
+        }
+        catch (HttpRequestException exception)
+        {
+            throw new RequirementChatAiUnavailableException(exception);
+        }
+        catch (InvalidOperationException exception)
+        {
+            throw new RequirementChatAiUnavailableException(exception);
+        }
+    }
+
+    public async Task<RequirementChatActionIntent> InterpretActionAsync(
+        RequirementChatActionInterpretationRequest request,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutSource = CancellationTokenSource
+            .CreateLinkedTokenSource(cancellationToken);
+        timeoutSource.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
+
+        try
+        {
+            using var response = await httpClient.PostAsJsonAsync(
+                InterpretPath,
+                request,
+                timeoutSource.Token);
+
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                throw new RequirementChatAiUnavailableException();
+            }
+
+            var body = await response.Content
+                .ReadFromJsonAsync<RequirementChatActionIntent>(
+                    cancellationToken: timeoutSource.Token);
+            if (body is null)
+            {
+                throw new RequirementChatAiUnavailableException();
+            }
+
+            return body;
         }
         catch (OperationCanceledException exception)
             when (!cancellationToken.IsCancellationRequested

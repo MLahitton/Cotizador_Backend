@@ -57,7 +57,7 @@ public sealed class RequirementChatController(
                 request.Message),
             cancellationToken);
         return result.IsSuccess && result.Thread is { } thread
-            ? Ok(Map(thread))
+            ? Ok(Map(thread, result.LastInteraction))
             : MapFailure(result.Failure);
     }
 
@@ -106,7 +106,7 @@ public sealed class RequirementChatController(
                 request.Message),
             cancellationToken);
         return result.IsSuccess && result.Thread is { } thread
-            ? Ok(Map(thread))
+            ? Ok(Map(thread, result.LastInteraction))
             : MapFailure(result.Failure);
     }
 
@@ -170,7 +170,8 @@ public sealed class RequirementChatController(
         };
 
     private static RequirementChatResponse Map(
-        RequirementChatThreadReadModel thread) =>
+        RequirementChatThreadReadModel thread,
+        RequirementChatInteractionReadModel? interaction = null) =>
         new(
             thread.ThreadId,
             thread.RequirementId,
@@ -183,7 +184,22 @@ public sealed class RequirementChatController(
                 message.Role,
                 message.Content,
                 message.Sequence,
-                message.CreatedAtUtc)).ToArray());
+                message.CreatedAtUtc)).ToArray(),
+            interaction is null
+                ? null
+                : new RequirementChatInteractionResponse(
+                    interaction.MessageType,
+                    interaction.PlanId,
+                    interaction.RequiresConfirmation,
+                    interaction.ActionType,
+                    new RequirementChatActionTargetResponse(
+                        interaction.TargetTechnicalProposalItemId,
+                        interaction.TargetReference),
+                    interaction.CurrentValue,
+                    interaction.RequestedValue,
+                    interaction.PricingImpactExpected,
+                    interaction.PricingStatus,
+                    interaction.Reasons));
 
     private ObjectResult RequirementProblem(
         int statusCode,

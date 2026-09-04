@@ -65,6 +65,7 @@ public sealed record RequirementTechnicalProposalItemResponse(
     bool IsPriceable,
     RequirementTechnicalProposalItemReadinessResponse Readiness,
     RequirementTechnicalProposalHistoricalEvidenceResponse HistoricalEvidence,
+    RequirementTechnicalProposalVisualModelResponse VisualModel,
     RequirementTechnicalProposalTraceResponse Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceResponse> Evidence);
 
@@ -196,6 +197,47 @@ public sealed record RequirementTechnicalProposalHistoricalExampleResponse(
     IReadOnlyList<string> MatchedFeatures,
     IReadOnlyList<string> Differences,
     string TechnicalExplanation);
+
+public sealed record RequirementTechnicalProposalVisualModelResponse(
+    string Version,
+    string Source,
+    RequirementTechnicalProposalVisualSystemResponse? System,
+    string? FunctionalType,
+    string? Operation,
+    string? GeometryType,
+    int? WidthMm,
+    int? HeightMm,
+    int? Quantity,
+    IReadOnlyList<RequirementTechnicalProposalVisualPanelResponse> Panels,
+    IReadOnlyList<RequirementTechnicalProposalVisualDivisionResponse> Divisions,
+    IReadOnlyList<string> SpecialFeatures,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons);
+
+public sealed record RequirementTechnicalProposalVisualSystemResponse(
+    Guid Id,
+    string Code,
+    string DisplayName);
+
+public sealed record RequirementTechnicalProposalVisualPanelResponse(
+    int Index,
+    string Kind,
+    string Role,
+    string? Operation,
+    int? WidthMm,
+    int? HeightMm,
+    decimal? WidthRatio,
+    decimal? HeightRatio,
+    bool? IsMovable,
+    string? OpeningDirection,
+    decimal? Confidence,
+    IReadOnlyList<RequirementTechnicalProposalVisualPanelResponse> SubPanels);
+
+public sealed record RequirementTechnicalProposalVisualDivisionResponse(
+    string Orientation,
+    decimal? PositionRatio,
+    int? PositionMm,
+    string? Source);
 
 public sealed record RequirementTechnicalProposalTraceResponse(
     string? RequestedSystemRaw,

@@ -245,6 +245,32 @@ public sealed class RequirementTechnicalProposalController(
                         example.MatchedFeatures,
                         example.Differences,
                         example.TechnicalExplanation)).ToArray()),
+            new RequirementTechnicalProposalVisualModelResponse(
+                item.VisualModel.Version,
+                item.VisualModel.Source,
+                item.VisualModel.System is null
+                    ? null
+                    : new RequirementTechnicalProposalVisualSystemResponse(
+                        item.VisualModel.System.Id,
+                        item.VisualModel.System.Code,
+                        item.VisualModel.System.DisplayName),
+                item.VisualModel.FunctionalType,
+                item.VisualModel.Operation,
+                item.VisualModel.GeometryType,
+                item.VisualModel.WidthMm,
+                item.VisualModel.HeightMm,
+                item.VisualModel.Quantity,
+                item.VisualModel.Panels.Select(panel =>
+                    Map(panel)).ToArray(),
+                item.VisualModel.Divisions.Select(division =>
+                    new RequirementTechnicalProposalVisualDivisionResponse(
+                        division.Orientation,
+                        division.PositionRatio,
+                        division.PositionMm,
+                        division.Source)).ToArray(),
+                item.VisualModel.SpecialFeatures,
+                item.VisualModel.RequiresReview,
+                item.VisualModel.ReviewReasons),
             new RequirementTechnicalProposalTraceResponse(
                 item.Trace.RequestedSystemRaw,
                 item.Trace.RequestedProfileRaw,
@@ -286,6 +312,22 @@ public sealed class RequirementTechnicalProposalController(
             readiness.PricingBlockingItems,
             readiness.PricingBlockingDefinitions,
             readiness.Categories);
+
+    private static RequirementTechnicalProposalVisualPanelResponse Map(
+        RequirementTechnicalProposalVisualPanelReadModel panel) =>
+        new(
+            panel.Index,
+            panel.Kind,
+            panel.Role,
+            panel.Operation,
+            panel.WidthMm,
+            panel.HeightMm,
+            panel.WidthRatio,
+            panel.HeightRatio,
+            panel.IsMovable,
+            panel.OpeningDirection,
+            panel.Confidence,
+            panel.SubPanels.Select(Map).ToArray());
 
     private static RequirementTechnicalProposalItemReadinessResponse Map(
         RequirementTechnicalProposalItemReadinessReadModel readiness) =>

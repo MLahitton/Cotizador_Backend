@@ -31,6 +31,8 @@ public sealed class BuildRequirementTechnicalProposalService(
         "HISTORICAL_DEFAULT_GLASS";
     private const string HistoricalDefaultFinishReason =
         "HISTORICAL_DEFAULT_FINISH";
+    private const string SystemInoxFinishReason =
+        "SYSTEM_INOX_FINISH";
     private const string QuantityMissingReason = "QUANTITY_MISSING";
     private const string DefaultGlassCode = "TEMP_5";
     private const string DefaultFinishCommercialCode = "PP13";
@@ -157,6 +159,10 @@ public sealed class BuildRequirementTechnicalProposalService(
         var suggestedSystem = systems.FirstOrDefault(system =>
             system.Code == systemSelection.SuggestedSystemCode);
         var suggestedSystemId = suggestedSystem?.Id;
+        finish = ResolveSystemDrivenFinish(
+                suggestedSystem,
+                finishes)
+            ?? finish;
         glass = ApplyConfirmedGlassRules(
                 item,
                 commercialLine,
@@ -1075,6 +1081,41 @@ public sealed class BuildRequirementTechnicalProposalService(
                     DefaultFinishCommercialCode,
                     StringComparison.OrdinalIgnoreCase)));
 
+    private static FinishCandidateResolutionResult? ResolveSystemDrivenFinish(
+        ProductSystemCatalogReadModel? system,
+        IReadOnlyList<FinishTypeCatalogReadModel> finishes)
+    {
+        if (!IsInoxSystem(system))
+        {
+            return null;
+        }
+
+        var finish = finishes.FirstOrDefault(value =>
+            value.IsActive
+            && value.IsSelectable
+            && value.Code.Equals("FINISH_INOX", StringComparison.Ordinal));
+        if (finish is null)
+        {
+            return null;
+        }
+
+        var alternative = new FinishCandidateAlternative(
+            finish.Id,
+            finish.Code,
+            finish.Name,
+            1m,
+            [SystemInoxFinishReason]);
+        return new FinishCandidateResolutionResult(
+            alternative,
+            [alternative],
+            1m,
+            finish.RequiresReview,
+            finish.RequiresReview
+                ? [FinishResolutionReviewReasons.FinishAmbiguous]
+                : [],
+            [SystemInoxFinishReason]);
+    }
+
     private static bool SystemSkipsFinishDefault(
         ProductSystemCatalogReadModel? system)
     {
@@ -1083,15 +1124,30 @@ public sealed class BuildRequirementTechnicalProposalService(
             return false;
         }
 
-        return Contains(system.Code, "INOX")
-            || Contains(system.Name, "INOX")
-            || Contains(system.TechnicalName, "INOX")
-            || Contains(system.CommercialName, "INOX")
-            || Contains(system.Family, "INOX")
-            || Contains(system.Variant, "INOX")
+        return IsInoxSystem(system)
             || IsNotApplicable(system.Code)
             || IsNotApplicable(system.Name);
     }
+
+    private static bool IsInoxSystem(ProductSystemCatalogReadModel? system)
+    {
+        if (system is null)
+        {
+            return false;
+        }
+
+        return IsInoxCatalogValue(system.Variant)
+            || IsInoxCatalogValue(system.Family)
+            || IsInoxCatalogValue(system.TechnicalName)
+            || IsInoxCatalogValue(system.CommercialName)
+            || IsInoxCatalogValue(system.Code);
+    }
+
+    private static bool IsInoxCatalogValue(string? value) =>
+        Contains(value, "INOX")
+        || Contains(value, "ACERO INOXIDABLE")
+        || Contains(value, "STAINLESS_STEEL")
+        || Contains(value, "STAINLESS STEEL");
 
     private static string? CommercialLine(ProductSystemCatalogReadModel? system)
     {

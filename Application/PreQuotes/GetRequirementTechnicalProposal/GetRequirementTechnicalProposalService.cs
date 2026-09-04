@@ -4,6 +4,7 @@ using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.PreQuotes.TechnicalProposalReadiness;
+using Application.PreQuotes.VisualSystemModel;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.GetRequirementTechnicalProposal;
@@ -278,6 +279,11 @@ public sealed class GetRequirementTechnicalProposalService(
     {
         var extracted = item.ExtractedItem;
         var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item);
+        var suggested = new RequirementTechnicalProposalSuggestedReadModel(
+            MapSystem(item.SuggestedSystemId, systems),
+            MapGlass(item.SuggestedGlassTypeId, glasses),
+            MapFinish(item.SuggestedFinishTypeId, finishes));
+        var selected = MapSelected(item, systems, glasses, finishes);
         var area = item.EffectiveWidthMillimeters is > 0
             && item.EffectiveHeightMillimeters is > 0
                 ? item.EffectiveWidthMillimeters.Value
@@ -310,11 +316,8 @@ public sealed class GetRequirementTechnicalProposalService(
             extracted?.Confidence,
             extracted?.ExtractionStatus.ToString(),
             item.ManualNote,
-            new RequirementTechnicalProposalSuggestedReadModel(
-                MapSystem(item.SuggestedSystemId, systems),
-                MapGlass(item.SuggestedGlassTypeId, glasses),
-                MapFinish(item.SuggestedFinishTypeId, finishes)),
-            MapSelected(item, systems, glasses, finishes),
+            suggested,
+            selected,
             SelectionState(item),
             new RequirementTechnicalProposalAlternativesReadModel(
                 item.SystemAlternatives
@@ -358,6 +361,10 @@ public sealed class GetRequirementTechnicalProposalService(
                     .ThenBy(example => example.CandidateId)
                     .Select(MapHistoricalExample)
                     .ToArray()),
+            RequirementVisualSystemModelBuilder.Build(
+                item,
+                suggested.System,
+                selected),
             new RequirementTechnicalProposalTraceReadModel(
                 extracted?.RequestedSystemRaw,
                 extracted?.RequestedProfileRaw,
@@ -681,6 +688,7 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     bool IsPriceable,
     RequirementTechnicalProposalItemReadinessReadModel Readiness,
     RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
+    RequirementTechnicalProposalVisualModelReadModel VisualModel,
     RequirementTechnicalProposalTraceReadModel Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence);
 

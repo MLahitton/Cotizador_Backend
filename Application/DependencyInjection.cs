@@ -36,6 +36,7 @@ using Application.PreQuotes.GetCurrentRequirement;
 using Application.PreQuotes.GetRequirementDetails;
 using Application.PreQuotes.ManageRequirementDocuments;
 using Application.PreQuotes.RequirementChat;
+using Application.PreQuotes.RequirementChatActions;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.Projects.CreateProject;
@@ -92,6 +93,13 @@ public static class DependencyInjection
         services.AddScoped<GetRequirementDetailsService>();
         services.AddScoped<GetRequirementChatService>();
         services.AddScoped<SendRequirementChatMessageService>();
+        services.AddSingleton<IRequirementChatActionPlanStore, InMemoryRequirementChatActionPlanStore>();
+        services.AddScoped<IRequirementChatTechnicalProposalReader, RequirementChatTechnicalProposalReader>();
+        services.AddScoped<IRequirementChatSelectionExecutor, RequirementChatSelectionExecutor>();
+        services.AddScoped<IRequirementChatInclusionExecutor, RequirementChatInclusionExecutor>();
+        services.AddScoped<IRequirementChatPricingExecutor, RequirementChatPricingExecutor>();
+        services.AddScoped<PlanRequirementChatActionService>();
+        services.AddScoped<ConfirmRequirementChatActionService>();
         services.AddScoped<ManageRequirementDocumentsService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemSelectionService>();

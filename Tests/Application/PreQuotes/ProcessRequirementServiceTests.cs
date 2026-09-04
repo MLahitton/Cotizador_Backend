@@ -363,6 +363,29 @@ public sealed class ProcessRequirementServiceTests
         Assert.Contains("HISTORICAL_DEFAULT_FINISH", item.FinishResolutionReasons);
     }
 
+    [Fact]
+    public async Task Execute_WithInoxSystemAndMissingFinish_AppliesInoxFinish()
+    {
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext(
+            "system_inox_missing_finish",
+            File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(proposal!.Items);
+        Assert.Equal("SG_BATH_DIV_INOX", SuggestedSystemCode(context, item));
+        Assert.Equal("FINISH_INOX", SuggestedFinishCode(context, item));
+        Assert.Contains("SYSTEM_INOX_FINISH", item.FinishResolutionReasons);
+        Assert.DoesNotContain("HISTORICAL_DEFAULT_FINISH", item.FinishResolutionReasons);
+    }
+
     [Theory]
     [InlineData("tempered_2400", "TEMP_5")]
     [InlineData("tempered_2401", "TEMP_6")]
@@ -1206,11 +1229,12 @@ public sealed class ProcessRequirementServiceTests
                         CreateResponse(
                             call.Arg<DocumentProcessingClientRequest>(),
                             omitGlassSignal: true))),
-                "missing_finish" => Task.FromResult(
+                "missing_finish" or "system_inox_missing_finish" => Task.FromResult(
                     DocumentProcessingClientResult.Success(
                         CreateResponse(
                             call.Arg<DocumentProcessingClientRequest>(),
-                            omitFinishSignal: true))),
+                            omitFinishSignal: true,
+                            scenario: scenario))),
                 "invalid_evidence_location" => Task.FromResult(
                     DocumentProcessingClientResult.Success(
                         CreateResponse(
@@ -1304,8 +1328,9 @@ public sealed class ProcessRequirementServiceTests
         glassCatalog.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
             .Returns(glassCatalogItems);
         var finishCatalog = Substitute.For<IFinishTypeCatalogRepository>();
+        var finishCatalogItems = FinishCatalogItems();
         finishCatalog.ListActiveAsync(Arg.Any<CancellationToken>())
-            .Returns([Finish("BLACK_MATTE", "ALUCOLOR POLIESTER NEGRO MATE PP13")]);
+            .Returns(finishCatalogItems);
         var similarity = Substitute.For<IHistoricalSimilarityEvaluationService>();
         similarity.EvaluateAsync(Arg.Any<HistoricalCandidateQuery>(),
                 Arg.Any<CancellationToken>())
@@ -1363,14 +1388,16 @@ public sealed class ProcessRequirementServiceTests
             ai2,
             cancellationRegistry,
             glassCatalogItems,
-            productSystemItems);
+            productSystemItems,
+            finishCatalogItems);
     }
 
     private static ProductSystemCatalogReadModel ProductSystem(
         string code,
         string functionalType,
         string family,
-        string commercialLine = "ESSENTIAL") =>
+        string commercialLine = "ESSENTIAL",
+        string variant = "STANDARD") =>
         new(
             Guid.NewGuid(),
             code,
@@ -1381,7 +1408,7 @@ public sealed class ProcessRequirementServiceTests
             family,
             "SERIE 70",
             commercialLine,
-            "STANDARD",
+            variant,
             true,
             true,
             true,
@@ -1402,6 +1429,20 @@ public sealed class ProcessRequirementServiceTests
                 ProductSystem("3890", "SWING_DOOR", "SG 3890", "CLASSIC"),
                 ProductSystem("K40", "FIXED", "VENECIA FERMO"),
                 ProductSystem("SG_LOUVER", "GRILLE", "LOUVER", "SPECIAL")
+            ];
+        }
+
+        if (scenario == "system_inox_missing_finish")
+        {
+            return
+            [
+                ProductSystem(
+                    "SG_BATH_DIV_INOX",
+                    "SHOWER_DIVISION",
+                    "ACERO INOXIDABLE",
+                    "SPECIAL",
+                    "INOX"),
+                ProductSystem("K70", "SLIDING_DOOR", "VENECIA NAPOLES")
             ];
         }
 
@@ -1454,20 +1495,38 @@ public sealed class ProcessRequirementServiceTests
 
     private static FinishTypeCatalogReadModel Finish(
         string code,
-        string name) =>
+        string name,
+        string normalizedType = "PAINTED",
+        string? color = "BLACK",
+        string? texture = "MATTE",
+        string process = "PAINTED",
+        string? material = "ALUMINUM") =>
         new(
             Guid.NewGuid(),
             code,
             name,
-            "PAINTED",
-            "BLACK",
-            "MATTE",
-            "PAINTED",
+            normalizedType,
+            color,
+            texture,
+            process,
             null,
-            "ALUMINUM",
+            material,
             true,
             false,
             true);
+
+    private static IReadOnlyList<FinishTypeCatalogReadModel> FinishCatalogItems() =>
+    [
+        Finish("BLACK_MATTE", "ALUCOLOR POLIESTER NEGRO MATE PP13"),
+        Finish(
+            "FINISH_INOX",
+            "INOX",
+            "STAINLESS_STEEL",
+            null,
+            null,
+            "STAINLESS_STEEL",
+            "STAINLESS_STEEL")
+    ];
 
     private static RequirementFile File(
         string fileName,
@@ -1511,6 +1570,14 @@ public sealed class ProcessRequirementServiceTests
             ? null
             : context.Systems.Single(system =>
                 system.Id == item.SuggestedSystemId).Code;
+
+    private static string? SuggestedFinishCode(
+        Context context,
+        RequirementTechnicalProposalItem item) =>
+        item.SuggestedFinishTypeId is null
+            ? null
+            : context.Finishes.Single(finish =>
+                finish.Id == item.SuggestedFinishTypeId).Code;
 
     private static StructuredItemSegmentData[] CreateSegments(
         IReadOnlyList<string> roles,
@@ -1657,6 +1724,7 @@ public sealed class ProcessRequirementServiceTests
         var elementType = scenario switch
         {
             "special_shower" => StructuredElementType.ShowerDivision,
+            "system_inox_missing_finish" => StructuredElementType.ShowerDivision,
             "special_railing" => StructuredElementType.Railing,
             "assembly_projecting_fixed" => StructuredElementType.Window,
             "assembly_sliding_window_grille" => StructuredElementType.Window,
@@ -1676,6 +1744,7 @@ public sealed class ProcessRequirementServiceTests
         var functionalType = scenario switch
         {
             "special_shower" => "SHOWER_DIVISION",
+            "system_inox_missing_finish" => "SHOWER_DIVISION",
             "special_railing" => "RAILING",
             "assembly_sliding_window_grille" => "SLIDING_WINDOW",
             "assembly_sliding_window_lower_fixed" => "SLIDING_WINDOW",
@@ -2000,5 +2069,6 @@ public sealed class ProcessRequirementServiceTests
         IAi2DocumentProcessingClient Ai2,
         IOperationCancellationRegistry CancellationRegistry,
         IReadOnlyList<GlassTypeCatalogReadModel> Glasses,
-        IReadOnlyList<ProductSystemCatalogReadModel> Systems);
+        IReadOnlyList<ProductSystemCatalogReadModel> Systems,
+        IReadOnlyList<FinishTypeCatalogReadModel> Finishes);
 }

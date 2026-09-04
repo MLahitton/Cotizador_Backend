@@ -102,6 +102,15 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal("negro pintura al horno", item.Trace.FinishRawDescription);
         Assert.Equal(["POCKET"], item.Trace.SpecialFeatures);
         Assert.Equal("RECTANGULAR", item.Trace.GeometryType);
+        Assert.Equal("SUGGESTED_SYSTEM", item.VisualModel.Source);
+        Assert.Equal("K70", item.VisualModel.System!.Code);
+        Assert.Equal("SLIDING_DOOR", item.VisualModel.FunctionalType);
+        Assert.Equal("SLIDING", item.VisualModel.Operation);
+        Assert.Equal("RECTANGULAR", item.VisualModel.GeometryType);
+        Assert.Equal(3740, item.VisualModel.WidthMm);
+        Assert.Equal(2500, item.VisualModel.HeightMm);
+        Assert.Equal(1, item.VisualModel.Quantity);
+        Assert.Equal(["POCKET"], item.VisualModel.SpecialFeatures);
 
         var evidence = Assert.Single(item.Evidence);
         Assert.Null(evidence.PageNumber);
@@ -301,6 +310,378 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal("MODIFIED", item.SelectionState);
         Assert.Equal(At.AddMinutes(5), item.Selected.SelectedAtUtc);
         Assert.Equal(UserId, item.Selected.SelectedByUserId);
+        Assert.Equal("SELECTED_SYSTEM", item.VisualModel.Source);
+        Assert.Equal("K72", item.VisualModel.System!.Code);
+    }
+
+    [Fact]
+    public async Task Execute_WithFixedSegment_ReturnsFixedVisualPanel()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "FIXED");
+                SetPrivateProperty<string?>(extracted, "Operation", null);
+                SetPrivateProperty<string?>(extracted, "OpeningDirection", null);
+                SetPrivateProperty<int?>(item, "BaseWidthMillimeters", 1000);
+                SetPrivateProperty<int?>(item, "BaseHeightMillimeters", 2000);
+                AddSegment(extracted, 1, "FIXED", 1000, 2000);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var visual = Assert.Single(result.Proposal!.Items).VisualModel;
+        var panel = Assert.Single(visual.Panels);
+        Assert.Equal("SIMPLE", panel.Kind);
+        Assert.Equal("FIXED", panel.Role);
+        Assert.False(panel.IsMovable);
+        Assert.Empty(panel.SubPanels);
+        Assert.Equal(1000, visual.WidthMm);
+        Assert.Equal(2000, visual.HeightMm);
+        Assert.Equal(1m, panel.WidthRatio);
+        Assert.Equal(1m, panel.HeightRatio);
+        Assert.False(visual.RequiresReview);
+    }
+
+    [Fact]
+    public async Task Execute_WithProjectingAndFixedSegments_ReturnsOrderedVisualPanels()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "PROJECTING");
+                SetPrivateProperty(extracted, "Operation", "PROJECTING");
+                SetPrivateProperty(extracted, "OpeningDirection", "OUTWARD");
+                AddSegment(extracted, 1, "FIXED", null, null);
+                AddSegment(extracted, 2, "PROJECTING", null, null, "PROJECTING");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var panels = Assert.Single(result.Proposal!.Items).VisualModel.Panels;
+        Assert.Collection(
+            panels,
+            panel =>
+            {
+                Assert.Equal(1, panel.Index);
+                Assert.Equal("SIMPLE", panel.Kind);
+                Assert.Equal("FIXED", panel.Role);
+                Assert.False(panel.IsMovable);
+                Assert.Empty(panel.SubPanels);
+            },
+            panel =>
+            {
+                Assert.Equal(2, panel.Index);
+                Assert.Equal("SIMPLE", panel.Kind);
+                Assert.Equal("PROJECTING", panel.Role);
+                Assert.True(panel.IsMovable);
+                Assert.Equal("PROJECTING", panel.Operation);
+                Assert.Equal("OUTWARD", panel.OpeningDirection);
+                Assert.Empty(panel.SubPanels);
+            });
+
+        Assert.DoesNotContain(
+            "VISUAL_SUBPANEL_LAYOUT_UNRESOLVED",
+            Assert.Single(result.Proposal.Items).VisualModel.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithExplicitCompositeSegment_ReturnsCompositeVisualPanel()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "PROJECTING");
+                SetPrivateProperty(extracted, "Operation", "PROJECTING");
+                SetPrivateProperty(extracted, "OpeningDirection", "OUTWARD");
+                SetPrivateProperty<int?>(item, "BaseWidthMillimeters", 1300);
+                SetPrivateProperty<int?>(item, "BaseHeightMillimeters", 1800);
+                AddSegment(
+                    extracted,
+                    1,
+                    "COMPOSITE",
+                    1300,
+                    1800,
+                    "FIXED:1400+PROJECTING:400");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var visual = Assert.Single(result.Proposal!.Items).VisualModel;
+        var panel = Assert.Single(visual.Panels);
+        Assert.Equal("COMPOSITE", panel.Kind);
+        Assert.Equal("PROJECTING", panel.Role);
+        Assert.Equal(1300, panel.WidthMm);
+        Assert.Equal(1800, panel.HeightMm);
+        Assert.Equal(1m, panel.WidthRatio);
+        Assert.Equal(1m, panel.HeightRatio);
+        Assert.True(panel.IsMovable);
+        Assert.Null(panel.OpeningDirection);
+        Assert.False(visual.RequiresReview);
+
+        Assert.Collection(
+            panel.SubPanels,
+            subPanel =>
+            {
+                Assert.Equal(1, subPanel.Index);
+                Assert.Equal("SIMPLE", subPanel.Kind);
+                Assert.Equal("FIXED", subPanel.Role);
+                Assert.False(subPanel.IsMovable);
+                Assert.Null(subPanel.OpeningDirection);
+                Assert.Equal(1400m / 1800m, subPanel.HeightRatio);
+                Assert.Empty(subPanel.SubPanels);
+            },
+            subPanel =>
+            {
+                Assert.Equal(2, subPanel.Index);
+                Assert.Equal("SIMPLE", subPanel.Kind);
+                Assert.Equal("PROJECTING", subPanel.Role);
+                Assert.True(subPanel.IsMovable);
+                Assert.Equal("OUTWARD", subPanel.OpeningDirection);
+                Assert.Equal(400m / 1800m, subPanel.HeightRatio);
+                Assert.Empty(subPanel.SubPanels);
+            });
+    }
+
+    [Fact]
+    public async Task Execute_WithMultipleExplicitCompositeSegments_PreservesOrder()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "PROJECTING");
+                SetPrivateProperty(extracted, "Operation", "PROJECTING");
+                SetPrivateProperty(extracted, "OpeningDirection", "OUTWARD");
+                AddSegment(extracted, 1, "FIXED", null, null);
+                AddSegment(
+                    extracted,
+                    2,
+                    "COMPOSITE",
+                    null,
+                    1800,
+                    "FIXED:1400+PROJECTING:400");
+                AddSegment(extracted, 3, "FIXED", null, null);
+                AddSegment(
+                    extracted,
+                    4,
+                    "MODULE",
+                    null,
+                    1800,
+                    "FIXED:1200+PROJECTING:600");
+                AddSegment(extracted, 5, "FIXED", null, null);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var panels = Assert.Single(result.Proposal!.Items).VisualModel.Panels;
+        Assert.Equal([1, 2, 3, 4, 5], panels.Select(panel => panel.Index));
+        Assert.Equal(
+            ["SIMPLE", "COMPOSITE", "SIMPLE", "COMPOSITE", "SIMPLE"],
+            panels.Select(panel => panel.Kind));
+        Assert.Equal(2, panels[1].SubPanels.Count);
+        Assert.Equal(2, panels[3].SubPanels.Count);
+    }
+
+    [Fact]
+    public async Task Execute_WithSlidingSegments_ReturnsMovablePanels()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "SLIDING_WINDOW");
+                SetPrivateProperty(extracted, "Operation", "SLIDING");
+                AddSegment(extracted, 1, "SLIDING", null, null, "SLIDING");
+                AddSegment(extracted, 2, "SLIDING", null, null, "SLIDING");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var panels = Assert.Single(result.Proposal!.Items).VisualModel.Panels;
+        Assert.Equal(2, panels.Count);
+        Assert.All(panels, panel =>
+        {
+            Assert.Equal("SIMPLE", panel.Kind);
+            Assert.Equal("SLIDING", panel.Role);
+            Assert.True(panel.IsMovable);
+            Assert.Empty(panel.SubPanels);
+        });
+    }
+
+    [Fact]
+    public async Task Execute_WithOperationOnlySlidingSegment_UsesPanelCounts()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "SLIDING_DOOR");
+                SetPrivateProperty(extracted, "Operation", "SLIDING");
+                SetPrivateProperty<int?>(extracted, "PanelCount", 4);
+                SetPrivateProperty<int?>(extracted, "MovablePanelCount", 4);
+                SetPrivateProperty<int?>(extracted, "FixedPanelCount", 0);
+                AddSegment(extracted, 1, "SLIDING", null, null, "SLIDING");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var visual = Assert.Single(result.Proposal!.Items).VisualModel;
+        Assert.Equal(4, visual.Panels.Count);
+        Assert.All(visual.Panels, panel =>
+        {
+            Assert.Equal("SIMPLE", panel.Kind);
+            Assert.Equal("SLIDING", panel.Role);
+            Assert.True(panel.IsMovable);
+            Assert.Equal("SLIDING", panel.Operation);
+            Assert.Empty(panel.SubPanels);
+        });
+        Assert.True(visual.RequiresReview);
+        Assert.Contains(
+            "VISUAL_PANEL_ORDER_UNRESOLVED",
+            visual.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithHingedSegment_PreservesOpeningDirection()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "SWING_DOOR");
+                SetPrivateProperty(extracted, "Operation", "HINGED");
+                SetPrivateProperty(extracted, "OpeningDirection", "RIGHT");
+                AddSegment(extracted, 1, "HINGED", null, null, "HINGED");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var panel = Assert.Single(Assert.Single(result.Proposal!.Items).VisualModel.Panels);
+        Assert.Equal("SIMPLE", panel.Kind);
+        Assert.Equal("HINGED", panel.Role);
+        Assert.True(panel.IsMovable);
+        Assert.Equal("RIGHT", panel.OpeningDirection);
+        Assert.Empty(panel.SubPanels);
+    }
+
+    [Fact]
+    public async Task Execute_WithFoldingSegments_UsesStableSequenceOrder()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "FunctionalType", "FOLDING_DOOR");
+                SetPrivateProperty(extracted, "Operation", "FOLDING");
+                AddSegment(extracted, 2, "FOLDING", null, null, "FOLDING");
+                AddSegment(extracted, 1, "FOLDING", null, null, "FOLDING");
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var panels = Assert.Single(result.Proposal!.Items).VisualModel.Panels;
+        Assert.Equal([1, 2], panels.Select(panel => panel.Index).ToArray());
+        Assert.All(panels, panel =>
+        {
+            Assert.Equal("SIMPLE", panel.Kind);
+            Assert.Equal("FOLDING", panel.Role);
+            Assert.True(panel.IsMovable);
+            Assert.Empty(panel.SubPanels);
+        });
+    }
+
+    [Fact]
+    public async Task Execute_WithCornerGeometryWithoutTopology_ReturnsVisualReview()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                Assert.NotNull(item.ExtractedItem);
+                var extracted = item.ExtractedItem!;
+                SetPrivateProperty(extracted, "GeometryType", "CORNER");
+                AddSegment(extracted, 1, "FIXED", null, null);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var visual = Assert.Single(result.Proposal!.Items).VisualModel;
+        Assert.Equal("CORNER", visual.GeometryType);
+        Assert.True(visual.RequiresReview);
+        Assert.Contains(
+            "VISUAL_CORNER_TOPOLOGY_UNRESOLVED",
+            visual.ReviewReasons);
+    }
+
+    [Fact]
+    public async Task Execute_WithNoSelectedOrSuggestedSystem_UsesExtractionOnly()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty<Guid?>(item, "SuggestedSystemId", null);
+                Assert.NotNull(item.ExtractedItem);
+                AddSegment(item.ExtractedItem!, 1, "FIXED", null, null);
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        var visual = Assert.Single(result.Proposal!.Items).VisualModel;
+        Assert.Equal("EXTRACTION_ONLY", visual.Source);
+        Assert.Null(visual.System);
+        Assert.True(visual.RequiresReview);
+        Assert.Contains("VISUAL_SYSTEM_UNRESOLVED", visual.ReviewReasons);
     }
 
     [Fact]
@@ -787,6 +1168,34 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.NotNull(field);
         var list = Assert.IsType<List<T>>(field!.GetValue(target));
         list.Add(value);
+    }
+
+    private static void AddSegment(
+        RequirementExtractedItem item,
+        int sequence,
+        string role,
+        int? widthMillimeters,
+        int? heightMillimeters,
+        string? operation = null)
+    {
+        item.AddSegment(RequirementExtractedItemSegment.Create(
+            item.Id,
+            sequence,
+            role,
+            widthMillimeters,
+            heightMillimeters,
+            null,
+            operation,
+            "RECTANGULAR",
+            $"{role} panel",
+            "source-1",
+            EvidenceSourceType.Native,
+            1,
+            null,
+            null,
+            0.90m,
+            RequirementExtractionValueStatus.Explicit,
+            At));
     }
 
     private sealed record Context(
