@@ -48,6 +48,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         var item = Assert.Single(proposal.Items);
         Assert.Equal("PV-06", item.Reference);
         Assert.Equal("element-pv06", item.ElementId);
+        Assert.Equal(1, item.Quantity);
+        Assert.Null(item.ManualQuantityOverride);
+        Assert.Equal(1, item.EffectiveQuantity);
         Assert.Equal(3740, item.WidthMm);
         Assert.Equal(2500, item.HeightMm);
         Assert.Equal(9.35m, item.AreaM2);
@@ -132,6 +135,41 @@ public sealed class GetRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithExtractedQuantity_ReturnsQuantityAsEffectiveWhenNoManualOverride()
+    {
+        var context = CreateContext(withProposal: true, extractedQuantity: 25);
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.Equal(25, item.Quantity);
+        Assert.Null(item.ManualQuantityOverride);
+        Assert.Equal(25, item.EffectiveQuantity);
+    }
+
+    [Fact]
+    public async Task Execute_WithManualQuantityOverride_ReturnsOverrideAsEffectiveAndKeepsOriginal()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            extractedQuantity: 25,
+            manualQuantityOverride: 7);
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.Equal(25, item.Quantity);
+        Assert.Equal(7, item.ManualQuantityOverride);
+        Assert.Equal(7, item.EffectiveQuantity);
+    }
+
+    [Fact]
     public async Task Execute_WithNoCurrentProposal_ReturnsNotFoundFailure()
     {
         var context = CreateContext(withProposal: false);
@@ -168,7 +206,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
 
     private static Context CreateContext(
         bool withProposal,
-        bool withSelected = false)
+        bool withSelected = false,
+        int extractedQuantity = 1,
+        int? manualQuantityOverride = null)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -257,7 +297,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
                     alternativeGlass.GlassTypeId,
                     finish.Id,
                     alternativeFinish.Id,
-                    withSelected)
+                    withSelected,
+                    extractedQuantity,
+                    manualQuantityOverride)
                 : null);
         requirements.ListFilesByRequirementIdAsync(
                 requirement.Id,
@@ -319,7 +361,9 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Guid alternativeGlassId,
         Guid finishId,
         Guid alternativeFinishId,
-        bool withSelected)
+        bool withSelected,
+        int extractedQuantity,
+        int? manualQuantityOverride)
     {
         var attemptId = Guid.NewGuid();
         var extraction = RequirementExtractionResult.Create(
@@ -341,7 +385,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             "PV-06",
             "Puerta vidriera",
             StructuredElementType.Door,
-            1,
+            extractedQuantity,
             3740,
             2500,
             9.35m,
@@ -425,6 +469,10 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             "AVAILABLE",
             At);
         SetPrivateProperty(proposalItem, "ExtractedItem", item);
+        proposalItem.ApplyManualDataOverride(
+            manualQuantityOverride,
+            null,
+            null);
         proposalItem.AddSystemAlternative(
             RequirementTechnicalProposalSystemAlternative.Create(
                 proposalItem.Id,

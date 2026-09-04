@@ -257,6 +257,57 @@ public sealed class Ai2RequirementExtractionAdapterTests
             && evidence.CellRange is null);
     }
 
+    [Theory]
+    [InlineData(3)]
+    [InlineData(17)]
+    [InlineData(25)]
+    [InlineData(41)]
+    public void Adapt_UsesAuthoritativeQuantityAndDoesNotDeriveFromEvidenceText(
+        int quantity)
+    {
+        var payload =
+            $$"""
+            {
+              "requirement": {},
+              "sources": [{"id":"s1","file_name":"requerimiento.pdf","media_type":"application/pdf"}],
+              "elements": [{
+                "id":"e1",
+                "reference":{"value":"ANY-REF","status":"explicit","confidence":0.98,"evidence_ids":["ev-item"]},
+                "name":{"value":"Elemento","status":"explicit","confidence":0.97,"evidence_ids":["ev-item"]},
+                "category":{"normalized":"WINDOW","raw":"Ventana","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                "measurements":[
+                  {"type":"width","value":1.2,"unit":"m","status":"explicit","evidence_ids":["ev-item"]},
+                  {"type":"height","value":1.5,"unit":"m","status":"explicit","evidence_ids":["ev-item"]},
+                  {"type":"area","value":1.8,"unit":"m2","status":"explicit","evidence_ids":["ev-item"]}
+                ],
+                "quantity":{"value":{{quantity}},"status":"explicit","evidence_ids":["ev-item"]},
+                "functional_type":{"normalized":"FIXED","raw":"Ventana fija","status":"explicit","confidence":0.90,"evidence_ids":["ev-item"]},
+                "glass":[{"type":{"normalized":"templado","raw":"Templado 6 mm","status":"explicit","evidence_ids":["ev-glass"]},"thickness":{"value":6,"unit":"mm"},"status":"explicit","confidence":0.95,"evidence_ids":["ev-glass"]}],
+                "evidence_ids":["ev-item"],
+                "missing_fields":[],
+                "confidence":0.90
+              }],
+              "evidence":[
+                {"id":"ev-item","source_id":"s1","type":"range","page_number":1,"extracted_text":"ANY-REF CANTIDAD: 99","status":"explicit","confidence":0.95},
+                {"id":"ev-glass","source_id":"s1","type":"range","page_number":1,"extracted_text":"Templado 6 mm","status":"explicit","confidence":0.95}
+              ],
+              "relationships":[],
+              "conflicts":[],
+              "warnings":[],
+              "extraction_metadata":{"schema_version":"1.0","source_count":1,"element_count":1,"partial":false,"status":"completed","processing_time_ms":125,"pipeline_version":"ai2-v1"}
+            }
+            """;
+
+        var result = new Ai2RequirementExtractionAdapter().Adapt(
+            payload,
+            CreatePdfRequest());
+
+        var item = Assert.Single(result.StructuredExtraction!.Items);
+        Assert.Equal(quantity, item.Quantity);
+        Assert.Contains(item.Evidence, evidence =>
+            evidence.Text == "ANY-REF CANTIDAD: 99");
+    }
+
     [Fact]
     public void Adapt_WithRealCapturedAi2Payload_IsAcceptedByAdapter()
     {

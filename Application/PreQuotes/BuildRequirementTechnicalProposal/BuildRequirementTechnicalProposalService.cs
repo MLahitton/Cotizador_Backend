@@ -261,6 +261,7 @@ public sealed class BuildRequirementTechnicalProposalService(
             historical.EvidenceStatus.AverageSimilarity,
             historical.EvidenceStatus.Status,
             createdAtUtc);
+        proposalItem.AttachExtractedItem(item);
 
         AddSystemAlternatives(proposalItem, systemSelection, systems);
         AddGlassAlternatives(proposalItem, glass);

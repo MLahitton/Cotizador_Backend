@@ -1379,6 +1379,20 @@ public sealed class RequirementTechnicalProposalItem
         SelectedAtUtc = selectedAtUtc;
     }
 
+    public void AttachExtractedItem(RequirementExtractedItem extractedItem)
+    {
+        ArgumentNullException.ThrowIfNull(extractedItem);
+
+        if (extractedItem.Id != RequirementExtractedItemId)
+        {
+            throw new ArgumentException(
+                "El item extraido no corresponde a la propuesta tecnica.",
+                nameof(extractedItem));
+        }
+
+        ExtractedItem = extractedItem;
+    }
+
     public void ApplyManualDataOverride(
         int? quantity,
         int? widthMillimeters,

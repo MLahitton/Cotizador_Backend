@@ -132,6 +132,33 @@ public sealed class ProcessRequirementServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithAuthoritativeQuantity_PersistsAndBuildsProposalWithSameQuantity()
+    {
+        RequirementExtractedItem? extractedItem = null;
+        RequirementTechnicalProposal? proposal = null;
+        var context = CreateContext("quantity_25", File("source.pdf", PdfContentType));
+        context.Requirements.When(repository => repository.AddExtractedItem(
+                Arg.Any<RequirementExtractedItem>()))
+            .Do(call => extractedItem = call.Arg<RequirementExtractedItem>());
+        context.Requirements.When(repository => repository.AddTechnicalProposal(
+                Arg.Any<RequirementTechnicalProposal>()))
+            .Do(call => proposal = call.Arg<RequirementTechnicalProposal>());
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(extractedItem);
+        Assert.Equal(25, extractedItem!.Quantity);
+        var proposalItem = Assert.Single(proposal!.Items);
+        Assert.Null(proposalItem.ManualQuantityOverride);
+        Assert.Equal(25, proposalItem.EffectiveQuantity);
+        Assert.Contains(extractedItem.Evidence, evidence =>
+            evidence.Text == "PV-06 CANTIDAD: 99");
+    }
+
+    [Fact]
     public async Task Execute_WithExplicitSegments_PersistsSegmentsAndUsesThemForGlass()
     {
         RequirementTechnicalProposal? proposal = null;
@@ -1793,8 +1820,15 @@ public sealed class ProcessRequirementServiceTests
             ? "templado 10 mm"
             : "templado 6 mm";
         var glassThickness = scenario == "tempered_segments_4100" ? 10m : 6m;
+        var quantity = scenario switch
+        {
+            "quantity_25" => 25,
+            "quantity_17" => 17,
+            _ => 1
+        };
         var evidenceText = scenario switch
         {
+            "quantity_25" => "PV-06 CANTIDAD: 99",
             "tempered_evidence_vertical_uniform_900_2700" =>
                 "altura de 2.70m dividida en 3 tramos verticales de 0.90m cada uno",
             "tempered_evidence_horizontal_4000" =>
@@ -1849,7 +1883,7 @@ public sealed class ProcessRequirementServiceTests
             $"{width} x {height}",
             width,
             height,
-            1,
+            quantity,
             itemsRequiringReview > 0,
             [],
             [],
