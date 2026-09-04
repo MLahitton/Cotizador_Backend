@@ -1,4 +1,5 @@
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
@@ -51,6 +52,7 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionService(
     IPreQuoteRepository preQuoteRepository,
     IProjectRepository projectRepository,
     IClientRepository clientRepository,
+    IProductSystemCatalogRepository productSystemCatalog,
     TimeProvider timeProvider)
 {
     public async Task<ConfirmRequirementTechnicalProposalSelectionResult>
@@ -112,7 +114,12 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionService(
                     ConfirmRequirementTechnicalProposalSelectionFailure.NoIncludedItems);
             }
 
-            if (TechnicalProposalReadinessEvaluator.BlocksConfirmation(proposal))
+            var systems = (await productSystemCatalog.ListActiveAsync(
+                    cancellationToken))
+                .ToDictionary(system => system.Id);
+            if (TechnicalProposalReadinessEvaluator.BlocksConfirmation(
+                proposal,
+                systems))
             {
                 return ConfirmRequirementTechnicalProposalSelectionResult.Failed(
                     ConfirmRequirementTechnicalProposalSelectionFailure.IncompleteTechnicalProposal);

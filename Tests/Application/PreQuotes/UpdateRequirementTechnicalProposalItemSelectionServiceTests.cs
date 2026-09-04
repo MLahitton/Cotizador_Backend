@@ -266,13 +266,13 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
     [Theory]
     [InlineData(RequirementCommercialLine.Essential)]
     [InlineData(RequirementCommercialLine.Bioconfort)]
-    public async Task Execute_OpenLineAcceptsCrossLineAndFunctionalTypeSystem(
+    public async Task Execute_OpenLineAcceptsCrossLineWithCompatibleFunctionalType(
         RequirementCommercialLine commercialLine)
     {
         var context = CreateContext(
             commercialLine,
             alternativeSystemLine: "SIGNATURE",
-            alternativeFunctionalType: "SLIDING_WINDOW");
+            alternativeFunctionalType: "SLIDING_DOOR");
 
         var result = await context.Service.ExecuteAsync(
             new UpdateRequirementTechnicalProposalItemSelectionCommand(
@@ -286,6 +286,52 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(context.AlternativeSystem.Id, result.Selection!.System!.Id);
+    }
+
+    [Theory]
+    [InlineData("FIXED", "FIXED", true)]
+    [InlineData("FIXED", "SLIDING_DOOR", false)]
+    [InlineData("SLIDING_DOOR", "FIXED", false)]
+    [InlineData("CASEMENT", "FIXED", false)]
+    public async Task Execute_ValidatesFunctionalCompatibilityBeforeMutation(
+        string itemFunctionalType,
+        string selectedFunctionalType,
+        bool isCompatible)
+    {
+        var context = CreateContext(
+            itemFunctionalType: itemFunctionalType,
+            itemOperation: itemFunctionalType == "FIXED" ? "FIXED" : null,
+            suggestedFunctionalType: itemFunctionalType,
+            alternativeFunctionalType: selectedFunctionalType);
+        context.Proposal.ConfirmCommercialSelection(UserId, At.AddMinutes(-5));
+        var initialRevision = context.Proposal.CommercialRevision;
+        var wasConfirmed = context.Proposal.IsCommerciallyConfirmed;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                null,
+                null),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(isCompatible, result.IsSuccess);
+        if (isCompatible)
+        {
+            Assert.Equal(context.AlternativeSystem.Id, context.Item.SelectedSystemId);
+            return;
+        }
+
+        Assert.Equal(
+            UpdateRequirementTechnicalProposalItemSelectionFailure.FunctionalTypeMismatch,
+            result.Failure);
+        Assert.Equal(context.SuggestedSystem.Id, context.Item.SelectedSystemId);
+        Assert.Equal(initialRevision, context.Proposal.CommercialRevision);
+        Assert.Equal(wasConfirmed, context.Proposal.IsCommerciallyConfirmed);
+        await context.Requirements.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -313,7 +359,10 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
     private static Context CreateContext(
         RequirementCommercialLine commercialLine = RequirementCommercialLine.Essential,
         string alternativeSystemLine = "ESSENTIAL",
-        string alternativeFunctionalType = "SLIDING_DOOR")
+        string alternativeFunctionalType = "SLIDING_DOOR",
+        string itemFunctionalType = "SLIDING_DOOR",
+        string? itemOperation = "SLIDING",
+        string? suggestedFunctionalType = "SLIDING_DOOR")
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -379,8 +428,8 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             RequirementExtractionValueStatus.Explicit,
             false,
             [],
-            "SLIDING_DOOR",
-            "SLIDING",
+            itemFunctionalType,
+            itemOperation,
             null,
             null,
             null,
@@ -421,7 +470,8 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         SetPrivateProperty(proposal, "Requirement", requirement);
         var suggestedSystem = ProductSystem(
             Guid.Parse("22222222-2222-2222-2222-222222222222"),
-            "K70");
+            "K70",
+            functionalType: suggestedFunctionalType ?? itemFunctionalType);
         var alternativeSystem = ProductSystem(
             Guid.Parse("33333333-3333-3333-3333-333333333333"),
             "K72",

@@ -1,3 +1,5 @@
+using Application.Common.Abstractions.Catalogs;
+using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.TechnicalProposalReadiness;
@@ -5,7 +7,12 @@ namespace Application.PreQuotes.TechnicalProposalReadiness;
 public static class TechnicalProposalReadinessEvaluator
 {
     public static RequirementTechnicalProposalItemReadinessReadModel EvaluateItem(
-        RequirementTechnicalProposalItem item)
+        RequirementTechnicalProposalItem item) =>
+        EvaluateItem(item, null);
+
+    public static RequirementTechnicalProposalItemReadinessReadModel EvaluateItem(
+        RequirementTechnicalProposalItem item,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel>? systems)
     {
         var pending = new Dictionary<string, PendingDefinitionBuilder>(
             StringComparer.Ordinal);
@@ -34,6 +41,16 @@ public static class TechnicalProposalReadinessEvaluator
         if (!pricing.HasFinish)
         {
             AddReason(pending, "FINISH_NOT_RESOLVED", item);
+        }
+
+
+        if (HasFunctionalTypeMismatch(item, systems))
+        {
+            AddReason(
+                pending,
+                SgFunctionalCompatibilityEvaluator
+                    .TechnicalProposalFunctionalTypeMismatch,
+                item);
         }
 
         foreach (var reason in item.ReviewReasons.Distinct(StringComparer.Ordinal))
@@ -104,11 +121,21 @@ public static class TechnicalProposalReadinessEvaluator
     }
 
     public static bool BlocksConfirmation(RequirementTechnicalProposal proposal) =>
-        proposal.IncludedItems.Any(item => EvaluateItem(item).PendingDefinitions
+        BlocksConfirmation(proposal, null);
+
+    public static bool BlocksConfirmation(
+        RequirementTechnicalProposal proposal,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel>? systems) =>
+        proposal.IncludedItems.Any(item => EvaluateItem(item, systems).PendingDefinitions
             .Any(definition => definition.BlocksConfirmation));
 
     public static bool BlocksPricing(RequirementTechnicalProposal proposal) =>
-        proposal.IncludedItems.Any(item => EvaluateItem(item).PendingDefinitions
+        BlocksPricing(proposal, null);
+
+    public static bool BlocksPricing(
+        RequirementTechnicalProposal proposal,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel>? systems) =>
+        proposal.IncludedItems.Any(item => EvaluateItem(item, systems).PendingDefinitions
             .Any(definition => definition.BlocksPricing));
 
     private static void AddReason(
@@ -238,6 +265,17 @@ public static class TechnicalProposalReadinessEvaluator
                     MeasurementsValue(item),
                     "Modifica la configuracion e indica ancho y alto validos.",
                     true),
+            SgFunctionalCompatibilityEvaluator
+                .TechnicalProposalFunctionalTypeMismatch =>
+                PendingDefinitionBuilder.Blocking(
+                    "REVIEW_SYSTEM_FUNCTIONAL_COMPATIBILITY",
+                    "SYSTEM",
+                    "system",
+                    "Sistema incompatible",
+                    "El sistema seleccionado no pertenece a la funcion del requerimiento.",
+                    CurrentValue(item, "system"),
+                    "Escoge un sistema coherente con la funcion del item.",
+                    true),
             "INVALID_EVIDENCE_LOCATION" =>
                 PendingDefinitionBuilder.Warning(
                     "REVIEW_EVIDENCE",
@@ -341,6 +379,25 @@ public static class TechnicalProposalReadinessEvaluator
 
         action = created!;
         return created is not null;
+    }
+
+    private static bool HasFunctionalTypeMismatch(
+        RequirementTechnicalProposalItem item,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel>? systems)
+    {
+        if (systems is null)
+        {
+            return false;
+        }
+
+        var systemId = item.HasSelectedConfiguration()
+            ? item.SelectedSystemId
+            : item.SuggestedSystemId;
+        return systemId is { } value
+            && systems.TryGetValue(value, out var system)
+            && SgFunctionalCompatibilityEvaluator.Evaluate(
+                item,
+                system).IsIncompatible;
     }
 
     private static string? CurrentValue(

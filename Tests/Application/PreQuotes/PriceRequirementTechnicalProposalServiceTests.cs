@@ -23,6 +23,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     private static readonly Guid UserId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly DateTimeOffset At = new(2026, 8, 21, 12, 0, 0, TimeSpan.Zero);
     private static readonly Guid SystemNapolesId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid SystemFixedId = Guid.Parse("88888888-8888-8888-8888-888888888888");
     private static readonly Guid GlassTemp6Id = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid FinishBlackId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid SystemLsa9060Id = Guid.Parse("55555555-5555-5555-5555-555555555555");
@@ -1196,9 +1197,9 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         projects.FindByIdAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>()).Returns(client);
         systems.ListActiveAsync(Arg.Any<CancellationToken>())
-            .Returns([SystemNapoles(), SystemLsa9060()]);
+            .Returns([SystemNapoles(), SystemLsa9060(), SystemFixed()]);
         systems.ListActiveSelectableAsync(Arg.Any<CancellationToken>())
-            .Returns([SystemNapoles(), SystemLsa9060()]);
+            .Returns([SystemNapoles(), SystemLsa9060(), SystemFixed()]);
         glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
             .Returns([GlassTemp6(), GlassTemp8()]);
         finishes.ListActiveAsync(Arg.Any<CancellationToken>())
@@ -1285,7 +1286,9 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         int width = 3740,
         int height = 2500,
         decimal area = 9.35m,
-        string requestedSystemRaw = "3831") =>
+        string requestedSystemRaw = "3831",
+        string functionalType = "SLIDING_DOOR",
+        string operation = "CORREDIZA") =>
         RequirementExtractedItem.Create(
             Guid.NewGuid(),
             "element-" + reference,
@@ -1381,6 +1384,25 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             "SLIDING_DOOR",
             "VENECIA NAPOLES",
             "SERIE 70",
+            "ESSENTIAL",
+            "STANDARD",
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
+
+    private static ProductSystemCatalogReadModel SystemFixed() =>
+        new(
+            SystemFixedId,
+            "SYS_FIXED",
+            "CUERPO FIJO LINEA CLASSIC PRIMAVERA SIENA",
+            "CUERPO FIJO LINEA CLASSIC PRIMAVERA SIENA",
+            "PRIMAVERA SIENA",
+            "FIXED",
+            "PRIMAVERA SIENA",
+            "SG 4",
             "ESSENTIAL",
             "STANDARD",
             true,

@@ -1,4 +1,5 @@
 using System.Reflection;
+using Application.Common.Abstractions.Catalogs;
 using Application.PreQuotes.TechnicalProposalReadiness;
 using Domain.PreQuotes;
 using Xunit;
@@ -404,6 +405,31 @@ public sealed class TechnicalProposalReadinessEvaluatorTests
         Assert.Contains("MissingOrInvalidMeasurements", definition.RelatedReasonCodes);
     }
 
+
+    [Fact]
+    public void EvaluateItem_WithFunctionalTypeMismatchFromCatalog_BlocksPricingAndConfirmation()
+    {
+        var item = ProposalItem();
+        var systems = new Dictionary<Guid, ProductSystemCatalogReadModel>
+        {
+            [SystemId] = ProductSystem(SystemId, "SLIDING_DOOR")
+        };
+
+        var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(
+            item,
+            systems);
+        var definition = Assert.Single(readiness.PendingDefinitions);
+
+        Assert.Equal("BLOCKED", readiness.State);
+        Assert.Equal("REVIEW_SYSTEM_FUNCTIONAL_COMPATIBILITY", definition.Code);
+        Assert.Equal("SYSTEM", definition.Category);
+        Assert.Equal("system", definition.Field);
+        Assert.True(definition.BlocksConfirmation);
+        Assert.True(definition.BlocksPricing);
+        Assert.Contains(
+            "TECHNICAL_PROPOSAL_FUNCTIONAL_TYPE_MISMATCH",
+            definition.RelatedReasonCodes);
+    }
     private static RequirementTechnicalProposalItem ProposalItem(
         bool withoutSystem = false,
         bool withoutGlass = false,
@@ -510,6 +536,27 @@ public sealed class TechnicalProposalReadinessEvaluatorTests
 
         return item;
     }
+
+    private static ProductSystemCatalogReadModel ProductSystem(
+        Guid id,
+        string functionalType) =>
+        new(
+            id,
+            $"SYS-{functionalType}-{id:N}",
+            $"Sistema {functionalType}",
+            null,
+            null,
+            functionalType,
+            null,
+            null,
+            "ESSENTIAL",
+            null,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
 
     private static void SetPrivateProperty<T>(
         object target,
