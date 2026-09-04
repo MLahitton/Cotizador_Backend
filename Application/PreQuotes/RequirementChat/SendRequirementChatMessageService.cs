@@ -4,6 +4,7 @@ using Application.PreQuotes.GetRequirementDetails;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.RequirementChatActions;
 using Domain.PreQuotes;
+using Microsoft.Extensions.Logging;
 
 namespace Application.PreQuotes.RequirementChat;
 
@@ -57,7 +58,8 @@ public sealed class SendRequirementChatMessageService(
     IRequirementRepository requirementRepository,
     PlanRequirementChatActionService planActionService,
     IRequirementChatActionPlanStore actionPlanStore,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    ILogger<SendRequirementChatMessageService> logger)
 {
     private const int ConversationLimit = 20;
 
@@ -191,6 +193,16 @@ public sealed class SendRequirementChatMessageService(
         {
             try
             {
+                logger.LogInformation(
+                    "Requirement chat informational context built. RequirementId={RequirementId} TechnicalProposalId={TechnicalProposalId} IncludedItems={IncludedItems} ExcludedItems={ExcludedItems} PriceableItems={PriceableItems} PricingSnapshotId={PricingSnapshotId} CommercialRevision={CommercialRevision}",
+                    command.RequirementId,
+                    context.TechnicalProposalId,
+                    context.IncludedItems,
+                    context.ExcludedItems,
+                    context.PriceableItems,
+                    context.PricingSnapshotId,
+                    context.CommercialRevision);
+
                 response = await aiClient.RespondAsync(
                     new RequirementChatAiRequest(
                         scopeContract,
@@ -357,6 +369,16 @@ public sealed class SendRequirementChatMessageService(
         var pricing = await requirementRepository.GetCurrentPricingSnapshotAsync(
             requirementId,
             cancellationToken);
+        var totalItems = proposal?.Items.Count;
+        var includedItems = proposal?.Items.Count(value => value.IsIncluded);
+        var excludedItems = proposal?.Items.Count(value => !value.IsIncluded);
+        var priceableItems = proposal?.Items.Count(value =>
+            value.IsIncluded && value.IsPriceable);
+        var blockingItems = proposal?.Items.Count(IsBlockingItem);
+        var excludedReferences = proposal?.Items
+            .Where(value => !value.IsIncluded)
+            .Select(value => value.Reference ?? value.ItemId.ToString())
+            .ToArray();
 
         var context = new
         {
@@ -390,6 +412,15 @@ public sealed class SendRequirementChatMessageService(
                 proposal.TechnicallyCompleteItems,
                 proposal.PriceableItems,
                 proposal.Readiness,
+                currentState = new
+                {
+                    totalItems,
+                    includedItems,
+                    excludedItems,
+                    excludedReferences,
+                    priceableItems,
+                    blockingItems
+                },
                 items = technicalProposalItemId is null
                     ? proposal.Items.Select(ToItemContext).ToArray()
                     : null
@@ -397,6 +428,9 @@ public sealed class SendRequirementChatMessageService(
             item = item is null ? null : ToItemContext(item),
             pricing = pricing is null ? null : new
             {
+                pricingSnapshotId = pricing.Id,
+                technicalProposalId = pricing.TechnicalProposalId,
+                commercialRevision = pricing.TechnicalProposalCommercialRevision,
                 pricing.Currency,
                 pricing.PricingBasis,
                 pricing.OriginalGrandTotal,
@@ -420,7 +454,15 @@ public sealed class SendRequirementChatMessageService(
             }
         };
 
-        return new(RequirementChatFailure.None, context);
+        return new(
+            RequirementChatFailure.None,
+            context,
+            proposal?.TechnicalProposalId,
+            includedItems,
+            excludedItems,
+            priceableItems,
+            pricing?.Id,
+            pricing?.TechnicalProposalCommercialRevision);
     }
 
     private static object ToItemContext(
@@ -445,7 +487,24 @@ public sealed class SendRequirementChatMessageService(
             item.ExtractionStatus,
             item.Suggested,
             item.Selected,
+            effective = new
+            {
+                system = item.Selected?.System ?? item.Suggested.System,
+                glass = item.Selected?.Glass ?? item.Suggested.Glass,
+                finish = item.Selected?.Finish ?? item.Suggested.Finish,
+                quantity = item.EffectiveQuantity,
+                widthMm = item.EffectiveWidthMm,
+                heightMm = item.EffectiveHeightMm,
+                areaM2 = item.AreaM2
+            },
             item.SelectionState,
+            inclusion = new
+            {
+                item.IsIncluded,
+                item.ExcludedAtUtc,
+                item.ExcludedByUserId,
+                item.ExclusionReason
+            },
             alternatives = new
             {
                 systems = item.Alternatives.Systems.Take(5).ToArray(),
@@ -465,6 +524,17 @@ public sealed class SendRequirementChatMessageService(
             item.Trace,
             evidence = item.Evidence.Take(8).ToArray()
         };
+
+    private static bool IsBlockingItem(
+        RequirementTechnicalProposalItemReadModel item) =>
+        item.IsIncluded
+        && (!item.IsPriceable
+            || !item.IsTechnicallyComplete
+            || item.RequiresReview
+            || !string.Equals(
+                item.Readiness.State,
+                "READY",
+                StringComparison.OrdinalIgnoreCase));
 
     private static object ToPricingItemContext(
         RequirementPricingItemSnapshot item) =>
@@ -507,7 +577,13 @@ public sealed class SendRequirementChatMessageService(
 
     private sealed record ContextBuildResult(
         RequirementChatFailure Failure,
-        object? Context);
+        object? Context,
+        Guid? TechnicalProposalId = null,
+        int? IncludedItems = null,
+        int? ExcludedItems = null,
+        int? PriceableItems = null,
+        Guid? PricingSnapshotId = null,
+        long? CommercialRevision = null);
 
     private static RequirementChatInteractionReadModel ToInteraction(
         ChatActionPlanReadModel plan)

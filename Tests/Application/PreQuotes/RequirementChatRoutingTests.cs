@@ -12,6 +12,7 @@ using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 using ProjectEntity = Domain.Projects.Project;
@@ -53,6 +54,115 @@ public sealed class RequirementChatRoutingTests
             Arg.Is<RequirementChatAiRequest>(request => request.Scope == "REQUIREMENT"),
             Arg.Any<CancellationToken>());
         Assert.Empty(context.Store.Plans);
+    }
+
+    [Fact]
+    public async Task RequirementChat_InformationalContext_ReportsCurrentExcludedItems()
+    {
+        var context = CreateContext();
+        var excluded = context.Proposal.Items.Last();
+        excluded.Exclude(UserId, At.AddMinutes(1), "No cotizar");
+        RequirementChatAiRequest? aiRequest = null;
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.91m, false, null, "que items estan excluidos"));
+        context.Ai.RespondAsync(
+                Arg.Do<RequirementChatAiRequest>(request => aiRequest = request),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("Hay 1 item excluido."));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "que items estan excluidos"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var json = Serialize(aiRequest!.Context);
+        Assert.Contains("\"currentState\"", json);
+        Assert.Contains("\"includedItems\":1", json);
+        Assert.Contains("\"excludedItems\":1", json);
+        Assert.Contains("\"excludedReferences\":[\"V-10\"]", json);
+        Assert.Contains("\"isIncluded\":false", json);
+        Assert.Contains("\"exclusionReason\":\"No cotizar\"", json);
+    }
+
+    [Fact]
+    public async Task RequirementChat_InformationalContext_ReportsCurrentIncludedItemsAfterReactivation()
+    {
+        var context = CreateContext();
+        var item = context.Proposal.Items.Last();
+        item.Exclude(UserId, At.AddMinutes(1), "No cotizar");
+        item.Reactivate();
+        RequirementChatAiRequest? aiRequest = null;
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.91m, false, null, "que items estan incluidos"));
+        context.Ai.RespondAsync(
+                Arg.Do<RequirementChatAiRequest>(request => aiRequest = request),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("Hay 2 items incluidos."));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "que items estan incluidos"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var json = Serialize(aiRequest!.Context);
+        Assert.Contains("\"includedItems\":2", json);
+        Assert.Contains("\"excludedItems\":0", json);
+        Assert.Contains("\"excludedReferences\":[]", json);
+        Assert.Contains("\"isIncluded\":true", json);
+    }
+
+    [Fact]
+    public async Task RequirementChat_InformationalContext_ReportsEffectiveSelectedValuesAndOverrides()
+    {
+        var context = CreateContext();
+        var item = context.Proposal.Items.First();
+        item.Select(SystemBId, GlassBId, FinishBId, UserId, At.AddMinutes(1));
+        item.ApplyManualDataOverride(3, 1200, 2100);
+        RequirementChatAiRequest? aiRequest = null;
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.91m, false, null, "que valores efectivos tiene este item"));
+        context.Ai.RespondAsync(
+                Arg.Do<RequirementChatAiRequest>(request => aiRequest = request),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("El item usa seleccion comercial."));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, item.Id, "que valores efectivos tiene este item"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var json = Serialize(aiRequest!.Context);
+        Assert.Contains("\"effective\"", json);
+        Assert.Contains("\"system\":{\"id\":\"22222222-2222-2222-2222-222222222222\"", json);
+        Assert.Contains("\"glass\":{\"id\":\"33333333-3333-3333-3333-333333333332\"", json);
+        Assert.Contains("\"finish\":{\"id\":\"44444444-4444-4444-4444-444444444442\"", json);
+        Assert.Contains("\"quantity\":3", json);
+        Assert.Contains("\"widthMm\":1200", json);
+        Assert.Contains("\"heightMm\":2100", json);
+    }
+
+    [Fact]
+    public async Task RequirementChat_InformationalContext_ReportsCurrentPricingSnapshot()
+    {
+        var context = CreateContext(withPricingSnapshot: true);
+        RequirementChatAiRequest? aiRequest = null;
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.91m, false, null, "cual es el pricing actual"));
+        context.Ai.RespondAsync(
+                Arg.Do<RequirementChatAiRequest>(request => aiRequest = request),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("El total actual es 321."));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cual es el pricing actual"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var json = Serialize(aiRequest!.Context);
+        Assert.Contains("\"pricingSnapshotId\"", json);
+        Assert.Contains("\"commercialRevision\":1", json);
+        Assert.Contains("\"currentGrandTotal\":321", json);
+        Assert.Contains("\"currentLineExpected\":321", json);
     }
 
     [Fact]
@@ -334,7 +444,9 @@ public sealed class RequirementChatRoutingTests
         Assert.DoesNotContain("\"pendingAction\"", Serialize(secondRequest!.Context));
     }
 
-    private static Context CreateContext(bool duplicateReference = false)
+    private static Context CreateContext(
+        bool duplicateReference = false,
+        bool withPricingSnapshot = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -356,13 +468,16 @@ public sealed class RequirementChatRoutingTests
         var preQuote = PreQuote.Create(project.Id, UserId, "PC-2026-0001", null, At);
         var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
         var proposal = CreateProposal(requirement, duplicateReference);
+        var pricingSnapshot = withPricingSnapshot
+            ? CreatePricingSnapshot(requirement, proposal)
+            : null;
 
         currentUser.IsAuthenticated.Returns(true);
         currentUser.UserId.Returns(UserId);
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(user);
         requirements.FindByIdAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(requirement);
         requirements.GetCurrentTechnicalProposalAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(proposal);
-        requirements.GetCurrentPricingSnapshotAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns((RequirementPricingSnapshot?)null);
+        requirements.GetCurrentPricingSnapshotAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(pricingSnapshot);
         requirements.ListFilesByRequirementIdAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns([]);
         preQuotes.FindByIdAsync(preQuote.Id, Arg.Any<CancellationToken>()).Returns(new PreQuoteDetails(preQuote.Id, preQuote.ProjectId, 0, preQuote.CreatedAtUtc, preQuote.UpdatedAtUtc));
         projects.FindByIdAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
@@ -390,9 +505,40 @@ public sealed class RequirementChatRoutingTests
             requirements,
             plan,
             store,
-            clock);
+            clock,
+            NullLogger<SendRequirementChatMessageService>.Instance);
 
         return new Context(service, ai, store, requirement, proposal, clock);
+    }
+
+    private static RequirementPricingSnapshot CreatePricingSnapshot(
+        Requirement requirement,
+        RequirementTechnicalProposal proposal)
+    {
+        var snapshot = RequirementPricingSnapshot.Create(
+            requirement.Id,
+            proposal.Id,
+            proposal.CommercialRevision,
+            "COP",
+            "PUBLIC_QUOTED_ITEM_PRICES",
+            300m,
+            321m,
+            At);
+        snapshot.AddItem(RequirementPricingItemSnapshot.Create(
+            snapshot.Id,
+            proposal.Items.First().Id,
+            SystemAId,
+            GlassAId,
+            FinishAId,
+            "PRICED",
+            100m,
+            100m,
+            100m,
+            300m,
+            321m,
+            321m,
+            At));
+        return snapshot;
     }
 
     private static RequirementTechnicalProposal CreateProposal(Requirement requirement, bool duplicateReference)
