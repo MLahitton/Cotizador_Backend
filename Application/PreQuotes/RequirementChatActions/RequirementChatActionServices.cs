@@ -10,6 +10,8 @@ namespace Application.PreQuotes.RequirementChatActions;
 
 public sealed record PlanRequirementChatActionCommand(
     Guid RequirementId,
+    Guid? ChatThreadId,
+    Guid? ExistingPlanId,
     Guid? ContextTechnicalProposalItemId,
     string? Scope,
     string ActionType,
@@ -66,7 +68,8 @@ public sealed record ChatActionPlanReadModel(
     DateTimeOffset? ExpiresAtUtc,
     string? PricingStatus,
     IReadOnlyList<string> ExecutionReasons,
-    IReadOnlyList<ChatActionPlanActionReadModel> Actions);
+    IReadOnlyList<ChatActionPlanActionReadModel> Actions,
+    Guid? ChatThreadId = null);
 
 public sealed record ChatActionPlanActionReadModel(
     Guid ActionId,
@@ -97,6 +100,11 @@ public interface IRequirementChatActionPlanStore
 {
     void Save(ChatActionPlanReadModel plan);
     ChatActionPlanReadModel? Find(Guid requirementId, Guid planId);
+    ChatActionPlanReadModel? FindPendingClarification(
+        Guid requirementId,
+        string scope,
+        Guid? technicalProposalItemId,
+        Guid chatThreadId);
     ChatActionPlanReadModel? StartExecution(Guid requirementId, Guid planId);
 }
 
@@ -151,6 +159,40 @@ public sealed class InMemoryRequirementChatActionPlanStore(TimeProvider timeProv
         lock (_gate)
         {
             return FindCore(requirementId, planId);
+        }
+    }
+
+    public ChatActionPlanReadModel? FindPendingClarification(
+        Guid requirementId,
+        string scope,
+        Guid? technicalProposalItemId,
+        Guid chatThreadId)
+    {
+        lock (_gate)
+        {
+            return _plans.Values
+                .Where(plan => plan.RequirementId == requirementId)
+                .Select(plan => FindCore(plan.RequirementId, plan.PlanId))
+                .Where(plan => plan is
+                {
+                    Status: "NEEDS_CLARIFICATION",
+                    ChatThreadId: not null
+                })
+                .Where(plan => plan!.ChatThreadId == chatThreadId)
+                .Where(plan => string.Equals(
+                    plan!.Scope,
+                    scope,
+                    StringComparison.OrdinalIgnoreCase))
+                .Where(plan =>
+                {
+                    var action = plan!.Actions.SingleOrDefault();
+                    return action is not null
+                        && (scope != "ITEM"
+                            || action.TargetTechnicalProposalItemId
+                                == technicalProposalItemId);
+                })
+                .OrderByDescending(plan => plan!.CreatedAtUtc)
+                .FirstOrDefault();
         }
     }
 
@@ -281,7 +323,7 @@ public sealed class PlanRequirementChatActionService(
             ? "READY_FOR_CONFIRMATION"
             : action.ValidationState;
         var plan = new ChatActionPlanReadModel(
-            Guid.NewGuid(),
+            command.ExistingPlanId ?? Guid.NewGuid(),
             command.RequirementId,
             proposal.TechnicalProposalId,
             scope,
@@ -291,7 +333,8 @@ public sealed class PlanRequirementChatActionService(
             now.AddMinutes(15),
             null,
             [],
-            [action]);
+            [action],
+            command.ChatThreadId);
         store.Save(plan);
         return RequirementChatActionPlanResult.Success(plan);
     }

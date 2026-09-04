@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using Application.Common.Abstractions.PreQuotes;
+using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.DocumentProcessing;
 
 public sealed class CotizadorAi2RequirementChatClient(
     HttpClient httpClient,
-    CotizadorAi2Options options)
+    CotizadorAi2Options options,
+    ILogger<CotizadorAi2RequirementChatClient> logger)
     : IRequirementChatAiClient
 {
     private const string ChatPath = "chat/respond";
@@ -29,6 +31,13 @@ public sealed class CotizadorAi2RequirementChatClient(
 
             if (response.StatusCode != HttpStatusCode.OK)
             {
+                var errorBody = await response.Content.ReadAsStringAsync(
+                    timeoutSource.Token);
+                logger.LogWarning(
+                    "Cotizador_AI2 chat respond failed. Endpoint={Endpoint} StatusCode={StatusCode} ResponseBody={ResponseBody}",
+                    "/" + ChatPath,
+                    (int)response.StatusCode,
+                    Truncate(errorBody));
                 throw new RequirementChatAiUnavailableException();
             }
 
@@ -75,7 +84,16 @@ public sealed class CotizadorAi2RequirementChatClient(
 
             if (response.StatusCode != HttpStatusCode.OK)
             {
-                throw new RequirementChatAiUnavailableException();
+                var errorBody = await response.Content.ReadAsStringAsync(
+                    timeoutSource.Token);
+                logger.LogWarning(
+                    "Cotizador_AI2 chat action interpret failed. Endpoint={Endpoint} StatusCode={StatusCode} ResponseBody={ResponseBody}",
+                    "/" + InterpretPath,
+                    (int)response.StatusCode,
+                    Truncate(errorBody));
+                throw new RequirementChatAiUnavailableException(
+                    new InvalidDataException(
+                        $"Cotizador_AI2 chat action interpret returned {(int)response.StatusCode}: {Truncate(errorBody)}"));
             }
 
             var body = await response.Content
@@ -102,5 +120,16 @@ public sealed class CotizadorAi2RequirementChatClient(
         {
             throw new RequirementChatAiUnavailableException(exception);
         }
+    }
+
+    private static string Truncate(string value)
+    {
+        const int maximumLength = 4_000;
+        if (string.IsNullOrEmpty(value) || value.Length <= maximumLength)
+        {
+            return value;
+        }
+
+        return value[..maximumLength];
     }
 }

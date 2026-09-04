@@ -190,6 +190,144 @@ public sealed class RequirementChatRoutingTests
         await context.Ai.DidNotReceive().RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task RequirementChat_PendingClarification_SendsPendingActionContextAndReusesPlanId()
+    {
+        var context = CreateContext();
+        RequirementChatActionInterpretationRequest? secondRequest = null;
+        context.Ai.InterpretActionAsync(
+                Arg.Any<RequirementChatActionInterpretationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_SYSTEM", "REQUIREMENT", "V-9", "venecia fermo", null, null, null, 0.88m, false, null, "cambia V-9 a venecia fermo")),
+                call =>
+                {
+                    secondRequest = call.Arg<RequirementChatActionInterpretationRequest>();
+                    return Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_SYSTEM", "REQUIREMENT", null, "K72", null, null, null, 0.92m, false, null, "Que sea a Sistema K72"));
+                });
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a venecia fermo"),
+            TestContext.Current.CancellationToken);
+        var firstPlanId = first.LastInteraction!.PlanId;
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "Que sea a Sistema K72"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("CLARIFICATION", first.LastInteraction.MessageType);
+        Assert.NotNull(firstPlanId);
+        Assert.NotEmpty(first.LastInteraction.AvailableOptions);
+        Assert.True(second.IsSuccess);
+        Assert.Equal("ACTION_PLAN", second.LastInteraction!.MessageType);
+        Assert.Equal(firstPlanId, second.LastInteraction.PlanId);
+        Assert.True(second.LastInteraction.RequiresConfirmation);
+        var json = Serialize(secondRequest!.Context);
+        Assert.Contains("\"pendingAction\"", json);
+        Assert.Contains("\"planId\"", json);
+        Assert.Contains("\"actionType\":\"CHANGE_SYSTEM\"", json);
+        Assert.Contains("\"targetReference\":\"V-9\"", json);
+        Assert.Contains("\"requestedValue\":\"venecia fermo\"", json);
+        Assert.Contains("\"availableOptions\"", json);
+    }
+
+    [Fact]
+    public async Task RequirementChat_ItemPendingClarification_SendsPendingActionForSameItem()
+    {
+        var context = CreateContext();
+        var itemId = context.Proposal.Items.First().Id;
+        RequirementChatActionInterpretationRequest? secondRequest = null;
+        context.Ai.InterpretActionAsync(
+                Arg.Any<RequirementChatActionInterpretationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_FINISH", "ITEM", null, "inox", null, null, null, 0.88m, false, null, "ponlo en inox")),
+                call =>
+                {
+                    secondRequest = call.Arg<RequirementChatActionInterpretationRequest>();
+                    return Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_FINISH", "ITEM", null, "WHITE_MATTE", null, null, null, 0.90m, false, null, "que sea blanco"));
+                });
+
+        await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, itemId, "ponlo en inox"),
+            TestContext.Current.CancellationToken);
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, itemId, "que sea blanco"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("ACTION_PLAN", result.LastInteraction!.MessageType);
+        var json = Serialize(secondRequest!.Context);
+        Assert.Contains("\"scope\":\"ITEM\"", json);
+        Assert.Contains($"\"targetTechnicalProposalItemId\":\"{itemId}\"", json);
+    }
+
+    [Fact]
+    public async Task RequirementChat_PendingClarificationFromAnotherItem_IsNotSent()
+    {
+        var context = CreateContext();
+        var itemA = context.Proposal.Items.First().Id;
+        var itemB = context.Proposal.Items.Last().Id;
+        RequirementChatActionInterpretationRequest? secondRequest = null;
+        context.Ai.InterpretActionAsync(
+                Arg.Any<RequirementChatActionInterpretationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_FINISH", "ITEM", null, "inox", null, null, null, 0.88m, false, null, "ponlo en inox")),
+                call =>
+                {
+                    secondRequest = call.Arg<RequirementChatActionInterpretationRequest>();
+                    return Task.FromResult(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.84m, false, null, "que sea blanco"));
+                });
+        context.Ai.RespondAsync(
+                Arg.Any<RequirementChatAiRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("Respuesta informativa."));
+
+        await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, itemA, "ponlo en inox"),
+            TestContext.Current.CancellationToken);
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, itemB, "que sea blanco"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("INFORMATIONAL", result.LastInteraction!.MessageType);
+        Assert.DoesNotContain("\"pendingAction\"", Serialize(secondRequest!.Context));
+    }
+
+    [Fact]
+    public async Task RequirementChat_ExpiredPendingClarification_IsNotReused()
+    {
+        var context = CreateContext();
+        RequirementChatActionInterpretationRequest? secondRequest = null;
+        context.Ai.InterpretActionAsync(
+                Arg.Any<RequirementChatActionInterpretationRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_SYSTEM", "REQUIREMENT", "V-9", "venecia fermo", null, null, null, 0.88m, false, null, "cambia V-9 a venecia fermo")),
+                call =>
+                {
+                    secondRequest = call.Arg<RequirementChatActionInterpretationRequest>();
+                    return Task.FromResult(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.80m, false, null, "Que sea a Sistema K72"));
+                });
+        context.Ai.RespondAsync(
+                Arg.Any<RequirementChatAiRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("Respuesta informativa."));
+
+        await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a venecia fermo"),
+            TestContext.Current.CancellationToken);
+        context.Clock.Advance(TimeSpan.FromMinutes(16));
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "Que sea a Sistema K72"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("INFORMATIONAL", result.LastInteraction!.MessageType);
+        Assert.DoesNotContain("\"pendingAction\"", Serialize(secondRequest!.Context));
+    }
+
     private static Context CreateContext(bool duplicateReference = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
@@ -203,7 +341,8 @@ public sealed class RequirementChatRoutingTests
         var finishes = Substitute.For<IFinishTypeCatalogRepository>();
         var chat = new FakeRequirementChatRepository();
         var ai = Substitute.For<IRequirementChatAiClient>();
-        var store = new ObservablePlanStore(new FixedTimeProvider(At));
+        var clock = new FixedTimeProvider(At);
+        var store = new ObservablePlanStore(clock);
 
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
         var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
@@ -235,7 +374,7 @@ public sealed class RequirementChatRoutingTests
             glasses,
             finishes,
             store,
-            new FixedTimeProvider(At));
+            clock);
         var service = new SendRequirementChatMessageService(
             currentUser,
             chat,
@@ -244,9 +383,10 @@ public sealed class RequirementChatRoutingTests
             technical,
             requirements,
             plan,
-            new FixedTimeProvider(At));
+            store,
+            clock);
 
-        return new Context(service, ai, store, requirement, proposal);
+        return new Context(service, ai, store, requirement, proposal, clock);
     }
 
     private static RequirementTechnicalProposal CreateProposal(Requirement requirement, bool duplicateReference)
@@ -363,7 +503,8 @@ public sealed class RequirementChatRoutingTests
         IRequirementChatAiClient Ai,
         ObservablePlanStore Store,
         Requirement Requirement,
-        RequirementTechnicalProposal Proposal);
+        RequirementTechnicalProposal Proposal,
+        FixedTimeProvider Clock);
 
     private sealed class ObservablePlanStore(TimeProvider timeProvider)
         : IRequirementChatActionPlanStore
@@ -380,6 +521,17 @@ public sealed class RequirementChatRoutingTests
 
         public ChatActionPlanReadModel? Find(Guid requirementId, Guid planId) =>
             _inner.Find(requirementId, planId);
+
+        public ChatActionPlanReadModel? FindPendingClarification(
+            Guid requirementId,
+            string scope,
+            Guid? technicalProposalItemId,
+            Guid chatThreadId) =>
+            _inner.FindPendingClarification(
+                requirementId,
+                scope,
+                technicalProposalItemId,
+                chatThreadId);
 
         public ChatActionPlanReadModel? StartExecution(Guid requirementId, Guid planId) =>
             _inner.StartExecution(requirementId, planId);
@@ -409,8 +561,17 @@ public sealed class RequirementChatRoutingTests
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
+    private static string Serialize(object value) =>
+        global::System.Text.Json.JsonSerializer.Serialize(
+            value,
+            global::System.Text.Json.JsonSerializerOptions.Web);
+
     private sealed class FixedTimeProvider(DateTimeOffset value) : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => value;
+        private DateTimeOffset _value = value;
+
+        public override DateTimeOffset GetUtcNow() => _value;
+
+        public void Advance(TimeSpan value) => _value += value;
     }
 }

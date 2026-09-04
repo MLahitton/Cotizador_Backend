@@ -199,7 +199,13 @@ public sealed class RequirementChatController(
                     interaction.RequestedValue,
                     interaction.PricingImpactExpected,
                     interaction.PricingStatus,
-                    interaction.Reasons));
+                    interaction.Reasons,
+                    interaction.AvailableOptions.Select(option =>
+                        new RequirementChatInteractionOptionResponse(
+                            option.Id,
+                            option.Code,
+                            option.DisplayName,
+                            option.OptionType)).ToArray()));
 
     private ObjectResult RequirementProblem(
         int statusCode,

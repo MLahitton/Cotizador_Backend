@@ -39,7 +39,14 @@ public sealed record RequirementChatInteractionReadModel(
     string? RequestedValue,
     string? PricingImpactExpected,
     string? PricingStatus,
-    IReadOnlyList<string> Reasons);
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<RequirementChatInteractionOptionReadModel> AvailableOptions);
+
+public sealed record RequirementChatInteractionOptionReadModel(
+    Guid? Id,
+    string? Code,
+    string DisplayName,
+    string OptionType);
 
 public sealed class SendRequirementChatMessageService(
     ICurrentUser currentUser,
@@ -49,6 +56,7 @@ public sealed class SendRequirementChatMessageService(
     GetRequirementTechnicalProposalService getTechnicalProposalService,
     IRequirementRepository requirementRepository,
     PlanRequirementChatActionService planActionService,
+    IRequirementChatActionPlanStore actionPlanStore,
     TimeProvider timeProvider)
 {
     private const int ConversationLimit = 20;
@@ -145,6 +153,14 @@ public sealed class SendRequirementChatMessageService(
         }
 
         var scopeContract = GetRequirementChatService.ToContract(scope);
+        var pendingPlan = actionPlanStore.FindPendingClarification(
+            command.RequirementId,
+            scopeContract,
+            command.TechnicalProposalItemId,
+            thread.Id);
+        var aiContext = pendingPlan is null
+            ? context.Context!
+            : WithPendingAction(context.Context!, pendingPlan);
         RequirementChatActionIntent intent;
         try
         {
@@ -160,7 +176,7 @@ public sealed class SendRequirementChatMessageService(
                                     : "assistant",
                                 message.Content))
                         .ToArray(),
-                    context.Context!),
+                    aiContext),
                 cancellationToken);
         }
         catch (RequirementChatAiUnavailableException)
@@ -206,6 +222,7 @@ public sealed class SendRequirementChatMessageService(
                 null,
                 null,
                 null,
+                null,
                 []);
         }
         else if (intent.RequiresClarification
@@ -229,19 +246,28 @@ public sealed class SendRequirementChatMessageService(
                 null,
                 string.IsNullOrWhiteSpace(intent.ClarificationReason)
                     ? []
-                    : [intent.ClarificationReason.Trim()]);
+                    : [intent.ClarificationReason.Trim()],
+                pendingPlan?.Actions.Single().AvailableOptions
+                    .Select(ToInteractionOption)
+                    .ToArray() ?? []);
         }
         else
         {
+            var pendingAction = pendingPlan?.Actions.SingleOrDefault();
             var planResult = await planActionService.ExecuteAsync(
                 new PlanRequirementChatActionCommand(
                     command.RequirementId,
-                    command.TechnicalProposalItemId,
-                    intent.Scope ?? scopeContract,
-                    intent.ActionType,
+                    thread.Id,
+                    pendingPlan?.PlanId,
+                    command.TechnicalProposalItemId
+                        ?? pendingAction?.TargetTechnicalProposalItemId,
+                    intent.Scope ?? pendingPlan?.Scope ?? scopeContract,
+                    intent.ActionType ?? pendingAction?.ActionType!,
                     null,
-                    intent.TargetReference,
-                    intent.RequestedValue,
+                    intent.TargetReference ?? pendingAction?.TargetReference,
+                    intent.RequestedValue
+                        ?? pendingAction?.RequestedValue
+                        ?? command.Message.Trim(),
                     intent.RequestedQuantity,
                     intent.RequestedWidthMm,
                     intent.RequestedHeightMm,
@@ -499,11 +525,60 @@ public sealed class SendRequirementChatMessageService(
             action.CurrentValue,
             action.RequestedValue,
             plan.Status == "READY_FOR_CONFIRMATION" ? "POSSIBLE_REPRICE" : null,
-            plan.PricingStatus,
-            action.ValidationReasons.Concat(plan.ExecutionReasons)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray());
+                plan.PricingStatus,
+                action.ValidationReasons.Concat(plan.ExecutionReasons)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray(),
+                action.AvailableOptions.Select(ToInteractionOption).ToArray());
     }
+
+    private static object WithPendingAction(object context, ChatActionPlanReadModel plan)
+    {
+        var action = plan.Actions.Single();
+        return new
+        {
+            originalContext = context,
+            pendingAction = new
+            {
+                plan.PlanId,
+                plan.RequirementId,
+                plan.TechnicalProposalId,
+                plan.Scope,
+                action.ActionType,
+                action.TargetTechnicalProposalItemId,
+                action.TargetReference,
+                action.RequestedValue,
+                action.CurrentValue,
+                clarificationExpected = ExpectedField(action),
+                clarificationReason = action.ValidationReasons.FirstOrDefault(),
+                action.ValidationReasons,
+                action.AvailableOptions,
+                plan.CreatedAtUtc,
+                plan.ExpiresAtUtc
+            }
+        };
+    }
+
+    private static string ExpectedField(ChatActionPlanActionReadModel action) =>
+        action.ValidationReasons.Any(reason => reason.EndsWith(
+            "_VALUE_REQUIRED",
+            StringComparison.Ordinal))
+            || action.ValidationReasons.Any(reason => reason.EndsWith(
+                "_NOT_FOUND",
+                StringComparison.Ordinal))
+            || action.ValidationReasons.Any(reason => reason.EndsWith(
+                "_AMBIGUOUS",
+                StringComparison.Ordinal))
+            ? "requestedValue"
+            : action.ValidationReasons.Any(reason => reason.StartsWith(
+                "TARGET_",
+                StringComparison.Ordinal))
+                ? "target"
+                : "unknown";
+
+    private static RequirementChatInteractionOptionReadModel ToInteractionOption(
+        ChatActionOptionReadModel option) =>
+        new(option.Id, option.Code, option.DisplayName, option.OptionType);
 
     private static string ToAssistantMessage(ChatActionPlanReadModel plan)
     {

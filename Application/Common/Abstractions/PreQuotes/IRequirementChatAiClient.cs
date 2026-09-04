@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Application.Common.Abstractions.PreQuotes;
 
 public interface IRequirementChatAiClient
@@ -24,8 +26,9 @@ public sealed record RequirementChatAiConversationMessage(
 public sealed record RequirementChatAiResponse(string Message);
 
 public sealed record RequirementChatActionInterpretationRequest(
-    string Message,
+    string UserMessage,
     string Scope,
+    [property: JsonIgnore]
     Guid? TechnicalProposalItemId,
     IReadOnlyList<RequirementChatAiConversationMessage> Conversation,
     object Context);

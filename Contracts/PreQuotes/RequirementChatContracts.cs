@@ -29,8 +29,15 @@ public sealed record RequirementChatInteractionResponse(
     string? RequestedValue,
     string? PricingImpactExpected,
     string? PricingStatus,
-    IReadOnlyList<string> Reasons);
+    IReadOnlyList<string> Reasons,
+    IReadOnlyList<RequirementChatInteractionOptionResponse> AvailableOptions);
 
 public sealed record RequirementChatActionTargetResponse(
     Guid? TechnicalProposalItemId,
     string? Reference);
+
+public sealed record RequirementChatInteractionOptionResponse(
+    Guid? Id,
+    string? Code,
+    string DisplayName,
+    string OptionType);

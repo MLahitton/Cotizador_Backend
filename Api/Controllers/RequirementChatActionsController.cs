@@ -33,6 +33,8 @@ public sealed class RequirementChatActionsController(
             new PlanRequirementChatActionCommand(
                 requirementId,
                 null,
+                null,
+                null,
                 request.Scope,
                 request.ActionType,
                 request.TargetTechnicalProposalItemId,
@@ -65,6 +67,8 @@ public sealed class RequirementChatActionsController(
         var result = await planService.ExecuteAsync(
             new PlanRequirementChatActionCommand(
                 requirementId,
+                null,
+                null,
                 technicalProposalItemId,
                 "ITEM",
                 request.ActionType,

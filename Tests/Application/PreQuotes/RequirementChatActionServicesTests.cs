@@ -267,6 +267,8 @@ public sealed class RequirementChatActionServicesTests
         int? heightMm = null) =>
         new(
             RequirementId,
+            null,
+            null,
             contextItemId,
             scope,
             actionType,
