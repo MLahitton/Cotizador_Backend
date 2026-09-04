@@ -62,6 +62,7 @@ public enum UpdateRequirementTechnicalProposalItemSelectionFailure
     ClientNotFound,
     InactiveClient,
     InvalidSystemSelection,
+    FunctionalTypeMismatch,
     InvalidGlassSelection,
     InvalidFinishSelection,
     QueryError,
@@ -168,17 +169,31 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                 cancellationToken);
             var finishes = await finishCatalog.ListActiveAsync(cancellationToken);
 
-            if (command.SystemId is { } systemId
-                && !systems.Any(system => system.Id == systemId
-                    && system.IsActive
-                    && system.IsSelectable
-                    && IsAllowedForCommercialLine(
-                        system,
-                        proposal.Requirement.CommercialLine)))
+            ProductSystemCatalogReadModel? requestedSystem = null;
+            if (command.SystemId is { } systemId)
             {
-                return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
-                    UpdateRequirementTechnicalProposalItemSelectionFailure
-                        .InvalidSystemSelection);
+                requestedSystem = systems.SingleOrDefault(system => system.Id == systemId);
+                if (requestedSystem is null
+                    || !requestedSystem.IsActive
+                    || !requestedSystem.IsSelectable
+                    || !IsAllowedForCommercialLine(
+                        requestedSystem,
+                        proposal.Requirement.CommercialLine))
+                {
+                    return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
+                        UpdateRequirementTechnicalProposalItemSelectionFailure
+                            .InvalidSystemSelection);
+                }
+
+                var compatibility = SgFunctionalCompatibilityEvaluator.Evaluate(
+                    item,
+                    requestedSystem);
+                if (compatibility.IsIncompatible)
+                {
+                    return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
+                        UpdateRequirementTechnicalProposalItemSelectionFailure
+                            .FunctionalTypeMismatch);
+                }
             }
 
             if (command.GlassId is { } glassId

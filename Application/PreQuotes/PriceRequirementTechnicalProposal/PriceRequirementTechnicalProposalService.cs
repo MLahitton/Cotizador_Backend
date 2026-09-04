@@ -36,6 +36,7 @@ public enum PriceRequirementTechnicalProposalFailure
     TechnicalProposalNotFound,
     TechnicalProposalNotConfirmed,
     TechnicalProposalNoIncludedItems,
+    FunctionalTypeMismatch,
     QueryError,
     Cancelled
 }
@@ -57,6 +58,7 @@ public enum RepriceRequirementTechnicalProposalItemFailure
     TechnicalProposalItemNotFound,
     TechnicalProposalItemExcluded,
     InvalidSystemSelection,
+    FunctionalTypeMismatch,
     InvalidGlassSelection,
     InvalidFinishSelection,
     QueryError,
@@ -169,6 +171,12 @@ public sealed class PriceRequirementTechnicalProposalService(
             var systems = (await productSystemCatalog.ListActiveAsync(
                     operationCancellationToken))
                 .ToDictionary(value => value.Id);
+            if (HasIncludedFunctionalTypeMismatch(proposal, systems))
+            {
+                return PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.FunctionalTypeMismatch);
+            }
+
             var glasses = (await glassCatalog.GetActiveWithCurrentPriceRangesAsync(
                     operationCancellationToken))
                 .ToDictionary(value => value.GlassTypeId);
@@ -384,6 +392,22 @@ public sealed class PriceRequirementTechnicalProposalService(
                         .InvalidFinishSelection);
             }
 
+
+            var baseConfiguration = EffectiveConfiguration(proposalItem);
+            var newSystemId = command.SystemId ?? baseConfiguration.SystemId;
+            var newGlassTypeId = command.GlassTypeId ?? baseConfiguration.GlassTypeId;
+            var newFinishTypeId = command.FinishTypeId ?? baseConfiguration.FinishTypeId;
+            if (newSystemId is { } effectiveSystemId
+                && systems.TryGetValue(effectiveSystemId, out var effectiveSystem)
+                && SgFunctionalCompatibilityEvaluator.Evaluate(
+                    proposalItem,
+                    effectiveSystem).IsIncompatible)
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .FunctionalTypeMismatch);
+            }
+
             var snapshot =
                 await requirementRepository.FindCurrentPricingSnapshotForUpdateAsync(
                     command.RequirementId,
@@ -420,10 +444,6 @@ public sealed class PriceRequirementTechnicalProposalService(
             }
 
             var previousCommercialState = CurrentCommercialState(proposalItem);
-            var baseConfiguration = EffectiveConfiguration(proposalItem);
-            var newSystemId = command.SystemId ?? baseConfiguration.SystemId;
-            var newGlassTypeId = command.GlassTypeId ?? baseConfiguration.GlassTypeId;
-            var newFinishTypeId = command.FinishTypeId ?? baseConfiguration.FinishTypeId;
             var requireSystemMatchedComparable = command.SystemId is not null
                 && newSystemId != baseConfiguration.SystemId;
             var now = DateTimeOffset.UtcNow;
@@ -639,6 +659,22 @@ public sealed class PriceRequirementTechnicalProposalService(
                 missing);
         }
 
+
+        if (SgFunctionalCompatibilityEvaluator.Evaluate(
+            proposalItem,
+            system).IsIncompatible)
+        {
+            return EmptyItem(
+                proposalItem,
+                "NOT_PRICEABLE",
+                effective.Source,
+                null,
+                true,
+                [],
+                [SgFunctionalCompatibilityEvaluator
+                    .TechnicalProposalFunctionalTypeMismatch]);
+        }
+
         var mapping = WithPricingContext(
             mapper.Map(proposalItem, system, glass, finish),
             commercialLine,
@@ -821,6 +857,19 @@ public sealed class PriceRequirementTechnicalProposalService(
         snapshot.TechnicalProposalId == proposal.Id
         && snapshot.TechnicalProposalCommercialRevision
             == proposal.CommercialRevision;
+
+    private static bool HasIncludedFunctionalTypeMismatch(
+        RequirementTechnicalProposal proposal,
+        IReadOnlyDictionary<Guid, ProductSystemCatalogReadModel> systems) =>
+        proposal.IncludedItems.Any(item =>
+        {
+            var effective = EffectiveConfiguration(item);
+            return effective.SystemId is { } systemId
+                && systems.TryGetValue(systemId, out var system)
+                && SgFunctionalCompatibilityEvaluator.Evaluate(
+                    item,
+                    system).IsIncompatible;
+        });
 
     private static RequirementTechnicalProposalPricingReadModel MapSnapshot(
         RequirementTechnicalProposal proposal,

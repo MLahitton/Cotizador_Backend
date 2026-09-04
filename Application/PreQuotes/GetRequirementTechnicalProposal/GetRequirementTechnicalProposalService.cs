@@ -278,7 +278,7 @@ public sealed class GetRequirementTechnicalProposalService(
         IReadOnlyDictionary<string, SourceMetadata> sourcesById)
     {
         var extracted = item.ExtractedItem;
-        var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item);
+        var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item, systems);
         var suggested = new RequirementTechnicalProposalSuggestedReadModel(
             MapSystem(item.SuggestedSystemId, systems),
             MapGlass(item.SuggestedGlassTypeId, glasses),

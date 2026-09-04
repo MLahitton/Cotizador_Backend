@@ -922,13 +922,13 @@ public sealed class DeterministicSgTechnicalSelector(
 
     private static bool IsMonaco(ProductSystemCatalogReadModel system) =>
         Contains(system.Family, "MONACO")
-        || Contains(system.Family, "MÓNACO")
+        || Contains(system.Family, "MÃ“NACO")
         || Contains(system.TechnicalName, "MONACO")
-        || Contains(system.TechnicalName, "MÓNACO")
+        || Contains(system.TechnicalName, "MÃ“NACO")
         || Contains(system.CommercialName, "MONACO")
-        || Contains(system.CommercialName, "MÓNACO")
+        || Contains(system.CommercialName, "MÃ“NACO")
         || Contains(system.Name, "MONACO")
-        || Contains(system.Name, "MÓNACO");
+        || Contains(system.Name, "MÃ“NACO");
 
     private static bool IsLsa(ProductSystemCatalogReadModel system) =>
         Contains(system.Family, "LSA")

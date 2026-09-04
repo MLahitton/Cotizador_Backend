@@ -149,6 +149,13 @@ public sealed class TechnicalProposalItemSelectionController(
                     "Sistema invalido",
                     "El sistema seleccionado no existe o no esta activo para seleccion."),
             UpdateRequirementTechnicalProposalItemSelectionFailure
+                .FunctionalTypeMismatch =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalFunctionalTypeMismatch,
+                    "Sistema incompatible",
+                    "El sistema seleccionado no pertenece a la funcion del requerimiento."),
+            UpdateRequirementTechnicalProposalItemSelectionFailure
                 .InvalidGlassSelection =>
                 RequirementProblem(
                     StatusCodes.Status400BadRequest,

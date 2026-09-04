@@ -23,6 +23,8 @@ public static class RequirementErrorCodes
         "TECHNICAL_PROPOSAL_NO_INCLUDED_ITEMS";
     public const string TechnicalProposalItemExcluded =
         "TECHNICAL_PROPOSAL_ITEM_EXCLUDED";
+    public const string TechnicalProposalFunctionalTypeMismatch =
+        "TECHNICAL_PROPOSAL_FUNCTIONAL_TYPE_MISMATCH";
     public const string ProjectInactive = "REQUIREMENT_PROJECT_INACTIVE";
     public const string ClientInactive = "REQUIREMENT_CLIENT_INACTIVE";
     public const string ProcessingAlreadyActive =

@@ -159,6 +159,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.TechnicalProposalNoIncludedItems,
                     "Propuesta tecnica sin items incluidos",
                     "No hay elementos incluidos en la propuesta tecnica para calcular pricing."),
+            PriceRequirementTechnicalProposalFailure.FunctionalTypeMismatch =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalFunctionalTypeMismatch,
+                    "Sistema incompatible",
+                    "Hay un sistema seleccionado que no pertenece a la funcion del requerimiento."),
             PriceRequirementTechnicalProposalFailure.Cancelled =>
                 RequirementProblem(StatusCodes.Status409Conflict,
                     RequirementErrorCodes.PricingCancelled,
@@ -346,6 +351,11 @@ public sealed class RequirementPricingController(
                     RequirementErrorCodes.InvalidRequest,
                     "Sistema invalido",
                     "El sistema seleccionado no existe o no es seleccionable."),
+            RepriceRequirementTechnicalProposalItemFailure.FunctionalTypeMismatch =>
+                RequirementProblem(StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalFunctionalTypeMismatch,
+                    "Sistema incompatible",
+                    "El sistema seleccionado no pertenece a la funcion del requerimiento."),
             RepriceRequirementTechnicalProposalItemFailure.InvalidGlassSelection =>
                 RequirementProblem(StatusCodes.Status400BadRequest,
                     RequirementErrorCodes.InvalidRequest,

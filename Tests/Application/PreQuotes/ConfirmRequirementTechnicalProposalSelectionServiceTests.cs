@@ -1,10 +1,12 @@
 using System.Reflection;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
 using CotizadorBackend.Tests.TestDoubles;
+using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -141,6 +143,7 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var projects = Substitute.For<IProjectRepository>();
         var clients = Substitute.For<IClientRepository>();
+        var productSystems = Substitute.For<IProductSystemCatalogRepository>();
 
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
         var client = Client.Create(
@@ -281,6 +284,9 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>())
             .Returns(client);
 
+        productSystems.ListActiveAsync(Arg.Any<CancellationToken>())
+            .Returns([ProductSystem(SuggestedSystemId, "FIXED"), ProductSystem(SelectedSystemId, "FIXED")]);
+
         var service = new ConfirmRequirementTechnicalProposalSelectionService(
             currentUser,
             identity,
@@ -288,10 +294,32 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
             preQuotes,
             projects,
             clients,
+            productSystems,
             new FixedTimeProvider(At));
 
         return new Context(service, requirements, proposal, item);
     }
+
+    private static ProductSystemCatalogReadModel ProductSystem(
+        Guid id,
+        string functionalType) =>
+        new(
+            id,
+            $"SYS-{functionalType}-{id:N}",
+            $"Sistema {functionalType}",
+            null,
+            null,
+            functionalType,
+            null,
+            null,
+            "ESSENTIAL",
+            null,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
 
     private static void SetPrivateProperty<T>(
         object target,
