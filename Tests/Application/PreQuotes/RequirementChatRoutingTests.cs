@@ -43,8 +43,11 @@ public sealed class RequirementChatRoutingTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("INFORMATIONAL", result.LastInteraction!.MessageType);
-        Assert.Null(result.LastInteraction.PlanId);
+        var lastInteraction = Assert.IsType<RequirementChatInteractionReadModel>(result.LastInteraction);
+        Assert.Equal("INFORMATIONAL", lastInteraction.MessageType);
+        Assert.Empty(lastInteraction.Reasons);
+        Assert.Empty(lastInteraction.AvailableOptions);
+        Assert.Null(lastInteraction.PlanId);
         Assert.Equal("V-9 usa el sistema sugerido.", result.Thread!.Messages.Last().Content);
         await context.Ai.Received(1).RespondAsync(
             Arg.Is<RequirementChatAiRequest>(request => request.Scope == "REQUIREMENT"),
@@ -72,7 +75,10 @@ public sealed class RequirementChatRoutingTests
                 request.Scope == "ITEM" && request.TechnicalProposalItemId == itemId),
             Arg.Any<CancellationToken>());
         Assert.Equal("ITEM", result.Thread!.Scope);
-        Assert.Equal("INFORMATIONAL", result.LastInteraction!.MessageType);
+        var lastInteraction = Assert.IsType<RequirementChatInteractionReadModel>(result.LastInteraction);
+        Assert.Equal("INFORMATIONAL", lastInteraction.MessageType);
+        Assert.Empty(lastInteraction.Reasons);
+        Assert.Empty(lastInteraction.AvailableOptions);
     }
 
     [Fact]

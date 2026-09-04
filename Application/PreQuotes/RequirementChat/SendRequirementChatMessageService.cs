@@ -222,7 +222,7 @@ public sealed class SendRequirementChatMessageService(
                 null,
                 null,
                 null,
-                null,
+                [],
                 []);
         }
         else if (intent.RequiresClarification
