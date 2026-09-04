@@ -199,8 +199,8 @@ public sealed class RequirementChatController(
                     interaction.RequestedValue,
                     interaction.PricingImpactExpected,
                     interaction.PricingStatus,
-                    interaction.Reasons,
-                    interaction.AvailableOptions.Select(option =>
+                    interaction.Reasons ?? [],
+                    (interaction.AvailableOptions ?? []).Select(option =>
                         new RequirementChatInteractionOptionResponse(
                             option.Id,
                             option.Code,
