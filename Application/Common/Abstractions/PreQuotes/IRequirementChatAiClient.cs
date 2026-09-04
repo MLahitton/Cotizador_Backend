@@ -45,7 +45,45 @@ public sealed record RequirementChatActionIntent(
     decimal? Confidence,
     bool RequiresClarification,
     string? ClarificationReason,
-    string? RawUserMessage);
+    string? RawUserMessage,
+    RequirementChatRequestedAttributes? RequestedAttributes = null);
+
+public sealed record RequirementChatRequestedAttributes(
+    RequirementChatRequestedSystemAttributes? System = null,
+    RequirementChatRequestedGlassAttributes? Glass = null,
+    RequirementChatRequestedFinishAttributes? Finish = null);
+
+public sealed record RequirementChatRequestedSystemAttributes(
+    string? FunctionalType = null,
+    string? Operation = null,
+    string? CommercialName = null,
+    string? Family = null,
+    string? Variant = null,
+    string? CommercialLine = null,
+    string? Code = null);
+
+public sealed record RequirementChatRequestedGlassAttributes(
+    string? Family = null,
+    string? Composition = null,
+    string? Treatment = null,
+    decimal? OuterThicknessMm = null,
+    decimal? InnerThicknessMm = null,
+    decimal? PvbThicknessMm = null,
+    decimal? ChamberThicknessMm = null,
+    string? PvbType = null,
+    string? PvbColor = null,
+    string? Color = null,
+    string? Pattern = null,
+    string? ProductLine = null,
+    string? ProductToken = null);
+
+public sealed record RequirementChatRequestedFinishAttributes(
+    string? NormalizedType = null,
+    string? Material = null,
+    string? Color = null,
+    string? Texture = null,
+    string? Process = null,
+    string? CommercialCode = null);
 
 public sealed class RequirementChatAiUnavailableException : Exception
 {

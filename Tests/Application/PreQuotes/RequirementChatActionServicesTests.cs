@@ -22,8 +22,13 @@ public sealed class RequirementChatActionServicesTests
     private static readonly Guid ItemBId = Guid.Parse("10000000-0000-0000-0000-00000000000b");
     private static readonly Guid SystemAId = Guid.Parse("20000000-0000-0000-0000-000000000001");
     private static readonly Guid SystemBId = Guid.Parse("20000000-0000-0000-0000-000000000002");
+    private static readonly Guid SystemCId = Guid.Parse("20000000-0000-0000-0000-000000000003");
+    private static readonly Guid SystemDId = Guid.Parse("20000000-0000-0000-0000-000000000004");
     private static readonly Guid GlassAId = Guid.Parse("30000000-0000-0000-0000-000000000001");
     private static readonly Guid GlassBId = Guid.Parse("30000000-0000-0000-0000-000000000002");
+    private static readonly Guid GlassCId = Guid.Parse("30000000-0000-0000-0000-000000000003");
+    private static readonly Guid GlassDId = Guid.Parse("30000000-0000-0000-0000-000000000004");
+    private static readonly Guid GlassEId = Guid.Parse("30000000-0000-0000-0000-000000000005");
     private static readonly Guid FinishAId = Guid.Parse("40000000-0000-0000-0000-000000000001");
     private static readonly Guid FinishBId = Guid.Parse("40000000-0000-0000-0000-000000000002");
 
@@ -133,6 +138,188 @@ public sealed class RequirementChatActionServicesTests
         Assert.Contains("GLASS_NOT_FOUND", action.ValidationReasons);
         Assert.Equal(0, context.Selection.Count);
         Assert.Equal(0, context.Pricing.RepriceCount);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_GlassAttributesResolveTemperedThicknessWithoutExactDisplayName()
+    {
+        var context = CreateContext();
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_GLASS",
+                contextItemId: ItemAId,
+                requestedValue: "vidrio templado de 6 mm",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Glass: new RequirementChatRequestedGlassAttributes(
+                        Composition: "TEMPERED",
+                        OuterThicknessMm: 6m))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan.Status);
+        Assert.Equal(GlassAId, action.ResolvedCatalogEntity!.Id);
+        Assert.Equal("TEMP_6", action.ResolvedCatalogEntity.Code);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_GlassAlternativesPreferSameCompositionWhenThicknessIsUnavailable()
+    {
+        var context = CreateContext(
+            glassValues:
+            [
+                Glass("TEMP_5", GlassCId, true),
+                Glass("TEMP_8", GlassBId, true),
+                Glass("TEMP_10", GlassDId, true),
+                Glass("LAM_4_4", GlassEId, true)
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_GLASS",
+                contextItemId: ItemAId,
+                requestedValue: "vidrio templado de 6 mm",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Glass: new RequirementChatRequestedGlassAttributes(
+                        Composition: "TEMPERED",
+                        OuterThicknessMm: 6m))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("NEEDS_CLARIFICATION", result.Plan.Status);
+        Assert.Contains("GLASS_NOT_FOUND", action.ValidationReasons);
+        Assert.Equal(["TEMP_5", "TEMP_8", "TEMP_10"], action.AvailableOptions.Take(3).Select(option => option.Code).ToArray());
+        Assert.DoesNotContain(action.AvailableOptions, option => option.Code == "LAM_4_4");
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_GlassAttributesKeepLaminatedCandidatesInLaminatedSpace()
+    {
+        var context = CreateContext(
+            glassValues:
+            [
+                Glass("TEMP_6", GlassAId, true),
+                GlassCatalog("LAM_4_4", GlassBId, "COMPOSICION LAMINADO CRUDO 4 MM INC + PVB 0,38 MM INC + 4 MM INC", "LAMINATED", null, "RAW", 4m, 4m, null),
+                GlassCatalog("LAM_5_5", GlassCId, "COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC", "LAMINATED", null, "RAW", 5m, 5m, null)
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_GLASS",
+                contextItemId: ItemAId,
+                requestedValue: "laminado 4+4",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Glass: new RequirementChatRequestedGlassAttributes(
+                        Composition: "LAMINATED",
+                        OuterThicknessMm: 4m,
+                        InnerThicknessMm: 4m))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan.Status);
+        Assert.Equal("LAM_4_4", action.ResolvedCatalogEntity!.Code);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_GlassAttributesKeepChamberCandidatesFirst()
+    {
+        var context = CreateContext(
+            glassValues:
+            [
+                Glass("TEMP_6", GlassAId, true),
+                GlassCatalog("DVH_5_12_6", GlassDId, "COMPOSICION TEMPLADO 5 MM INC + CAMARA 12 MM + TEMPLADO 6 MM INC", "IGU", null, "TEMPERED", 5m, 6m, 12m)
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_GLASS",
+                contextItemId: ItemAId,
+                requestedValue: "doble vidrio con camara 12",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Glass: new RequirementChatRequestedGlassAttributes(
+                        Family: "IGU",
+                        ChamberThicknessMm: 12m))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan.Status);
+        Assert.Equal("DVH_5_12_6", action.ResolvedCatalogEntity!.Code);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_SystemAlternativesPreserveCurrentFunctionalTypeWhenUserDoesNotRequestTypeChange()
+    {
+        var context = CreateContext(
+            systemValues:
+            [
+                System("SD_MONACO", SystemBId, "SLIDING_DOOR", "SLIDING", "VENECIA MONACO"),
+                System("SD_FERMO", SystemCId, "SLIDING_DOOR", "SLIDING", "VENECIA FERMO"),
+                System("SW_MONZA", SystemDId, "SLIDING_WINDOW", "SLIDING", "MONZA")
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_SYSTEM",
+                contextItemId: ItemAId,
+                requestedValue: "Venecia",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    System: new RequirementChatRequestedSystemAttributes(
+                        CommercialName: "VENECIA"))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("NEEDS_CLARIFICATION", result.Plan.Status);
+        Assert.Equal(["SD_FERMO", "SD_MONACO"], action.AvailableOptions.Select(option => option.Code).ToArray());
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_SystemAttributesCanRequestExplicitTypeChange()
+    {
+        var context = CreateContext(
+            systemValues:
+            [
+                System("SD_MONACO", SystemBId, "SLIDING_DOOR", "SLIDING", "VENECIA MONACO"),
+                System("SW_MONZA", SystemDId, "SLIDING_WINDOW", "SLIDING", "MONZA")
+            ]);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_SYSTEM",
+                contextItemId: ItemAId,
+                requestedValue: "ventana corrediza Monza",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    System: new RequirementChatRequestedSystemAttributes(
+                        FunctionalType: "SLIDING_WINDOW",
+                        Operation: "SLIDING",
+                        CommercialName: "MONZA"))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan.Status);
+        Assert.Equal(SystemDId, action.ResolvedCatalogEntity!.Id);
+        Assert.Equal("SW_MONZA", action.ResolvedCatalogEntity.Code);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_FinishAttributesResolveColorAndTexture()
+    {
+        var context = CreateContext();
+
+        var result = await context.Plan.ExecuteAsync(
+            Command(
+                "CHANGE_FINISH",
+                contextItemId: ItemAId,
+                requestedValue: "negro mate",
+                requestedAttributes: new RequirementChatRequestedAttributes(
+                    Finish: new RequirementChatRequestedFinishAttributes(
+                        Color: "BLACK",
+                        Texture: "MATTE"))),
+            TestContext.Current.CancellationToken);
+
+        var action = Assert.Single(result.Plan!.Actions);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan.Status);
+        Assert.Equal(FinishAId, action.ResolvedCatalogEntity!.Id);
+        Assert.Equal("BLACK_MATTE", action.ResolvedCatalogEntity.Code);
     }
 
     [Fact]
@@ -264,7 +451,8 @@ public sealed class RequirementChatActionServicesTests
         string? requestedValue = null,
         int? quantity = null,
         int? widthMm = null,
-        int? heightMm = null) =>
+        int? heightMm = null,
+        RequirementChatRequestedAttributes? requestedAttributes = null) =>
         new(
             RequirementId,
             null,
@@ -278,7 +466,8 @@ public sealed class RequirementChatActionServicesTests
             quantity,
             widthMm,
             heightMm,
-            "chat request");
+            "chat request",
+            requestedAttributes);
 
     private static async Task<ChatActionPlanReadModel> ReadyPlanAsync(
         Context context,
@@ -298,7 +487,10 @@ public sealed class RequirementChatActionServicesTests
         bool hasPricing = false,
         bool duplicateReference = false,
         bool repriceFailure = false,
-        TimeSpan? repriceDelay = null)
+        TimeSpan? repriceDelay = null,
+        IReadOnlyList<ProductSystemCatalogReadModel>? systemValues = null,
+        IReadOnlyList<GlassTypeCatalogReadModel>? glassValues = null,
+        IReadOnlyList<FinishTypeCatalogReadModel>? finishValues = null)
     {
         var reader = new FakeTechnicalProposalReader(CreateProposal(duplicateReference));
         var selection = new FakeSelectionExecutor(reader);
@@ -324,13 +516,13 @@ public sealed class RequirementChatActionServicesTests
                 : null);
         var systems = Substitute.For<IProductSystemCatalogRepository>();
         systems.ListActiveSelectableAsync(Arg.Any<CancellationToken>())
-            .Returns([System("K70", SystemAId), System("K72", SystemBId)]);
+            .Returns(systemValues ?? [System("K70", SystemAId), System("K72", SystemBId)]);
         var glasses = Substitute.For<IGlassTypeCatalogRepository>();
         glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
-            .Returns([Glass("TEMP_6", GlassAId, true), Glass("TEMP_8", GlassBId, true)]);
+            .Returns(glassValues ?? [Glass("TEMP_6", GlassAId, true), Glass("TEMP_8", GlassBId, true)]);
         var finishes = Substitute.For<IFinishTypeCatalogRepository>();
         finishes.ListActiveAsync(Arg.Any<CancellationToken>())
-            .Returns([Finish("BLACK_MATTE", FinishAId), Finish("WHITE_MATTE", FinishBId)]);
+            .Returns(finishValues ?? [Finish("BLACK_MATTE", FinishAId), Finish("WHITE_MATTE", FinishBId)]);
 
         var plan = new PlanRequirementChatActionService(
             reader,
@@ -461,16 +653,21 @@ public sealed class RequirementChatActionServicesTests
                 "RECTANGULAR"),
             []);
 
-    private static ProductSystemCatalogReadModel System(string code, Guid id) =>
+    private static ProductSystemCatalogReadModel System(
+        string code,
+        Guid id,
+        string functionalType = "SLIDING_DOOR",
+        string operation = "SLIDING",
+        string? commercialName = null) =>
         new(
             id,
             code,
-            $"Sistema {code}",
-            $"Sistema tecnico {code}",
+            $"{functionalType} {commercialName ?? code}",
+            $"{operation} {functionalType} {commercialName ?? code}",
+            commercialName ?? code,
+            functionalType,
             code,
-            "SLIDING_DOOR",
-            code,
-            "SERIE",
+            operation,
             "ESSENTIAL",
             "STANDARD",
             true,
@@ -481,10 +678,64 @@ public sealed class RequirementChatActionServicesTests
             true);
 
     private static GlassTypeCatalogReadModel Glass(string code, Guid id, bool selectable) =>
-        new(id, code, $"Cristal {code}", null, true, null, IsSelectable: selectable);
+        new(
+            id,
+            code,
+            $"Cristal {code}",
+            null,
+            true,
+            null,
+            Family: code.StartsWith("LAM_", StringComparison.Ordinal) ? "LAMINATED" : "MONOLITHIC",
+            Composition: code.StartsWith("TEMP_", StringComparison.Ordinal) ? "TEMPERED" : "RAW",
+            OuterThicknessMm: code switch
+            {
+                "TEMP_5" => 5m,
+                "TEMP_6" => 6m,
+                "TEMP_8" => 8m,
+                "TEMP_10" => 10m,
+                _ => null
+            },
+            IsSelectable: selectable);
+
+    private static GlassTypeCatalogReadModel GlassCatalog(
+        string code,
+        Guid id,
+        string name,
+        string family,
+        string? composition,
+        string? treatment,
+        decimal? outerThicknessMm,
+        decimal? innerThicknessMm,
+        decimal? chamberThicknessMm) =>
+        new(
+            id,
+            code,
+            name,
+            null,
+            true,
+            null,
+            Family: family,
+            Composition: composition,
+            Treatment: treatment,
+            OuterThicknessMm: outerThicknessMm,
+            InnerThicknessMm: innerThicknessMm,
+            ChamberThicknessMm: chamberThicknessMm,
+            IsSelectable: true);
 
     private static FinishTypeCatalogReadModel Finish(string code, Guid id) =>
-        new(id, code, $"Acabado {code}", "PAINTED", code, "MATTE", "PAINTED", null, "ALUMINUM", true, false, true);
+        new(
+            id,
+            code,
+            $"Acabado {code}",
+            "PAINTED",
+            code.StartsWith("BLACK", StringComparison.Ordinal) ? "BLACK" : "WHITE",
+            "MATTE",
+            "PAINTED",
+            null,
+            "ALUMINUM",
+            true,
+            false,
+            true);
 
     private static RequirementTechnicalProposalSystemOptionReadModel OptionSystem(Guid id, string code) =>
         new(id, code, $"Sistema {code}", $"Sistema tecnico {code}", code, "SLIDING_DOOR", code, "SERIE", "ESSENTIAL", "STANDARD");

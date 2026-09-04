@@ -271,7 +271,8 @@ public sealed class SendRequirementChatMessageService(
                     intent.RequestedQuantity,
                     intent.RequestedWidthMm,
                     intent.RequestedHeightMm,
-                    intent.RawUserMessage ?? command.Message.Trim()),
+                    intent.RawUserMessage ?? command.Message.Trim(),
+                    intent.RequestedAttributes),
                 cancellationToken);
             if (!planResult.IsSuccess || planResult.Plan is null)
             {

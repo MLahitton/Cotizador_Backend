@@ -79,6 +79,52 @@ public sealed class CotizadorAi2RequirementChatClientTests
     }
 
     [Fact]
+    public async Task InterpretActionAsync_WithRequestedAttributes_DeserializesSemanticAttributes()
+    {
+        var handler = new CaptureHandler(
+            HttpStatusCode.OK,
+            """
+            {
+              "isAction": true,
+              "actionType": "CHANGE_GLASS",
+              "scope": "ITEM",
+              "targetReference": "V-01",
+              "requestedValue": "vidrio templado de 6 mm",
+              "requestedQuantity": null,
+              "requestedWidthMm": null,
+              "requestedHeightMm": null,
+              "confidence": 0.93,
+              "requiresClarification": false,
+              "clarificationReason": null,
+              "rawUserMessage": "Ponle vidrio templado de 6 mm",
+              "requestedAttributes": {
+                "glass": {
+                  "composition": "TEMPERED",
+                  "outerThicknessMm": 6
+                }
+              }
+            }
+            """);
+        using var httpClient = CreateHttpClient(handler);
+        var client = CreateClient(httpClient);
+
+        var intent = await client.InterpretActionAsync(
+            new RequirementChatActionInterpretationRequest(
+                "Ponle vidrio templado de 6 mm",
+                "ITEM",
+                Guid.NewGuid(),
+                [],
+                new { }),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("CHANGE_GLASS", intent.ActionType);
+        Assert.Equal("vidrio templado de 6 mm", intent.RequestedValue);
+        Assert.NotNull(intent.RequestedAttributes?.Glass);
+        Assert.Equal("TEMPERED", intent.RequestedAttributes.Glass.Composition);
+        Assert.Equal(6m, intent.RequestedAttributes.Glass.OuterThicknessMm);
+    }
+
+    [Fact]
     public async Task InterpretActionAsync_WithLegacyBackendShape_WouldMissAi2RequiredUserMessage()
     {
         var json = JsonSerializer.Serialize(

@@ -5,6 +5,8 @@ using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.PriceRequirementTechnicalProposal;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
+using System.Globalization;
+using System.Text;
 
 namespace Application.PreQuotes.RequirementChatActions;
 
@@ -21,7 +23,8 @@ public sealed record PlanRequirementChatActionCommand(
     int? Quantity,
     int? WidthMillimeters,
     int? HeightMillimeters,
-    string? RawUserMessage);
+    string? RawUserMessage,
+    RequirementChatRequestedAttributes? RequestedAttributes = null);
 
 public sealed record ConfirmRequirementChatActionCommand(
     Guid RequirementId,
@@ -371,9 +374,9 @@ public sealed class PlanRequirementChatActionService(
         var item = target.Item!;
         var resolved = actionType switch
         {
-            "CHANGE_SYSTEM" => await ResolveSystemAsync(command.RequestedValue, cancellationToken),
-            "CHANGE_GLASS" => await ResolveGlassAsync(command.RequestedValue, cancellationToken),
-            "CHANGE_FINISH" => await ResolveFinishAsync(command.RequestedValue, cancellationToken),
+            "CHANGE_SYSTEM" => await ResolveSystemAsync(command.RequestedValue, command.RequestedAttributes?.System, item, cancellationToken),
+            "CHANGE_GLASS" => await ResolveGlassAsync(command.RequestedValue, command.RequestedAttributes?.Glass, cancellationToken),
+            "CHANGE_FINISH" => await ResolveFinishAsync(command.RequestedValue, command.RequestedAttributes?.Finish, cancellationToken),
             "CHANGE_QUANTITY" => command.Quantity is > 0
                 ? Resolved(null, [])
                 : Unresolved("QUANTITY_REQUIRED"),
@@ -440,34 +443,103 @@ public sealed class PlanRequirementChatActionService(
 
     private async Task<CatalogResolution> ResolveSystemAsync(
         string? requestedValue,
+        RequirementChatRequestedSystemAttributes? attributes,
+        RequirementTechnicalProposalItemReadModel item,
         CancellationToken cancellationToken)
     {
         var systems = await productSystems.ListActiveSelectableAsync(cancellationToken);
+        var requestedFunctionalType = BlankToNull(attributes?.FunctionalType);
+        var requestedOperation = BlankToNull(attributes?.Operation);
+        var functionalType = requestedFunctionalType
+            ?? BlankToNull(item.Selected?.System?.FunctionalType)
+            ?? BlankToNull(item.Suggested.System?.FunctionalType)
+            ?? BlankToNull(item.VisualModel.FunctionalType)
+            ?? BlankToNull(item.Trace.FunctionalType);
+        var operation = requestedOperation
+            ?? BlankToNull(item.VisualModel.Operation)
+            ?? BlankToNull(item.Trace.Operation);
+        var compatible = systems
+            .Where(system => IsCompatible(system.FunctionalType, functionalType))
+            .Where(system => IsCompatible(system.Series, operation)
+                || IsCompatible(system.Variant, operation)
+                || IsCompatible(system.TechnicalName, operation)
+                || IsCompatible(system.Name, operation)
+                || string.IsNullOrWhiteSpace(operation))
+            .ToArray();
+        if (compatible.Length == 0)
+        {
+            compatible = systems.ToArray();
+        }
+
         return ResolveCatalog(
             requestedValue,
-            systems,
+            compatible,
             system => system.Id,
             system => system.Code,
             system => system.Name,
-            "SYSTEM");
+            "SYSTEM",
+            system => SystemScore(system, requestedValue, attributes),
+            systems);
     }
 
     private async Task<CatalogResolution> ResolveGlassAsync(
         string? requestedValue,
+        RequirementChatRequestedGlassAttributes? attributes,
         CancellationToken cancellationToken)
     {
         var glasses = await glassTypes.GetActiveWithCurrentPriceRangesAsync(cancellationToken);
+        var selectable = glasses
+            .Where(glass => glass.IsActive && glass.IsSelectable)
+            .ToArray();
+        var compatible = HardFilterGlass(selectable, attributes);
+        if (HasExplicitPhysicalGlassAttribute(attributes))
+        {
+            var exactPhysical = compatible
+                .Where(glass => MatchesExplicitPhysicalGlassAttributes(glass, attributes))
+                .ToArray();
+            if (exactPhysical.Length == 1)
+            {
+                var match = exactPhysical[0];
+                return Resolved(
+                    new ChatActionResolvedCatalogEntityReadModel(
+                        match.GlassTypeId,
+                        match.Code,
+                        match.Name,
+                        "GLASS"),
+                    []);
+            }
+
+            if (exactPhysical.Length > 1)
+            {
+                return Unresolved(
+                    "GLASS_AMBIGUOUS",
+                    Options(exactPhysical, glass => glass.GlassTypeId, glass => glass.Code, glass => glass.Name, "GLASS"));
+            }
+
+            return Unresolved(
+                "GLASS_NOT_FOUND",
+                Options(
+                    RelevantOptions(compatible, glass => GlassScore(glass, requestedValue, attributes)),
+                    glass => glass.GlassTypeId,
+                    glass => glass.Code,
+                    glass => glass.Name,
+                    "GLASS"));
+        }
+
         return ResolveCatalog(
             requestedValue,
-            glasses.Where(glass => glass.IsActive && glass.IsSelectable).ToArray(),
+            compatible,
             glass => glass.GlassTypeId,
             glass => glass.Code,
             glass => glass.Name,
-            "GLASS");
+            "GLASS",
+            glass => GlassScore(glass, requestedValue, attributes),
+            compatible);
     }
 
     private async Task<CatalogResolution> ResolveFinishAsync(
         string? requestedValue,
+        RequirementChatRequestedFinishAttributes? attributes,
         CancellationToken cancellationToken)
     {
         var values = await finishes.ListActiveAsync(cancellationToken);
@@ -477,7 +549,9 @@ public sealed class PlanRequirementChatActionService(
             finish => finish.Id,
             finish => finish.Code,
             finish => finish.Name,
-            "FINISH");
+            "FINISH",
+            finish => FinishScore(finish, requestedValue, attributes),
+            values.Where(finish => finish.IsActive && finish.IsSelectable).ToArray());
     }
 
     private static CatalogResolution ResolveCatalog<T>(
@@ -486,29 +560,42 @@ public sealed class PlanRequirementChatActionService(
         Func<T, Guid> id,
         Func<T, string> code,
         Func<T, string> name,
-        string entityType)
+        string entityType,
+        Func<T, CatalogMatchScore> score,
+        IReadOnlyList<T>? fallbackValues = null)
     {
-        if (string.IsNullOrWhiteSpace(requestedValue))
+        var normalized = requestedValue?.Trim() ?? string.Empty;
+        var matches = values
+            .Select(value => new ScoredCatalogValue<T>(value, score(value)))
+            .Where(value => value.Score.IsMatch)
+            .OrderByDescending(value => value.Score.Score)
+            .ThenBy(value => name(value.Value), StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (string.IsNullOrWhiteSpace(requestedValue) && matches.Length == 0)
         {
             return Unresolved($"{entityType}_VALUE_REQUIRED", Options(values, id, code, name, entityType));
         }
 
-        var normalized = requestedValue.Trim();
-        var matches = values.Where(value =>
-                Guid.TryParse(normalized, out var parsed) && id(value) == parsed
-                || string.Equals(code(value), normalized, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name(value), normalized, StringComparison.OrdinalIgnoreCase))
+        var strongest = matches.Length == 0 ? [] : matches
+            .Where(value => value.Score.Score == matches[0].Score.Score)
             .ToArray();
-        if (matches.Length != 1)
+        if (strongest.Length != 1)
         {
             return Unresolved(
-                matches.Length == 0
+                strongest.Length == 0
                     ? $"{entityType}_NOT_FOUND"
                     : $"{entityType}_AMBIGUOUS",
-                Options(matches.Length == 0 ? values : matches, id, code, name, entityType));
+                Options(
+                    (strongest.Length == 0
+                        ? RelevantOptions(fallbackValues ?? values, score)
+                        : strongest.Select(value => value.Value).ToArray()),
+                    id,
+                    code,
+                    name,
+                    entityType));
         }
 
-        var match = matches[0];
+        var match = strongest[0].Value;
         return Resolved(
             new ChatActionResolvedCatalogEntityReadModel(
                 id(match),
@@ -516,6 +603,292 @@ public sealed class PlanRequirementChatActionService(
                 name(match),
                 entityType),
             []);
+    }
+
+    private static CatalogMatchScore SystemScore(
+        ProductSystemCatalogReadModel system,
+        string? requestedValue,
+        RequirementChatRequestedSystemAttributes? attributes)
+    {
+        var exact = ExactCatalogScore(system.Id, system.Code, system.Name, requestedValue);
+        var score = exact.Score;
+        score += MatchText(system.Code, attributes?.Code, 120);
+        score += MatchText(system.CommercialName, attributes?.CommercialName, 100);
+        score += MatchText(system.Family, attributes?.Family, 80);
+        score += MatchText(system.Variant, attributes?.Variant, 70);
+        score += MatchText(system.CommercialLine, attributes?.CommercialLine, 40);
+        score += MatchText(system.Name, requestedValue, 35);
+        score += MatchText(system.TechnicalName, requestedValue, 30);
+        score += ContainsText(system.Name, requestedValue, 15);
+        score += ContainsText(system.TechnicalName, requestedValue, 15);
+        score += ContainsText(system.CommercialName, requestedValue, 15);
+        return new CatalogMatchScore(score > 0, score);
+    }
+
+    private static CatalogMatchScore GlassScore(
+        GlassTypeCatalogReadModel glass,
+        string? requestedValue,
+        RequirementChatRequestedGlassAttributes? attributes)
+    {
+        var exact = ExactCatalogScore(glass.GlassTypeId, glass.Code, glass.Name, requestedValue);
+        var score = exact.Score;
+        score += MatchGlassText(glass.Composition, glass.Name, attributes?.Composition, 120);
+        score += MatchGlassText(glass.Family, glass.Name, attributes?.Family, 90);
+        score += MatchGlassText(glass.Treatment, glass.Name, attributes?.Treatment, 80);
+        score += MatchNumber(glass.OuterThicknessMm, ExtractThickness(glass.Code, glass.Name), attributes?.OuterThicknessMm, 100, 80);
+        score += MatchNumber(glass.InnerThicknessMm, null, attributes?.InnerThicknessMm, 80, 60);
+        score += MatchNumber(glass.PvbThicknessMm, null, attributes?.PvbThicknessMm, 75, 50);
+        score += MatchNumber(glass.ChamberThicknessMm, null, attributes?.ChamberThicknessMm, 75, 50);
+        score += MatchText(glass.PvbType, attributes?.PvbType, 60);
+        score += MatchText(glass.PvbColor, attributes?.PvbColor, 55);
+        score += MatchText(glass.Color, attributes?.Color, 50);
+        score += MatchText(glass.Pattern, attributes?.Pattern, 50);
+        score += MatchText(glass.ProductLine, attributes?.ProductLine, 45);
+        score += MatchText(glass.ProductToken, attributes?.ProductToken, 45);
+        score += ContainsText(glass.Name, requestedValue, 20);
+        score += ContainsText(glass.Code, requestedValue, 20);
+        return new CatalogMatchScore(score > 0, score);
+    }
+
+    private static bool HasExplicitPhysicalGlassAttribute(RequirementChatRequestedGlassAttributes? attributes) =>
+        attributes?.OuterThicknessMm is not null
+        || attributes?.InnerThicknessMm is not null
+        || attributes?.PvbThicknessMm is not null
+        || attributes?.ChamberThicknessMm is not null;
+
+    private static bool MatchesExplicitPhysicalGlassAttributes(
+        GlassTypeCatalogReadModel glass,
+        RequirementChatRequestedGlassAttributes? attributes) =>
+        attributes is null
+        || MatchesNumber(glass.OuterThicknessMm ?? ExtractThickness(glass.Code, glass.Name), attributes.OuterThicknessMm)
+        && MatchesNumber(glass.InnerThicknessMm, attributes.InnerThicknessMm)
+        && MatchesNumber(glass.PvbThicknessMm, attributes.PvbThicknessMm)
+        && MatchesNumber(glass.ChamberThicknessMm, attributes.ChamberThicknessMm);
+
+    private static bool MatchesNumber(decimal? actual, decimal? expected) =>
+        expected is null || actual == expected.Value;
+
+    private static IReadOnlyList<GlassTypeCatalogReadModel> HardFilterGlass(
+        IReadOnlyList<GlassTypeCatalogReadModel> values,
+        RequirementChatRequestedGlassAttributes? attributes)
+    {
+        var compatible = values
+            .Where(glass => IsGlassCompatible(glass.Composition, glass.Name, attributes?.Composition))
+            .Where(glass => IsGlassCompatible(glass.Family, glass.Name, attributes?.Family))
+            .Where(glass => IsGlassCompatible(glass.Treatment, glass.Name, attributes?.Treatment))
+            .ToArray();
+        return compatible.Length == 0 ? [] : compatible;
+    }
+
+    private static CatalogMatchScore FinishScore(
+        FinishTypeCatalogReadModel finish,
+        string? requestedValue,
+        RequirementChatRequestedFinishAttributes? attributes)
+    {
+        var exact = ExactCatalogScore(finish.Id, finish.Code, finish.Name, requestedValue);
+        var score = exact.Score;
+        score += MatchText(finish.NormalizedType, attributes?.NormalizedType, 90);
+        score += MatchText(finish.Material, attributes?.Material, 90);
+        score += MatchText(finish.Color, attributes?.Color, 100);
+        score += MatchText(finish.Texture, attributes?.Texture, 80);
+        score += MatchText(finish.Process, attributes?.Process, 70);
+        score += MatchText(finish.CommercialCode, attributes?.CommercialCode, 60);
+        score += ContainsText(finish.Name, requestedValue, 20);
+        score += ContainsText(finish.Code, requestedValue, 20);
+        return new CatalogMatchScore(score > 0, score);
+    }
+
+    private static CatalogMatchScore ExactCatalogScore(
+        Guid id,
+        string code,
+        string name,
+        string? requestedValue)
+    {
+        if (string.IsNullOrWhiteSpace(requestedValue))
+        {
+            return new CatalogMatchScore(false, 0);
+        }
+
+        var normalized = requestedValue.Trim();
+        if (Guid.TryParse(normalized, out var parsed) && id == parsed
+            || string.Equals(code, normalized, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return new CatalogMatchScore(true, 1_000);
+        }
+
+        return new CatalogMatchScore(false, 0);
+    }
+
+    private static IReadOnlyList<T> RelevantOptions<T>(
+        IReadOnlyList<T> values,
+        Func<T, CatalogMatchScore> score) =>
+        values
+            .Select(value => new ScoredCatalogValue<T>(value, score(value)))
+            .OrderByDescending(value => value.Score.Score)
+            .ThenBy(value => value.Score.IsMatch ? 0 : 1)
+            .Select(value => value.Value)
+            .ToArray();
+
+    private static bool IsCompatible(string? actual, string? expected) =>
+        string.IsNullOrWhiteSpace(expected)
+        || string.Equals(NormalizeText(actual), NormalizeText(expected), StringComparison.Ordinal);
+
+    private static int MatchText(string? actual, string? expected, int weight) =>
+        !string.IsNullOrWhiteSpace(actual)
+        && !string.IsNullOrWhiteSpace(expected)
+        && string.Equals(NormalizeText(actual), NormalizeText(expected), StringComparison.Ordinal)
+            ? weight
+            : 0;
+
+    private static int MatchGlassText(string? actual, string? displayName, string? expected, int weight)
+    {
+        if (MatchText(actual, expected, weight) > 0)
+        {
+            return weight;
+        }
+
+        var normalizedExpected = NormalizeText(expected);
+        if (string.IsNullOrWhiteSpace(normalizedExpected))
+        {
+            return 0;
+        }
+
+        var normalizedDisplay = NormalizeText(displayName);
+        return normalizedExpected switch
+        {
+            "tempered" or "templado" when normalizedDisplay.Contains("templado", StringComparison.Ordinal) => weight,
+            "raw" or "crudo" when normalizedDisplay.Contains("crudo", StringComparison.Ordinal) => weight,
+            "laminated" or "laminado" when normalizedDisplay.Contains("laminado", StringComparison.Ordinal) => weight,
+            _ => normalizedDisplay.Contains(normalizedExpected, StringComparison.Ordinal) ? weight : 0
+        };
+    }
+
+    private static bool IsGlassCompatible(string? actual, string? displayName, string? expected)
+    {
+        var normalizedExpected = NormalizeGlassToken(expected);
+        if (string.IsNullOrWhiteSpace(normalizedExpected))
+        {
+            return true;
+        }
+
+        var normalizedActual = NormalizeGlassToken(actual);
+        if (string.Equals(normalizedActual, normalizedExpected, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var normalizedDisplay = NormalizeText(displayName);
+        return normalizedExpected switch
+        {
+            "tempered" => normalizedDisplay.Contains("monolitico templado", StringComparison.Ordinal)
+                || normalizedDisplay.Contains("composicion templado", StringComparison.Ordinal),
+            "raw" => normalizedDisplay.Contains("monolitico crudo", StringComparison.Ordinal),
+            "laminated" => normalizedDisplay.Contains("laminado", StringComparison.Ordinal),
+            "igu" or "chamber" or "dvh" => normalizedDisplay.Contains("camara", StringComparison.Ordinal),
+            _ => false
+        };
+    }
+
+    private static int MatchNumber(
+        decimal? actual,
+        decimal? inferredActual,
+        decimal? expected,
+        int exactWeight,
+        int nearbyWeight)
+    {
+        if (expected is null)
+        {
+            return 0;
+        }
+
+        var value = actual ?? inferredActual;
+        if (value is null)
+        {
+            return 0;
+        }
+
+        var distance = Math.Abs(value.Value - expected.Value);
+        if (distance == 0)
+        {
+            return exactWeight;
+        }
+
+        var nearby = nearbyWeight - (int)Math.Min(nearbyWeight, distance * 10);
+        return Math.Max(0, nearby);
+    }
+
+    private static string NormalizeGlassToken(string? value)
+    {
+        var normalized = NormalizeText(value);
+        return normalized switch
+        {
+            "templado" or "tempered" => "tempered",
+            "crudo" or "raw" => "raw",
+            "laminado" or "laminated" => "laminated",
+            "camara" or "dvh" or "insulated" or "igu" => "igu",
+            _ => normalized
+        };
+    }
+
+    private static int ContainsText(string? actual, string? expected, int weight)
+    {
+        var normalizedActual = NormalizeText(actual);
+        var normalizedExpected = NormalizeText(expected);
+        return !string.IsNullOrWhiteSpace(normalizedActual)
+            && !string.IsNullOrWhiteSpace(normalizedExpected)
+            && normalizedActual.Contains(normalizedExpected, StringComparison.Ordinal)
+            ? weight
+            : 0;
+    }
+
+    private static decimal? ExtractThickness(string code, string name)
+    {
+        foreach (var token in NormalizeText($"{code} {name}").Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (decimal.TryParse(token, NumberStyles.Number, CultureInfo.InvariantCulture, out var value)
+                && value is >= 3 and <= 30)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? BlankToNull(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string NormalizeText(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        var previousWasSpace = true;
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+                previousWasSpace = false;
+            }
+            else if (!previousWasSpace)
+            {
+                builder.Append(' ');
+                previousWasSpace = true;
+            }
+        }
+
+        return builder.ToString().Trim();
     }
 
     private static CatalogResolution Resolved(
@@ -534,7 +907,7 @@ public sealed class PlanRequirementChatActionService(
         Func<T, string> code,
         Func<T, string> name,
         string optionType) =>
-        values.Take(20)
+        values.Take(8)
             .Select(value => new ChatActionOptionReadModel(
                 id(value),
                 code(value),
@@ -632,6 +1005,10 @@ public sealed class PlanRequirementChatActionService(
         ChatActionResolvedCatalogEntityReadModel? Entity,
         IReadOnlyList<string> Reasons,
         IReadOnlyList<ChatActionOptionReadModel> Options);
+
+    private sealed record CatalogMatchScore(bool IsMatch, int Score);
+
+    private sealed record ScoredCatalogValue<T>(T Value, CatalogMatchScore Score);
 }
 
 public sealed class ConfirmRequirementChatActionService(
