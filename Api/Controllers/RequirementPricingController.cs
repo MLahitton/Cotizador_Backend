@@ -41,6 +41,32 @@ public sealed class RequirementPricingController(
         return MapFailure(result.Failure);
     }
 
+    [HttpGet("current")]
+    [ProducesResponseType(typeof(RequirementPricingResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCurrent(
+        [FromRoute] Guid requirementId,
+        CancellationToken cancellationToken)
+    {
+        var result = await service.GetCurrentAsync(
+            new PriceRequirementTechnicalProposalCommand(requirementId),
+            cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            return result.Pricing is { } pricing
+                ? Ok(Map(pricing))
+                : NoContent();
+        }
+
+        return MapFailure(result.Failure);
+    }
+
     [HttpPost("cancel")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status400BadRequest)]

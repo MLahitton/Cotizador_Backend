@@ -77,6 +77,9 @@ public sealed record PriceRequirementTechnicalProposalResult(
     public static PriceRequirementTechnicalProposalResult Failed(
         PriceRequirementTechnicalProposalFailure failure) =>
         new(false, failure, null);
+
+    public static PriceRequirementTechnicalProposalResult NoCurrentPricing() =>
+        new(true, PriceRequirementTechnicalProposalFailure.None, null);
 }
 
 public sealed record RepriceRequirementTechnicalProposalItemResult(
@@ -260,6 +263,60 @@ public sealed class PriceRequirementTechnicalProposalService(
         finally
         {
             cancellationRegistry.Complete(operationKey);
+        }
+    }
+
+    public async Task<PriceRequirementTechnicalProposalResult> GetCurrentAsync(
+        PriceRequirementTechnicalProposalCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.RequirementId == Guid.Empty)
+        {
+            return PriceRequirementTechnicalProposalResult.Failed(
+                PriceRequirementTechnicalProposalFailure.InvalidRequest);
+        }
+
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not Guid userId)
+        {
+            return PriceRequirementTechnicalProposalResult.Failed(
+                PriceRequirementTechnicalProposalFailure.Unauthorized);
+        }
+
+        var access = await ValidateAccessAsync(
+            command.RequirementId,
+            userId,
+            cancellationToken);
+        if (access != PriceRequirementTechnicalProposalFailure.None)
+        {
+            return PriceRequirementTechnicalProposalResult.Failed(access);
+        }
+
+        try
+        {
+            var proposal = await requirementRepository.GetCurrentTechnicalProposalAsync(
+                command.RequirementId,
+                cancellationToken);
+            if (proposal is null)
+            {
+                return PriceRequirementTechnicalProposalResult.Failed(
+                    PriceRequirementTechnicalProposalFailure.TechnicalProposalNotFound);
+            }
+
+            var snapshot = await requirementRepository.GetCurrentPricingSnapshotAsync(
+                command.RequirementId,
+                cancellationToken);
+            if (snapshot is null || !IsCurrentSnapshot(proposal, snapshot))
+            {
+                return PriceRequirementTechnicalProposalResult.NoCurrentPricing();
+            }
+
+            return PriceRequirementTechnicalProposalResult.Success(
+                MapSnapshot(proposal, snapshot));
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return PriceRequirementTechnicalProposalResult.Failed(
+                PriceRequirementTechnicalProposalFailure.QueryError);
         }
     }
 
