@@ -205,7 +205,33 @@ public sealed class RequirementChatController(
                             option.Id,
                             option.Code,
                             option.DisplayName,
-                            option.OptionType)).ToArray()));
+                            option.OptionType)).ToArray(),
+                    interaction.ActionCount,
+                    (interaction.Actions ?? []).Select(action =>
+                        new RequirementChatInteractionActionResponse(
+                            action.ActionId,
+                            action.ActionType,
+                            new RequirementChatActionTargetResponse(
+                                action.TargetTechnicalProposalItemId,
+                                action.TargetReference),
+                            action.CurrentValue,
+                            action.RequestedValue,
+                            action.ResolvedCatalogEntity is null
+                                ? null
+                                : new RequirementChatInteractionResolvedCatalogEntityResponse(
+                                    action.ResolvedCatalogEntity.Id,
+                                    action.ResolvedCatalogEntity.Code,
+                                    action.ResolvedCatalogEntity.DisplayName,
+                                    action.ResolvedCatalogEntity.EntityType),
+                            action.ValidationState,
+                            action.ValidationReasons ?? [],
+                            action.RequiresConfirmation,
+                            (action.AvailableOptions ?? []).Select(option =>
+                                new RequirementChatInteractionOptionResponse(
+                                    option.Id,
+                                    option.Code,
+                                    option.DisplayName,
+                                    option.OptionType)).ToArray())).ToArray()));
 
     private ObjectResult RequirementProblem(
         int statusCode,

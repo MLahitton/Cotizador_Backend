@@ -41,7 +41,28 @@ public sealed record RequirementChatInteractionReadModel(
     string? PricingImpactExpected,
     string? PricingStatus,
     IReadOnlyList<string> Reasons,
+    IReadOnlyList<RequirementChatInteractionOptionReadModel> AvailableOptions,
+    int ActionCount = 0,
+    IReadOnlyList<RequirementChatInteractionActionReadModel>? Actions = null);
+
+public sealed record RequirementChatInteractionActionReadModel(
+    Guid ActionId,
+    string ActionType,
+    Guid? TargetTechnicalProposalItemId,
+    string? TargetReference,
+    string? CurrentValue,
+    string? RequestedValue,
+    RequirementChatInteractionResolvedCatalogEntityReadModel? ResolvedCatalogEntity,
+    string ValidationState,
+    IReadOnlyList<string> ValidationReasons,
+    bool RequiresConfirmation,
     IReadOnlyList<RequirementChatInteractionOptionReadModel> AvailableOptions);
+
+public sealed record RequirementChatInteractionResolvedCatalogEntityReadModel(
+    Guid Id,
+    string Code,
+    string DisplayName,
+    string EntityType);
 
 public sealed record RequirementChatInteractionOptionReadModel(
     Guid? Id,
@@ -259,7 +280,8 @@ public sealed class SendRequirementChatMessageService(
                 string.IsNullOrWhiteSpace(intent.ClarificationReason)
                     ? []
                     : [intent.ClarificationReason.Trim()],
-                pendingPlan?.Actions.Single().AvailableOptions
+                pendingPlan?.Actions
+                    .SelectMany(value => value.AvailableOptions)
                     .Select(ToInteractionOption)
                     .ToArray() ?? []);
         }
@@ -589,7 +611,8 @@ public sealed class SendRequirementChatMessageService(
     private static RequirementChatInteractionReadModel ToInteraction(
         ChatActionPlanReadModel plan)
     {
-        var action = plan.Actions.First();
+        var primaryAction = plan.Actions.FirstOrDefault();
+        var actions = plan.Actions.Select(ToInteractionAction).ToArray();
         var messageType = plan.Status == "READY_FOR_CONFIRMATION"
             ? "ACTION_PLAN"
             : "CLARIFICATION";
@@ -597,25 +620,29 @@ public sealed class SendRequirementChatMessageService(
             messageType,
             plan.PlanId,
             plan.RequiresConfirmation,
-            action.ActionType,
-            action.TargetTechnicalProposalItemId,
-            action.TargetReference,
-            action.CurrentValue,
-            action.RequestedValue,
+            primaryAction?.ActionType,
+            primaryAction?.TargetTechnicalProposalItemId,
+            primaryAction?.TargetReference,
+            primaryAction?.CurrentValue,
+            primaryAction?.RequestedValue,
             plan.Status == "READY_FOR_CONFIRMATION" ? "POSSIBLE_REPRICE" : null,
                 plan.PricingStatus,
-                action.ValidationReasons.Concat(plan.ExecutionReasons)
+                plan.Actions
+                    .SelectMany(value => value.ValidationReasons)
+                    .Concat(plan.ExecutionReasons)
                     .Distinct(StringComparer.Ordinal)
                     .ToArray(),
                 plan.Actions
                     .SelectMany(value => value.AvailableOptions)
                     .Select(ToInteractionOption)
-                    .ToArray());
+                    .ToArray(),
+                actions.Length,
+                actions);
     }
 
     private static object WithPendingAction(object context, ChatActionPlanReadModel plan)
     {
-        var action = plan.Actions.First();
+        var primaryAction = plan.Actions.FirstOrDefault();
         return new
         {
             originalContext = context,
@@ -627,15 +654,17 @@ public sealed class SendRequirementChatMessageService(
                 plan.Scope,
                 actionCount = plan.Actions.Count,
                 actions = plan.Actions,
-                action.ActionType,
-                action.TargetTechnicalProposalItemId,
-                action.TargetReference,
-                action.RequestedValue,
-                action.CurrentValue,
-                clarificationExpected = ExpectedField(action),
-                clarificationReason = action.ValidationReasons.FirstOrDefault(),
-                action.ValidationReasons,
-                action.AvailableOptions,
+                primaryAction?.ActionType,
+                primaryAction?.TargetTechnicalProposalItemId,
+                primaryAction?.TargetReference,
+                primaryAction?.RequestedValue,
+                primaryAction?.CurrentValue,
+                clarificationExpected = primaryAction is null
+                    ? "unknown"
+                    : ExpectedField(primaryAction),
+                clarificationReason = primaryAction?.ValidationReasons.FirstOrDefault(),
+                validationReasons = primaryAction?.ValidationReasons ?? [],
+                availableOptions = primaryAction?.AvailableOptions ?? [],
                 plan.CreatedAtUtc,
                 plan.ExpiresAtUtc
             }
@@ -663,29 +692,88 @@ public sealed class SendRequirementChatMessageService(
         ChatActionOptionReadModel option) =>
         new(option.Id, option.Code, option.DisplayName, option.OptionType);
 
+    private static RequirementChatInteractionActionReadModel ToInteractionAction(
+        ChatActionPlanActionReadModel action) =>
+        new(
+            action.ActionId,
+            action.ActionType,
+            action.TargetTechnicalProposalItemId,
+            action.TargetReference,
+            action.CurrentValue,
+            action.RequestedValue,
+            action.ResolvedCatalogEntity is null
+                ? null
+                : new RequirementChatInteractionResolvedCatalogEntityReadModel(
+                    action.ResolvedCatalogEntity.Id,
+                    action.ResolvedCatalogEntity.Code,
+                    action.ResolvedCatalogEntity.DisplayName,
+                    action.ResolvedCatalogEntity.EntityType),
+            action.ValidationState,
+            action.ValidationReasons,
+            action.RequiresConfirmation,
+            action.AvailableOptions.Select(ToInteractionOption).ToArray());
+
     private static string ToAssistantMessage(ChatActionPlanReadModel plan)
     {
-        var action = plan.Actions.Single();
-        if (plan.Status == "READY_FOR_CONFIRMATION")
+        if (plan.Actions.Count == 0)
         {
-            var target = string.IsNullOrWhiteSpace(action.TargetReference)
-                ? action.TargetTechnicalProposalItemId?.ToString()
-                : action.TargetReference;
-            var requested = action.ResolvedCatalogEntity?.DisplayName
-                ?? action.RequestedValue
-                ?? "el valor solicitado";
-            return $"Voy a aplicar {action.ActionType} en {target}: {action.CurrentValue ?? "sin valor actual"} -> {requested}. Confirma para ejecutarlo.";
+            return "No pude preparar una accion segura con ese mensaje.";
         }
 
-        if (action.AvailableOptions.Count > 0)
+        if (plan.Status == "READY_FOR_CONFIRMATION")
+        {
+            if (plan.Actions.Count == 1)
+            {
+                var action = plan.Actions[0];
+                return $"Voy a aplicar {action.ActionType} en {TargetLabel(action)}: {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}. Confirma para ejecutarlo.";
+            }
+
+            var lines = plan.Actions
+                .Select(action => $"- {RenderBatchAction(action)}");
+            return $"Voy a aplicar {plan.Actions.Count} cambios:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}{Environment.NewLine}Confirma para ejecutarlos.";
+        }
+
+        var availableOptions = plan.Actions
+            .SelectMany(action => action.AvailableOptions)
+            .ToArray();
+        if (availableOptions.Length > 0)
         {
             var options = string.Join(
                 ", ",
-                action.AvailableOptions.Take(5).Select(option => option.DisplayName));
+                availableOptions.Take(5).Select(option => option.DisplayName));
             return $"Necesito confirmar la accion antes de continuar. Opciones disponibles: {options}.";
         }
 
-        return action.ValidationReasons.FirstOrDefault()
+        return plan.Actions
+            .SelectMany(action => action.ValidationReasons)
+            .Concat(plan.ExecutionReasons)
+            .FirstOrDefault()
             ?? "No pude preparar una accion segura con ese mensaje.";
     }
+
+    private static string RenderBatchAction(ChatActionPlanActionReadModel action)
+    {
+        var target = TargetLabel(action);
+        return action.ActionType switch
+        {
+            "CHANGE_SYSTEM" => $"{target}: sistema {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "CHANGE_GLASS" => $"{target}: cristal {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "CHANGE_FINISH" => $"{target}: acabado {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "CHANGE_QUANTITY" => $"{target}: cantidad {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "CHANGE_DIMENSIONS" => $"{target}: dimensiones {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "INCLUDE_ITEM" => $"INCLUDE_ITEM en {target}: {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            "EXCLUDE_ITEM" => $"EXCLUDE_ITEM en {target}: {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}",
+            _ => $"{action.ActionType} en {target}: {action.CurrentValue ?? "sin valor actual"} -> {RequestedLabel(action)}"
+        };
+    }
+
+    private static string TargetLabel(ChatActionPlanActionReadModel action) =>
+        string.IsNullOrWhiteSpace(action.TargetReference)
+            ? action.TargetTechnicalProposalItemId?.ToString() ?? "sin target"
+            : action.TargetReference;
+
+    private static string RequestedLabel(ChatActionPlanActionReadModel action) =>
+        action.ResolvedCatalogEntity?.DisplayName
+        ?? action.RequestedValue
+        ?? "el valor solicitado";
 }

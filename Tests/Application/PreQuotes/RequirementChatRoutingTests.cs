@@ -216,6 +216,83 @@ public sealed class RequirementChatRoutingTests
     }
 
     [Fact]
+    public async Task RequirementChat_ActionBatchInclude_ReturnsBatchMessageAndActions()
+    {
+        var context = CreateContext(itemCount: 3);
+        foreach (var item in context.Proposal.Items)
+        {
+            item.Exclude(UserId, At.AddMinutes(1), "No cotizar");
+        }
+
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(
+                true,
+                "INCLUDE_ITEM",
+                "REQUIREMENT",
+                null,
+                "true",
+                null,
+                null,
+                null,
+                0.91m,
+                false,
+                null,
+                "Incluye V-9, V-10 y V-11 por favor",
+                TargetReferences: ["V-9", "V-10", "V-11"],
+                TargetCount: 3));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "Incluye V-9, V-10 y V-11 por favor"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("ACTION_PLAN", result.LastInteraction!.MessageType);
+        Assert.Equal(3, result.LastInteraction.ActionCount);
+        Assert.Equal(3, result.LastInteraction.Actions!.Count);
+        Assert.Contains("Voy a aplicar 3 cambios:", result.Thread!.Messages.Last().Content);
+        Assert.Contains("INCLUDE_ITEM en V-9", result.Thread.Messages.Last().Content);
+        Assert.Contains("INCLUDE_ITEM en V-10", result.Thread.Messages.Last().Content);
+        Assert.Contains("INCLUDE_ITEM en V-11", result.Thread.Messages.Last().Content);
+        await context.Ai.DidNotReceive().RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_ActionBatchExclude_ReturnsBatchMessageAndActions()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(
+                true,
+                "EXCLUDE_ITEM",
+                "REQUIREMENT",
+                null,
+                "false",
+                null,
+                null,
+                null,
+                0.91m,
+                false,
+                null,
+                "Excluye V-9 y V-10 por favor",
+                TargetReferences: ["V-9", "V-10"],
+                TargetCount: 2));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "Excluye V-9 y V-10 por favor"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("ACTION_PLAN", result.LastInteraction!.MessageType);
+        Assert.Equal(2, result.LastInteraction.ActionCount);
+        Assert.Equal(2, result.LastInteraction.Actions!.Count);
+        Assert.Contains("Voy a aplicar 2 cambios:", result.Thread!.Messages.Last().Content);
+        Assert.Contains("EXCLUDE_ITEM en V-9", result.Thread.Messages.Last().Content);
+        Assert.Contains("EXCLUDE_ITEM en V-10", result.Thread.Messages.Last().Content);
+        Assert.All(result.LastInteraction.Actions, action => Assert.Equal("EXCLUDE_ITEM", action.ActionType));
+        await context.Ai.DidNotReceive().RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RequirementChat_ActionItemSpecific_UsesContextualItemForPlan()
     {
         var context = CreateContext();
@@ -446,7 +523,8 @@ public sealed class RequirementChatRoutingTests
 
     private static Context CreateContext(
         bool duplicateReference = false,
-        bool withPricingSnapshot = false)
+        bool withPricingSnapshot = false,
+        int itemCount = 2)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -467,7 +545,7 @@ public sealed class RequirementChatRoutingTests
         var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, UserId, At);
         var preQuote = PreQuote.Create(project.Id, UserId, "PC-2026-0001", null, At);
         var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
-        var proposal = CreateProposal(requirement, duplicateReference);
+        var proposal = CreateProposal(requirement, duplicateReference, itemCount);
         var pricingSnapshot = withPricingSnapshot
             ? CreatePricingSnapshot(requirement, proposal)
             : null;
@@ -541,13 +619,26 @@ public sealed class RequirementChatRoutingTests
         return snapshot;
     }
 
-    private static RequirementTechnicalProposal CreateProposal(Requirement requirement, bool duplicateReference)
+    private static RequirementTechnicalProposal CreateProposal(
+        Requirement requirement,
+        bool duplicateReference,
+        int itemCount)
     {
         var extraction = RequirementExtractionResult.Create(Guid.NewGuid(), "AI2-1.0", "Ai2", "{}", 1, 0, 0, 0, "ai2", 100, At);
         var proposal = RequirementTechnicalProposal.Create(requirement.Id, extraction.Id, Guid.NewGuid(), false, At);
         SetPrivateProperty(proposal, "Requirement", requirement);
-        AddItem(proposal, extraction.Id, 1, "V-9");
-        AddItem(proposal, extraction.Id, 2, duplicateReference ? "V-9" : "V-10");
+        for (var sequence = 1; sequence <= itemCount; sequence++)
+        {
+            var reference = sequence switch
+            {
+                1 => "V-9",
+                2 when duplicateReference => "V-9",
+                2 => "V-10",
+                _ => $"V-{sequence + 8}"
+            };
+            AddItem(proposal, extraction.Id, sequence, reference);
+        }
+
         return proposal;
     }
 

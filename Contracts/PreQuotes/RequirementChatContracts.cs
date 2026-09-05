@@ -30,7 +30,27 @@ public sealed record RequirementChatInteractionResponse(
     string? PricingImpactExpected,
     string? PricingStatus,
     IReadOnlyList<string> Reasons,
+    IReadOnlyList<RequirementChatInteractionOptionResponse> AvailableOptions,
+    int ActionCount = 0,
+    IReadOnlyList<RequirementChatInteractionActionResponse>? Actions = null);
+
+public sealed record RequirementChatInteractionActionResponse(
+    Guid ActionId,
+    string ActionType,
+    RequirementChatActionTargetResponse? Target,
+    string? CurrentValue,
+    string? RequestedValue,
+    RequirementChatInteractionResolvedCatalogEntityResponse? ResolvedCatalogEntity,
+    string ValidationState,
+    IReadOnlyList<string> ValidationReasons,
+    bool RequiresConfirmation,
     IReadOnlyList<RequirementChatInteractionOptionResponse> AvailableOptions);
+
+public sealed record RequirementChatInteractionResolvedCatalogEntityResponse(
+    Guid Id,
+    string Code,
+    string DisplayName,
+    string EntityType);
 
 public sealed record RequirementChatActionTargetResponse(
     Guid? TechnicalProposalItemId,
