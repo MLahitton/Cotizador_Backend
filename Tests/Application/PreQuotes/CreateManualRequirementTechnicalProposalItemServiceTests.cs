@@ -73,7 +73,63 @@ public sealed class CreateManualRequirementTechnicalProposalItemServiceTests
         Assert.Equal("Agregada por plano", manual.ManualNote);
     }
 
-    private static Context CreateContext(bool confirmProposal = false)
+    [Fact]
+    public async Task Execute_WithManualResolvableCompatibleSystem_CreatesItem()
+    {
+        var context = CreateContext(systemFunctionalType: "SHOWER_DIVISION");
+
+        var result = await context.Service.ExecuteAsync(
+            new CreateManualRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                "D-01",
+                "Division de bano",
+                "SHOWER_DIVISION",
+                1,
+                900,
+                2100,
+                SystemId,
+                GlassId,
+                FinishId),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains(
+            context.Proposal.Items,
+            item => item.Source == TechnicalProposalItemSource.Manual
+                && item.SelectedSystemId == SystemId);
+    }
+
+    [Fact]
+    public async Task Execute_WithManualResolvableIncompatibleSystem_RejectsWithoutPersisting()
+    {
+        var context = CreateContext(systemFunctionalType: "FIXED");
+
+        var result = await context.Service.ExecuteAsync(
+            new CreateManualRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                "D-01",
+                "Division de bano",
+                "SHOWER_DIVISION",
+                1,
+                900,
+                2100,
+                SystemId,
+                GlassId,
+                FinishId),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            CreateManualRequirementTechnicalProposalItemFailure.FunctionalTypeMismatch,
+            result.Failure);
+        Assert.DoesNotContain(
+            context.Proposal.Items,
+            item => item.Source == TechnicalProposalItemSource.Manual);
+        Assert.Equal(["begin", "find"], context.Calls);
+    }
+    private static Context CreateContext(
+        bool confirmProposal = false,
+        string systemFunctionalType = "SLIDING_DOOR")
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -265,7 +321,7 @@ public sealed class CreateManualRequirementTechnicalProposalItemServiceTests
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>())
             .Returns(client);
         systems.ListActiveSelectableAsync(Arg.Any<CancellationToken>())
-            .Returns([ProductSystem()]);
+            .Returns([ProductSystem(systemFunctionalType)]);
         glasses.GetActiveWithCurrentPriceRangesAsync(Arg.Any<CancellationToken>())
             .Returns([Glass()]);
         finishes.ListActiveAsync(Arg.Any<CancellationToken>())
@@ -282,19 +338,21 @@ public sealed class CreateManualRequirementTechnicalProposalItemServiceTests
             systems,
             glasses,
             finishes,
+            new SgProductSystemConstraintEvaluator(new FixedTimeProvider(At)),
             new FixedTimeProvider(At));
 
         return new Context(service, requirement, proposal, calls);
     }
 
-    private static ProductSystemCatalogReadModel ProductSystem() =>
+    private static ProductSystemCatalogReadModel ProductSystem(
+        string functionalType = "SLIDING_DOOR") =>
         new(
             SystemId,
             "K70",
             "Sistema K70",
             "Sistema tecnico K70",
             "K70",
-            "SLIDING_DOOR",
+            functionalType,
             "K70",
             "SERIE 70",
             "ESSENTIAL",

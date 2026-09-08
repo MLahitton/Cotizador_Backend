@@ -245,18 +245,67 @@ public sealed class DeterministicSgTechnicalSelectorTests
             result.ResolutionReasons ?? []);
     }
 
-    [Fact]
-    public async Task SlidingWindowWithHeightOver2600_ResolvesAsSlidingDoor()
+    [Theory]
+    [InlineData(2400)]
+    [InlineData(2600)]
+    [InlineData(2601)]
+    [InlineData(2700)]
+    public async Task ExplicitSlidingWindow_PreservesWindowFamilyRegardlessOfHeight(
+        int height)
     {
         var result = await Selector().SelectAsync(
-            Input("SLIDING_WINDOW", height: 2800),
+            Input("SLIDING_WINDOW", height: height),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("K50", result.SuggestedSystemCode);
+        Assert.Equal(SgTechnicalSelectionRuleCodes.VeniceWindowMonza,
+            result.AppliedRuleCode);
+        Assert.DoesNotContain("K70", result.Alternatives);
+        Assert.DoesNotContain(
+            SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
+            result.ResolutionReasons ?? []);
+    }
+
+    [Theory]
+    [InlineData(2400)]
+    [InlineData(2700)]
+    public async Task ExplicitSlidingDoor_PreservesDoorFamilyRegardlessOfHeight(
+        int height)
+    {
+        var result = await Selector().SelectAsync(
+            Input("SLIDING_DOOR", height: height),
             TestContext.Current.CancellationToken);
 
         Assert.Equal("K70", result.SuggestedSystemCode);
         Assert.Equal(SgTechnicalSelectionRuleCodes.SystemSlidingDoorNapoles,
             result.AppliedRuleCode);
+    }
+
+    [Fact]
+    public async Task ExplicitSlidingWindowHigh_StillAppliesDimensionalConstraintsWithinWindowFamily()
+    {
+        var result = await new DeterministicSgTechnicalSelector(
+            new Catalog([
+                System(
+                    "K50",
+                    "SLIDING_WINDOW",
+                    "VENECIA MONZA",
+                    "STANDARD",
+                    "ESSENTIAL",
+                    Constraint(
+                        "MAX_OPENING_HEIGHT",
+                        ProductSystemConstraintType.MaxHeight,
+                        maxValue: 2600m,
+                        severity: ProductSystemConstraintSeverity.Hard,
+                        knowledgeClass: ProductSystemConstraintKnowledgeClass.VerifiedTechnical)),
+                System("SW_ALT", "SLIDING_WINDOW", "GENERIC WINDOW", "STANDARD", "ESSENTIAL")
+            ])).SelectAsync(
+                Input("SLIDING_WINDOW", height: 2700),
+                TestContext.Current.CancellationToken);
+
+        Assert.Equal("SW_ALT", result.SuggestedSystemCode);
         Assert.DoesNotContain("K50", result.Alternatives);
-        Assert.Contains(
+        Assert.DoesNotContain(
             SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
             result.ResolutionReasons ?? []);
     }

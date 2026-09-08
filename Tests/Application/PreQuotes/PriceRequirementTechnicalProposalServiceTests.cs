@@ -767,6 +767,43 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             Arg.Any<CancellationToken>());
     }
     [Fact]
+    public async Task RepriceItem_WithHeightOnly_ValidatesCompatibilityAgainstProposedHeight()
+    {
+        var item = ProposalItem(Item(functionalType: "WINDOW", operation: "SLIDING"));
+        var context = CreateContext(
+            [item],
+            TechnicalEstimate(200m, 200m, 200m));
+        var snapshot = Snapshot(
+            context.Requirement.Id,
+            context.Proposal.Id,
+            [(item, 100m, 100m)]);
+        context.Requirements.FindCurrentTechnicalProposalForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(context.Proposal);
+        context.Requirements.FindCurrentPricingSnapshotForUpdateAsync(
+                context.Requirement.Id,
+                Arg.Any<CancellationToken>())
+            .Returns(snapshot);
+
+        var result = await context.Service.RepriceItemAsync(
+            new RepriceRequirementTechnicalProposalItemCommand(
+                context.Requirement.Id,
+                item.Id,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2900),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(2900, item.EffectiveHeightMillimeters);
+        await context.Requirements.Received(1)
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Fact]
     public async Task RepriceItem_WithCommercialChange_SynchronizesProposalAndSnapshotRevision()
     {
         var item = ProposalItem(Item(reference: "PV-06"));
@@ -1416,6 +1453,7 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             systems,
             glasses,
             finishes,
+            new SgProductSystemConstraintEvaluator(TimeProvider.System),
             new TechnicalProposalItemToHistoricalPricingMapper(),
             technicalEstimator,
             commercial,
@@ -1498,12 +1536,12 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
             RequirementExtractionValueStatus.Explicit,
             false,
             [],
-            "SLIDING_DOOR",
-            "CORREDIZA",
+            functionalType,
+            operation,
             null,
             null,
             null,
-            "CORREDIZA",
+            operation,
             null,
             null,
             [],

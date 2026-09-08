@@ -95,6 +95,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
     IProductSystemCatalogRepository productSystemCatalog,
     IGlassTypeCatalogRepository glassCatalog,
     IFinishTypeCatalogRepository finishCatalog,
+    ISgProductSystemConstraintEvaluator constraintEvaluator,
     TimeProvider timeProvider)
 {
     public async Task<UpdateRequirementTechnicalProposalItemSelectionResult>
@@ -185,15 +186,6 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
                             .InvalidSystemSelection);
                 }
 
-                var compatibility = SgFunctionalCompatibilityEvaluator.Evaluate(
-                    item,
-                    requestedSystem);
-                if (compatibility.IsIncompatible)
-                {
-                    return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
-                        UpdateRequirementTechnicalProposalItemSelectionFailure
-                            .FunctionalTypeMismatch);
-                }
             }
 
             if (command.GlassId is { } glassId
@@ -232,6 +224,37 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionService(
             var selectedSystemId = command.SystemId ?? baseSystemId;
             var selectedGlassId = command.GlassId ?? baseGlassId;
             var selectedFinishId = command.FinishId ?? baseFinishId;
+            var proposed = RequirementTechnicalProposalProposedState.FromExisting(
+                item,
+                command.ConfirmSuggested,
+                command.SystemId,
+                command.GlassId,
+                command.FinishId,
+                command.Quantity,
+                command.WidthMillimeters,
+                command.HeightMillimeters,
+                proposal.Requirement.CommercialLine?.ToString());
+            var proposedSystem = proposed.SystemId is { } proposedSystemId
+                ? systems.SingleOrDefault(system => system.Id == proposedSystemId)
+                : null;
+            if (proposedSystem is not null
+                && proposed.HasFunctionalTypeMismatch(proposedSystem))
+            {
+                return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
+                    UpdateRequirementTechnicalProposalItemSelectionFailure
+                        .FunctionalTypeMismatch);
+            }
+
+            if (proposedSystem is not null
+                && proposed.HasHardConstraintFailure(
+                    proposedSystem,
+                    constraintEvaluator))
+            {
+                return UpdateRequirementTechnicalProposalItemSelectionResult.Failed(
+                    UpdateRequirementTechnicalProposalItemSelectionFailure
+                        .InvalidSystemSelection);
+            }
+
             var previousCommercialState = CurrentCommercialState(item);
 
             item.ApplyManualDataOverride(

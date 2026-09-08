@@ -54,6 +54,7 @@ public enum CreateManualRequirementTechnicalProposalItemFailure
     InactiveClient,
     TechnicalProposalNotFound,
     InvalidSystemSelection,
+    FunctionalTypeMismatch,
     InvalidGlassSelection,
     InvalidFinishSelection,
     QueryError,
@@ -85,6 +86,7 @@ public sealed class CreateManualRequirementTechnicalProposalItemService(
     IProductSystemCatalogRepository productSystemCatalog,
     IGlassTypeCatalogRepository glassCatalog,
     IFinishTypeCatalogRepository finishCatalog,
+    ISgProductSystemConstraintEvaluator constraintEvaluator,
     TimeProvider timeProvider)
 {
     public async Task<CreateManualRequirementTechnicalProposalItemResult>
@@ -150,12 +152,39 @@ public sealed class CreateManualRequirementTechnicalProposalItemService(
                 cancellationToken);
             var finishes = await finishCatalog.ListActiveAsync(cancellationToken);
 
-            if (!systems.Any(system => system.Id == command.SystemId
-                && system.IsActive
-                && system.IsSelectable
-                && IsAllowedForCommercialLine(
-                    system,
-                    proposal.Requirement.CommercialLine)))
+            var selectedSystem = systems.SingleOrDefault(system =>
+                system.Id == command.SystemId);
+            if (selectedSystem is null
+                || !selectedSystem.IsActive
+                || !selectedSystem.IsSelectable
+                || !IsAllowedForCommercialLine(
+                    selectedSystem,
+                    proposal.Requirement.CommercialLine))
+            {
+                return CreateManualRequirementTechnicalProposalItemResult.Failed(
+                    CreateManualRequirementTechnicalProposalItemFailure.InvalidSystemSelection);
+            }
+
+            var proposed = RequirementTechnicalProposalProposedState.FromManual(
+                elementType,
+                command.Quantity,
+                command.WidthMillimeters,
+                command.HeightMillimeters,
+                command.SystemId,
+                command.GlassTypeId,
+                command.FinishTypeId,
+                command.Description,
+                proposal.Requirement.CommercialLine?.ToString());
+            if (proposed.HasFunctionalTypeMismatch(selectedSystem))
+            {
+                return CreateManualRequirementTechnicalProposalItemResult.Failed(
+                    CreateManualRequirementTechnicalProposalItemFailure
+                        .FunctionalTypeMismatch);
+            }
+
+            if (proposed.HasHardConstraintFailure(
+                    selectedSystem,
+                    constraintEvaluator))
             {
                 return CreateManualRequirementTechnicalProposalItemResult.Failed(
                     CreateManualRequirementTechnicalProposalItemFailure.InvalidSystemSelection);

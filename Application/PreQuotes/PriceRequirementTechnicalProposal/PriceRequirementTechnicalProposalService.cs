@@ -106,6 +106,7 @@ public sealed class PriceRequirementTechnicalProposalService(
     IProductSystemCatalogRepository productSystemCatalog,
     IGlassTypeCatalogRepository glassCatalog,
     IFinishTypeCatalogRepository finishCatalog,
+    ISgProductSystemConstraintEvaluator constraintEvaluator,
     ITechnicalProposalItemToHistoricalPricingMapper mapper,
     IHistoricalTechnicalPriceEstimator technicalEstimator,
     IHistoricalCommercialPriceEstimator commercialEstimator,
@@ -449,22 +450,41 @@ public sealed class PriceRequirementTechnicalProposalService(
                         .InvalidFinishSelection);
             }
 
-
             var baseConfiguration = EffectiveConfiguration(proposalItem);
-            var newSystemId = command.SystemId ?? baseConfiguration.SystemId;
-            var newGlassTypeId = command.GlassTypeId ?? baseConfiguration.GlassTypeId;
-            var newFinishTypeId = command.FinishTypeId ?? baseConfiguration.FinishTypeId;
-            if (newSystemId is { } effectiveSystemId
+            var proposed = RequirementTechnicalProposalProposedState.FromExisting(
+                proposalItem,
+                false,
+                command.SystemId,
+                command.GlassTypeId,
+                command.FinishTypeId,
+                command.Quantity,
+                command.WidthMillimeters,
+                command.HeightMillimeters,
+                proposal.Requirement?.CommercialLine?.ToString());
+            var newSystemId = proposed.SystemId;
+            var newGlassTypeId = proposed.GlassTypeId;
+            var newFinishTypeId = proposed.FinishTypeId;
+            var proposedSystem = newSystemId is { } effectiveSystemId
                 && systems.TryGetValue(effectiveSystemId, out var effectiveSystem)
-                && SgFunctionalCompatibilityEvaluator.Evaluate(
-                    proposalItem,
-                    effectiveSystem).IsIncompatible)
+                    ? effectiveSystem
+                    : null;
+            if (proposedSystem is not null
+                && proposed.HasFunctionalTypeMismatch(proposedSystem))
             {
                 return RepriceRequirementTechnicalProposalItemResult.Failed(
                     RepriceRequirementTechnicalProposalItemFailure
                         .FunctionalTypeMismatch);
             }
 
+            if (proposedSystem is not null
+                && proposed.HasHardConstraintFailure(
+                    proposedSystem,
+                    constraintEvaluator))
+            {
+                return RepriceRequirementTechnicalProposalItemResult.Failed(
+                    RepriceRequirementTechnicalProposalItemFailure
+                        .InvalidSystemSelection);
+            }
             var snapshot =
                 await requirementRepository.FindCurrentPricingSnapshotForUpdateAsync(
                     command.RequirementId,

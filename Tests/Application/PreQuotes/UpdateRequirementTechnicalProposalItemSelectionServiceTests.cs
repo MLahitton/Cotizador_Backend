@@ -335,6 +335,95 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithSystemAndHeight_ValidatesCompatibilityAgainstProposedHeight()
+    {
+        var context = CreateContext(
+            itemFunctionalType: "WINDOW",
+            itemOperation: "SLIDING",
+            suggestedFunctionalType: "SLIDING_WINDOW",
+            alternativeFunctionalType: "SLIDING_DOOR");
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                context.AlternativeSystem.Id,
+                null,
+                null,
+                null,
+                null,
+                2900),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(context.AlternativeSystem.Id, context.Item.SelectedSystemId);
+        Assert.Equal(2900, context.Item.EffectiveHeightMillimeters);
+    }
+
+    [Fact]
+    public async Task Execute_WithHeightOnlyRejectsProposedFunctionalMismatchWithoutPersisting()
+    {
+        var context = CreateContext(
+            itemFunctionalType: "WINDOW",
+            itemOperation: "SLIDING",
+            suggestedFunctionalType: "SLIDING_WINDOW",
+            alternativeFunctionalType: "SLIDING_WINDOW");
+        var originalHeight = context.Item.EffectiveHeightMillimeters;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2900),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            UpdateRequirementTechnicalProposalItemSelectionFailure.FunctionalTypeMismatch,
+            result.Failure);
+        Assert.Equal(originalHeight, context.Item.EffectiveHeightMillimeters);
+        await context.Requirements.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Fact]
+    public async Task Execute_WithHeightOnlyRejectsProposedHardConstraintWithoutPersisting()
+    {
+        var context = CreateContext(
+            itemFunctionalType: "SLIDING_DOOR",
+            itemOperation: "SLIDING",
+            suggestedFunctionalType: "SLIDING_DOOR",
+            suggestedConstraints: [MaxHeightConstraint(2600)]);
+        var originalHeight = context.Item.EffectiveHeightMillimeters;
+
+        var result = await context.Service.ExecuteAsync(
+            new UpdateRequirementTechnicalProposalItemSelectionCommand(
+                context.Proposal.Id,
+                context.Item.Id,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                2900),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(
+            UpdateRequirementTechnicalProposalItemSelectionFailure.InvalidSystemSelection,
+            result.Failure);
+        Assert.Equal(originalHeight, context.Item.EffectiveHeightMillimeters);
+        await context.Requirements.DidNotReceive()
+            .SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+    [Fact]
     public async Task Execute_WithItemFromAnotherProposal_ReturnsItemNotFound()
     {
         var context = CreateContext();
@@ -362,7 +451,9 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         string alternativeFunctionalType = "SLIDING_DOOR",
         string itemFunctionalType = "SLIDING_DOOR",
         string? itemOperation = "SLIDING",
-        string? suggestedFunctionalType = "SLIDING_DOOR")
+        string? suggestedFunctionalType = "SLIDING_DOOR",
+        IReadOnlyList<ProductSystemConstraintCatalogReadModel>? suggestedConstraints = null,
+        IReadOnlyList<ProductSystemConstraintCatalogReadModel>? alternativeConstraints = null)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -471,12 +562,14 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         var suggestedSystem = ProductSystem(
             Guid.Parse("22222222-2222-2222-2222-222222222222"),
             "K70",
-            functionalType: suggestedFunctionalType ?? itemFunctionalType);
+            functionalType: suggestedFunctionalType ?? itemFunctionalType,
+            constraints: suggestedConstraints ?? []);
         var alternativeSystem = ProductSystem(
             Guid.Parse("33333333-3333-3333-3333-333333333333"),
             "K72",
             alternativeSystemLine,
-            alternativeFunctionalType);
+            alternativeFunctionalType,
+            alternativeConstraints ?? []);
         var suggestedGlass = Glass(
             Guid.Parse("44444444-4444-4444-4444-444444444444"),
             "TEMP_6",
@@ -565,6 +658,7 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
                 systems,
                 glasses,
                 finishes,
+                new SgProductSystemConstraintEvaluator(new FixedTimeProvider(At)),
                 new FixedTimeProvider(At));
 
         return new Context(
@@ -585,7 +679,8 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
         Guid id,
         string code,
         string commercialLine = "ESSENTIAL",
-        string functionalType = "SLIDING_DOOR") =>
+        string functionalType = "SLIDING_DOOR",
+        IReadOnlyList<ProductSystemConstraintCatalogReadModel>? constraints = null) =>
         new(
             id,
             code,
@@ -602,8 +697,32 @@ public sealed class UpdateRequirementTechnicalProposalItemSelectionServiceTests
             true,
             true,
             false,
-            true);
+            true,
+            constraints ?? []);
 
+    private static ProductSystemConstraintCatalogReadModel MaxHeightConstraint(
+        decimal maxHeight) =>
+        new(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "MAX_HEIGHT",
+            ProductSystemConstraintType.MaxHeight,
+            ProductSystemConstraintScope.System,
+            ConstraintEvaluationStage.PreSelection,
+            ProductSystemConstraintSeverity.Hard,
+            ProductSystemConstraintKnowledgeClass.VerifiedTechnical,
+            null,
+            maxHeight,
+            null,
+            [],
+            "mm",
+            false,
+            true,
+            null,
+            null,
+            ProductSystemConstraintSourceType.SgRule,
+            null,
+            null);
     private static GlassTypeCatalogReadModel Glass(
         Guid id,
         string code,
