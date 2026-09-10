@@ -6,6 +6,7 @@ using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Proposals;
 using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
 using Infrastructure.Authentication;
@@ -13,6 +14,7 @@ using Infrastructure.DocumentProcessing;
 using Infrastructure.HistoricalPricing;
 using Infrastructure.Operations;
 using Infrastructure.Persistence;
+using Infrastructure.Proposals.FpPro;
 using Infrastructure.Persistence.Repositories;
 using Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -56,7 +58,7 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                "La cadena de conexión 'DefaultConnection' no está configurada.");
+                "La cadena de conexiÃ³n 'DefaultConnection' no estÃ¡ configurada.");
         }
 
         services.AddDbContext<ApplicationDbContext>(options =>
@@ -65,6 +67,9 @@ public static class DependencyInjection
         services.AddSingleton(authenticationOptions.Google);
         services.AddSingleton(authenticationOptions.Jwt);
         services.AddSingleton<IGoogleTokenValidator, GoogleTokenValidator>();
+        services.AddSingleton<IFpProReportParser, FpProReportParser>();
+        services.AddSingleton<IQuotationTemplateCatalogReader, QuotationTemplateCatalogReader>();
+        services.AddSingleton<IQuotationWorkbookGenerator, QuotationWorkbookGenerator>();
         services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
         services.AddSingleton(fileStorageOptions);
         services.AddSingleton(cotizadorAiOptions);

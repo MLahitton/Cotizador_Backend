@@ -488,3 +488,13 @@ $RECYCLE.BIN/
 temp_api*
 temp_*.stdout
 temp_*.stderr
+
+# Local Steel & Glass report/export files
+**/S&G*.pdf
+**/S&G*.PDF
+**/S&G*.xlsx
+**/S&G*.XLSX
+**/SG*.pdf
+**/SG*.PDF
+**/SG*.xlsx
+**/SG*.XLSX

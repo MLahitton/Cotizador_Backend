@@ -11,6 +11,8 @@ using Application.Clients.UpdateClient;
 using Application.Catalogs.GetGlassTypesCatalog;
 using Application.Catalogs.GetCanonicalCatalog;
 using Application.PreQuotes.CreateDocumentProcessingAttempt;
+using Application.Proposals.FpPro;
+using Application.Proposals.FpPro.Experimental;
 using Application.PreQuotes.CreateRequirement;
 using Application.PreQuotes.GetDocumentProcessingAttempt;
 using Application.PreQuotes.ProcessClaimedDocumentProcessingAttempt;
@@ -60,6 +62,10 @@ public static class DependencyInjection
             typeof(DependencyInjection).Assembly);
 
         services.AddScoped<GoogleSignInService>();
+        services.AddScoped<PreviewFpProReportService>();
+        services.AddScoped<GenerateFpProQuotationService>();
+        services.AddScoped<IFpProPreviewConfigurationResolver, FpProPreviewConfigurationResolver>();
+        services.AddSingleton<IFpProModuleInferenceService, FpProModuleInferenceService>();
         services.AddScoped<GetCurrentUserService>();
         services.AddScoped<CreateClientService>();
         services.AddScoped<GetClientByIdService>();

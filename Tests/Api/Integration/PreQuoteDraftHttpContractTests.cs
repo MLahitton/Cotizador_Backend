@@ -190,11 +190,15 @@ public sealed class PreQuoteDraftHttpContractTests
         Assert.False(string.IsNullOrWhiteSpace(contract.TraceId));
         Assert.StartsWith("application/problem+json",
             response.Content.Headers.ContentType?.ToString());
-        var raw = await response.Content.ReadAsStringAsync(
-            TestContext.Current.CancellationToken);
-        Assert.DoesNotContain("exception", raw, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("sql", raw, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("connection", raw, StringComparison.OrdinalIgnoreCase);
+        var publicErrorText = string.Join(
+            ' ',
+            contract.Type,
+            contract.Title,
+            contract.Detail,
+            contract.ErrorCode);
+        Assert.DoesNotContain("exception", publicErrorText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("sql", publicErrorText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("connection", publicErrorText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

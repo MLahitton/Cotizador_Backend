@@ -17,6 +17,9 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"
                       Version="10.0.10" />
 
+    <PackageReference Include="ClosedXML"
+                      Version="0.105.1" />
+
     <PackageReference Include="xunit.v3"
                       Version="3.2.2" />
 
@@ -40,4 +43,8 @@
     <ProjectReference Include="..\Infrastructure\Infrastructure.csproj" />
   </ItemGroup>
 
+
+  <ItemGroup>
+    <None Include="Fixtures\FpPro\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
