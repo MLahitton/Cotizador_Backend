@@ -103,6 +103,74 @@ public sealed class Ai2RequirementExtractionAdapterTests
     }
 
     [Fact]
+    public void Adapt_WithRepeatedReference_MapsOccurrenceContextPerItem()
+    {
+        const string payload =
+            """
+            {
+              "requirement": {},
+              "sources": [{"id":"s1","file_name":"casa.pdf","media_type":"application/pdf"}],
+              "elements": [
+                {
+                  "id":"pv-a",
+                  "reference":{"value":"PV-01","status":"explicit","confidence":0.98,"evidence_ids":["ev-a"]},
+                  "name":{"value":"Puerta vidriera","status":"explicit","confidence":0.97,"evidence_ids":["ev-a"]},
+                  "category":{"normalized":"DOOR","raw":"Puerta","status":"explicit","confidence":0.90,"evidence_ids":["ev-a"]},
+                  "measurements":[
+                    {"type":"width","value":5.25,"unit":"m","status":"explicit","evidence_ids":["ev-a"]},
+                    {"type":"height","value":2.50,"unit":"m","status":"explicit","evidence_ids":["ev-a"]}
+                  ],
+                  "quantity":{"value":1,"status":"inferred","evidence_ids":["ev-a"]},
+                  "functional_type":{"normalized":"SLIDING_DOOR","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-a"]},
+                  "configuration":{"operation":{"normalized":"SLIDING","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-a"]}},
+                  "occurrences":[{"id":"pv-a-occurrence-1","location":{"value":"LEVEL A","status":"explicit","confidence":0.95,"evidence_ids":["ev-a"]}}],
+                  "evidence_ids":["ev-a"],
+                  "missing_fields":[],
+                  "confidence":0.90
+                },
+                {
+                  "id":"pv-b",
+                  "reference":{"value":"PV-01","status":"explicit","confidence":0.98,"evidence_ids":["ev-b"]},
+                  "name":{"value":"Puerta vidriera","status":"explicit","confidence":0.97,"evidence_ids":["ev-b"]},
+                  "category":{"normalized":"DOOR","raw":"Puerta","status":"explicit","confidence":0.90,"evidence_ids":["ev-b"]},
+                  "measurements":[
+                    {"type":"width","value":4.10,"unit":"m","status":"explicit","evidence_ids":["ev-b"]},
+                    {"type":"height","value":2.50,"unit":"m","status":"explicit","evidence_ids":["ev-b"]}
+                  ],
+                  "quantity":{"value":1,"status":"inferred","evidence_ids":["ev-b"]},
+                  "functional_type":{"normalized":"SLIDING_DOOR","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-b"]},
+                  "configuration":{"operation":{"normalized":"SLIDING","raw":"corrediza","status":"explicit","confidence":0.90,"evidence_ids":["ev-b"]}},
+                  "occurrences":[{"id":"pv-b-occurrence-1","location":{"value":"LEVEL B","status":"explicit","confidence":0.95,"evidence_ids":["ev-b"]}}],
+                  "evidence_ids":["ev-b"],
+                  "missing_fields":[],
+                  "confidence":0.90
+                }
+              ],
+              "evidence":[
+                {"id":"ev-a","source_id":"s1","type":"range","page_number":1,"extracted_text":"PV-01 LEVEL A 5.25 x 2.50","status":"explicit","confidence":0.95},
+                {"id":"ev-b","source_id":"s1","type":"range","page_number":1,"extracted_text":"PV-01 LEVEL B 4.10 x 2.50","status":"explicit","confidence":0.95}
+              ],
+              "relationships":[],
+              "conflicts":[],
+              "warnings":[],
+              "extraction_metadata":{"schema_version":"1.0","source_count":1,"element_count":2,"partial":false,"status":"completed","processing_time_ms":125,"pipeline_version":"ai2-v1"}
+            }
+            """;
+        var request = CreatePdfRequest();
+
+        var result = new Ai2RequirementExtractionAdapter().Adapt(
+            payload,
+            request);
+
+        var items = result.StructuredExtraction!.Items;
+        Assert.Equal(2, items.Count);
+        Assert.All(items, item => Assert.Equal("PV-01", item.Reference));
+        Assert.Equal(["LEVEL A", "LEVEL B"], items.Select(item => item.OccurrenceContext));
+        Assert.Equal([5250, 4100], items.Select(item => item.WidthMillimeters));
+        Assert.Equal(["pv-a", "pv-b"], items.Select(item => item.Ai2ElementId));
+    }
+
+    [Fact]
     public void Adapt_WithAssemblyComponents_MapsSegmentsAndAssemblyType()
     {
         const string payload =

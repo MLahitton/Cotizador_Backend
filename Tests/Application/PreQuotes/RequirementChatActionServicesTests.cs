@@ -1,6 +1,7 @@
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Abstractions.PreQuotes;
+using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.PriceRequirementTechnicalProposal;
 using Application.PreQuotes.RequirementChatActions;
@@ -32,6 +33,75 @@ public sealed class RequirementChatActionServicesTests
     private static readonly Guid FinishAId = Guid.Parse("40000000-0000-0000-0000-000000000001");
     private static readonly Guid FinishBId = Guid.Parse("40000000-0000-0000-0000-000000000002");
 
+    [Fact]
+    public async Task RequirementChatAction_PlanConfirmSelection_RequiresConfirmationWithoutItemTarget()
+    {
+        var context = CreateContext();
+
+        var result = await context.Plan.ExecuteAsync(
+            Command("CONFIRM_SELECTION", scope: "REQUIREMENT"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("READY_FOR_CONFIRMATION", result.Plan!.Status);
+        Assert.True(result.Plan.RequiresConfirmation);
+        var action = Assert.Single(result.Plan.Actions);
+        Assert.Equal("CONFIRM_SELECTION", action.ActionType);
+        Assert.Null(action.TargetTechnicalProposalItemId);
+        Assert.Null(action.TargetReference);
+        Assert.Equal("PENDING_CONFIRMATION", action.CurrentValue);
+        Assert.Equal("CONFIRMED", action.RequestedValue);
+        Assert.Equal(0, context.Confirmation.Count);
+        Assert.Equal(0, context.Selection.Count);
+        Assert.Equal(0, context.Pricing.RepriceCount);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_ConfirmSelection_ExecutesCoreServiceOnce()
+    {
+        var context = CreateContext();
+        var planResult = await context.Plan.ExecuteAsync(
+            Command("CONFIRM_SELECTION", scope: "REQUIREMENT"),
+            TestContext.Current.CancellationToken);
+
+        var first = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, planResult.Plan!.PlanId),
+            TestContext.Current.CancellationToken);
+        var second = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, planResult.Plan.PlanId),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("EXECUTED", first.Plan!.Status);
+        Assert.Equal("EXECUTED", second.Plan!.Status);
+        Assert.Null(first.Plan.PricingStatus);
+        Assert.Contains("CONFIRM_SELECTION_CONFIRMED", first.Plan.ExecutionReasons);
+        Assert.Equal(1, context.Confirmation.Count);
+        Assert.Equal(0, context.Selection.Count);
+        Assert.Equal(0, context.Inclusion.Count);
+        Assert.Equal(0, context.Pricing.PriceRequirementCount);
+        Assert.Equal("CONFIRMED", context.Reader.Current.CommercialConfirmation.State);
+    }
+
+    [Fact]
+    public async Task RequirementChatAction_PlanConfirmSelection_BlockedReadinessIsNotExecutable()
+    {
+        var context = CreateContext(readinessBlocked: true);
+
+        var result = await context.Plan.ExecuteAsync(
+            Command("CONFIRM_SELECTION", scope: "REQUIREMENT"),
+            TestContext.Current.CancellationToken);
+        var confirm = await context.Confirm.ExecuteAsync(
+            new ConfirmRequirementChatActionCommand(RequirementId, result.Plan!.PlanId),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("INVALID", result.Plan.Status);
+        var action = Assert.Single(result.Plan.Actions);
+        Assert.False(result.Plan.RequiresConfirmation);
+        Assert.Contains("TECHNICAL_PROPOSAL_NOT_READY_FOR_CONFIRMATION", action.ValidationReasons);
+        Assert.Contains("MISSING_SYSTEM=1", action.ValidationReasons);
+        Assert.Equal("INVALID", confirm.Plan!.Status);
+        Assert.Equal(0, context.Confirmation.Count);
+    }
     [Fact]
     public async Task RequirementChatAction_PlanItemChangeSystem_DoesNotWriteOrRepriceAndRequiresConfirmation()
     {
@@ -708,11 +778,14 @@ public sealed class RequirementChatActionServicesTests
         TimeSpan? priceRequirementDelay = null,
         IReadOnlyList<ProductSystemCatalogReadModel>? systemValues = null,
         IReadOnlyList<GlassTypeCatalogReadModel>? glassValues = null,
-        IReadOnlyList<FinishTypeCatalogReadModel>? finishValues = null)
+        IReadOnlyList<FinishTypeCatalogReadModel>? finishValues = null,
+        bool readinessBlocked = false,
+        ConfirmRequirementTechnicalProposalSelectionFailure? confirmationFailure = null)
     {
-        var reader = new FakeTechnicalProposalReader(CreateProposal(duplicateReference));
+        var reader = new FakeTechnicalProposalReader(CreateProposal(duplicateReference, readinessBlocked));
         var selection = new FakeSelectionExecutor(reader);
         var inclusion = new FakeInclusionExecutor(reader);
+        var confirmation = new FakeSelectionConfirmationExecutor(reader) { Failure = confirmationFailure };
         var pricing = new FakePricingExecutor(reader)
         {
             FailReprice = repriceFailure,
@@ -755,13 +828,14 @@ public sealed class RequirementChatActionServicesTests
             store,
             repository,
             selection,
+            confirmation,
             inclusion,
             pricing,
             reader);
-        return new Context(reader, selection, inclusion, pricing, plan, confirm);
+        return new Context(reader, selection, confirmation, inclusion, pricing, plan, confirm);
     }
 
-    private static RequirementTechnicalProposalReadModel CreateProposal(bool duplicateReference) =>
+    private static RequirementTechnicalProposalReadModel CreateProposal(bool duplicateReference, bool readinessBlocked = false) =>
         new(
             RequirementId,
             ProposalId,
@@ -782,16 +856,18 @@ public sealed class RequirementChatActionServicesTests
             2,
             2,
             new RequirementTechnicalProposalReadinessReadModel(
-                "READY",
-                true,
-                true,
+                readinessBlocked ? "BLOCKED" : "READY",
+                !readinessBlocked,
+                !readinessBlocked,
+                readinessBlocked ? 1 : 0,
                 0,
+                readinessBlocked ? 1 : 0,
                 0,
-                0,
-                0,
-                0,
-                0,
-                new Dictionary<string, int>()),
+                readinessBlocked ? 1 : 0,
+                readinessBlocked ? 1 : 0,
+                readinessBlocked
+                    ? new Dictionary<string, int> { ["MISSING_SYSTEM"] = 1 }
+                    : new Dictionary<string, int>()),
             [
                 Item(ItemAId, "V-01", 1),
                 Item(ItemBId, duplicateReference ? "V-01" : "V-02", 2)
@@ -969,6 +1045,7 @@ public sealed class RequirementChatActionServicesTests
     private sealed record Context(
         FakeTechnicalProposalReader Reader,
         FakeSelectionExecutor Selection,
+        FakeSelectionConfirmationExecutor Confirmation,
         FakeInclusionExecutor Inclusion,
         FakePricingExecutor Pricing,
         PlanRequirementChatActionService Plan,
@@ -991,6 +1068,18 @@ public sealed class RequirementChatActionServicesTests
         public RequirementTechnicalProposalItemReadModel Item(Guid itemId) =>
             Current.Items.Single(item => item.ItemId == itemId);
 
+        public void UpdateConfirmation(string state)
+        {
+            Current = Current with
+            {
+                CommercialConfirmation = Current.CommercialConfirmation with
+                {
+                    State = state,
+                    ConfirmedAtUtc = At,
+                    ConfirmedByUserId = Guid.NewGuid()
+                }
+            };
+        }
         public void UpdateItem(Guid itemId, Func<RequirementTechnicalProposalItemReadModel, RequirementTechnicalProposalItemReadModel> update)
         {
             Current = Current with
@@ -1016,6 +1105,33 @@ public sealed class RequirementChatActionServicesTests
         }
     }
 
+    private sealed class FakeSelectionConfirmationExecutor(FakeTechnicalProposalReader reader)
+        : IRequirementChatSelectionConfirmationExecutor
+    {
+        public int Count { get; private set; }
+        public ConfirmRequirementTechnicalProposalSelectionFailure? Failure { get; init; }
+
+        public Task<ConfirmRequirementTechnicalProposalSelectionResult> ExecuteAsync(
+            ConfirmRequirementTechnicalProposalSelectionCommand command,
+            CancellationToken cancellationToken)
+        {
+            Count++;
+            if (Failure is { } failure)
+            {
+                return Task.FromResult(
+                    ConfirmRequirementTechnicalProposalSelectionResult.Failed(failure));
+            }
+
+            reader.UpdateConfirmation("CONFIRMED");
+            return Task.FromResult(
+                ConfirmRequirementTechnicalProposalSelectionResult.Success(
+                    new ConfirmRequirementTechnicalProposalSelectionReadModel(
+                        command.TechnicalProposalId,
+                        "CONFIRMED",
+                        At,
+                        Guid.NewGuid())));
+        }
+    }
     private sealed class FakeInclusionExecutor(FakeTechnicalProposalReader reader)
         : IRequirementChatInclusionExecutor
     {

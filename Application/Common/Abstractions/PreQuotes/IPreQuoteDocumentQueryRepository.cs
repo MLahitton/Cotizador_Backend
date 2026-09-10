@@ -134,7 +134,8 @@ public sealed record StructuredItemReadModel(
     string? Modulation = null,
     string? OpeningDirection = null,
     IReadOnlyList<string>? SpecialFeatures = null,
-    string? GeometryType = null);
+    string? GeometryType = null,
+    string? OccurrenceContext = null);
 
 public sealed record StructuredItemGlassValuationReadModel(
     GlassValuationStatus Status,

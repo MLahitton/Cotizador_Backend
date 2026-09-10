@@ -574,6 +574,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 .Include(proposal => proposal.Requirement)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.ExtractedItem)
+                        .ThenInclude(item => item.Segments)
                 .SingleOrDefaultAsync(
                     proposal => proposal.Id == technicalProposalId,
                     cancellationToken);

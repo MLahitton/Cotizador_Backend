@@ -5,6 +5,8 @@ using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.RequirementChatActions;
 using Domain.PreQuotes;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
+using System.Text;
 
 namespace Application.PreQuotes.RequirementChat;
 
@@ -78,6 +80,7 @@ public sealed class SendRequirementChatMessageService(
     GetRequirementTechnicalProposalService getTechnicalProposalService,
     IRequirementRepository requirementRepository,
     PlanRequirementChatActionService planActionService,
+    ConfirmRequirementChatActionService confirmActionService,
     IRequirementChatActionPlanStore actionPlanStore,
     TimeProvider timeProvider,
     ILogger<SendRequirementChatMessageService> logger)
@@ -176,6 +179,58 @@ public sealed class SendRequirementChatMessageService(
         }
 
         var scopeContract = GetRequirementChatService.ToContract(scope);
+        var pendingConfirmations = actionPlanStore.FindPendingConfirmations(
+            command.RequirementId,
+            scopeContract,
+            command.TechnicalProposalItemId,
+            thread.Id);
+        var confirmationFollowUp = DetectConfirmationFollowUp(command.Message);
+        RequirementChatAiResponse? response = null;
+        RequirementChatInteractionReadModel? interaction = null;
+        if (confirmationFollowUp != ConfirmationFollowUp.None)
+        {
+            if (pendingConfirmations.Count == 1)
+            {
+                var pendingConfirmation = pendingConfirmations[0];
+                if (confirmationFollowUp == ConfirmationFollowUp.Affirmative)
+                {
+                    var confirmResult = await confirmActionService.ExecuteAsync(
+                        new ConfirmRequirementChatActionCommand(
+                            command.RequirementId,
+                            pendingConfirmation.PlanId),
+                        cancellationToken);
+                    if (!confirmResult.IsSuccess || confirmResult.Plan is null)
+                    {
+                        return SendRequirementChatMessageResult.Failed(
+                            RequirementChatFailure.QueryError);
+                    }
+
+                    interaction = ToExecutedInteraction(confirmResult.Plan);
+                    response = new RequirementChatAiResponse(
+                        ToExecutedAssistantMessage(confirmResult.Plan));
+                }
+                else
+                {
+                    var cancelled = actionPlanStore.CancelPendingConfirmation(
+                        command.RequirementId,
+                        pendingConfirmation.PlanId);
+                    interaction = cancelled is null
+                        ? InformationalInteraction()
+                        : ToCancelledInteraction(cancelled);
+                    response = new RequirementChatAiResponse(
+                        "Listo. No aplique ningun cambio.");
+                }
+            }
+            else
+            {
+                interaction = InformationalInteraction();
+                response = new RequirementChatAiResponse(
+                    pendingConfirmations.Count == 0
+                        ? "No encontre un cambio pendiente para confirmar."
+                        : "Hay mas de un cambio pendiente. Abre la tarjeta correspondiente y confirma desde ahi.");
+            }
+        }
+
         var pendingPlan = actionPlanStore.FindPendingClarification(
             command.RequirementId,
             scopeContract,
@@ -185,9 +240,11 @@ public sealed class SendRequirementChatMessageService(
             ? context.Context!
             : WithPendingAction(context.Context!, pendingPlan);
         RequirementChatActionIntent intent;
-        try
+        if (response is null)
         {
-            intent = await aiClient.InterpretActionAsync(
+            try
+            {
+                intent = await aiClient.InterpretActionAsync(
                 new RequirementChatActionInterpretationRequest(
                     command.Message.Trim(),
                     scopeContract,
@@ -202,15 +259,18 @@ public sealed class SendRequirementChatMessageService(
                     aiContext),
                 cancellationToken);
         }
-        catch (RequirementChatAiUnavailableException)
+            catch (RequirementChatAiUnavailableException)
+            {
+                return SendRequirementChatMessageResult.Failed(
+                    RequirementChatFailure.Ai2Unavailable);
+            }
+        }
+        else
         {
-            return SendRequirementChatMessageResult.Failed(
-                RequirementChatFailure.Ai2Unavailable);
+            intent = new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 1m, false, null, command.Message.Trim());
         }
 
-        RequirementChatAiResponse response;
-        RequirementChatInteractionReadModel interaction;
-        if (!intent.IsAction)
+        if (response is null && !intent.IsAction)
         {
             try
             {
@@ -258,9 +318,9 @@ public sealed class SendRequirementChatMessageService(
                 [],
                 []);
         }
-        else if (intent.RequiresClarification
+        else if (response is null && (intent.RequiresClarification
             || string.Equals(intent.ActionType, "UNKNOWN", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(intent.ActionType))
+            || string.IsNullOrWhiteSpace(intent.ActionType)))
         {
             var message = string.IsNullOrWhiteSpace(intent.ClarificationReason)
                 ? "Necesito un poco mas de informacion para preparar esa accion."
@@ -285,7 +345,7 @@ public sealed class SendRequirementChatMessageService(
                     .Select(ToInteractionOption)
                     .ToArray() ?? []);
         }
-        else
+        else if (response is null)
         {
             var pendingAction = pendingPlan?.Actions.FirstOrDefault();
             var planResult = await planActionService.ExecuteAsync(
@@ -317,6 +377,12 @@ public sealed class SendRequirementChatMessageService(
 
             interaction = ToInteraction(planResult.Plan);
             response = new RequirementChatAiResponse(ToAssistantMessage(planResult.Plan));
+        }
+
+        if (response is null || interaction is null)
+        {
+            return SendRequirementChatMessageResult.Failed(
+                RequirementChatFailure.QueryError);
         }
 
         try
@@ -470,9 +536,11 @@ public sealed class SendRequirementChatMessageService(
             },
             instructions = new[]
             {
-                "READ_ONLY_CHAT",
                 "USE_ONLY_CONTEXT",
-                "DO_NOT_MUTATE_SELECTION",
+                "CAN_PREPARE_SUPPORTED_ACTIONS",
+                "MUTATIONS_REQUIRE_CONFIRMATION",
+                "BACKEND_VALIDATES_AND_EXECUTES_ACTIONS",
+                "UNSUPPORTED_ACTIONS_MUST_BE_DECLARED_UNAVAILABLE",
                 "DISTINGUISH_SUGGESTED_SELECTED"
             }
         };
@@ -608,6 +676,134 @@ public sealed class SendRequirementChatMessageService(
         Guid? PricingSnapshotId = null,
         long? CommercialRevision = null);
 
+    private enum ConfirmationFollowUp
+    {
+        None,
+        Affirmative,
+        Negative
+    }
+
+    private static ConfirmationFollowUp DetectConfirmationFollowUp(string message)
+    {
+        if (message.Contains('?') || message.Contains('\u00bf'))
+        {
+            return ConfirmationFollowUp.None;
+        }
+
+        var normalized = NormalizeConfirmationText(message);
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return ConfirmationFollowUp.None;
+        }
+
+        var negative = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "no",
+            "no lo hagas",
+            "cancela",
+            "cancelalo",
+            "mejor no",
+            "no gracias"
+        };
+        if (negative.Contains(normalized))
+        {
+            return ConfirmationFollowUp.Negative;
+        }
+
+        var affirmative = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "si",
+            "si hazlo",
+            "hazlo",
+            "confirmo",
+            "adelante",
+            "aplicalo",
+            "aplica el cambio",
+            "de acuerdo",
+            "dale",
+            "ok"
+        };
+        return affirmative.Contains(normalized)
+            ? ConfirmationFollowUp.Affirmative
+            : ConfirmationFollowUp.None;
+    }
+
+    private static string NormalizeConfirmationText(string value)
+    {
+        var normalized = value.Trim().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        var previousWasSpace = true;
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+                previousWasSpace = false;
+            }
+            else if (!previousWasSpace)
+            {
+                builder.Append(' ');
+                previousWasSpace = true;
+            }
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static RequirementChatInteractionReadModel InformationalInteraction() =>
+        new(
+            "INFORMATIONAL",
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            [],
+            []);
+
+    private static RequirementChatInteractionReadModel ToCancelledInteraction(
+        ChatActionPlanReadModel plan) =>
+        InformationalInteraction() with
+        {
+            PlanId = plan.PlanId,
+            Reasons = plan.ExecutionReasons,
+            ActionCount = plan.Actions.Count,
+            Actions = plan.Actions.Select(ToInteractionAction).ToArray()
+        };
+
+    private static RequirementChatInteractionReadModel ToExecutedInteraction(
+        ChatActionPlanReadModel plan)
+    {
+        var primaryAction = plan.Actions.FirstOrDefault();
+        var actions = plan.Actions.Select(ToInteractionAction).ToArray();
+        return new RequirementChatInteractionReadModel(
+            "INFORMATIONAL",
+            plan.PlanId,
+            false,
+            primaryAction?.ActionType,
+            primaryAction?.TargetTechnicalProposalItemId,
+            primaryAction?.TargetReference,
+            primaryAction?.CurrentValue,
+            primaryAction?.RequestedValue,
+            null,
+            plan.PricingStatus,
+            plan.ExecutionReasons
+                .Concat(["CHAT_ACTION_EXECUTED"])
+                .Distinct(StringComparer.Ordinal)
+                .ToArray(),
+            [],
+            actions.Length,
+            actions);
+    }
     private static RequirementChatInteractionReadModel ToInteraction(
         ChatActionPlanReadModel plan)
     {
@@ -713,6 +909,33 @@ public sealed class SendRequirementChatMessageService(
             action.RequiresConfirmation,
             action.AvailableOptions.Select(ToInteractionOption).ToArray());
 
+    private static string ToExecutedAssistantMessage(ChatActionPlanReadModel plan)
+    {
+        if (plan.Status is not "EXECUTED" and not "EXECUTED_WITH_PRICING_PENDING")
+        {
+            return "No fue posible completar la accion. Revisa el mensaje e intenta nuevamente.";
+        }
+
+        var prefix = plan.Actions.Count > 1
+            ? $"Listo. Aplique {plan.Actions.Count} cambios."
+            : "Listo. Aplique el cambio.";
+        if (plan.PricingStatus == "PRICING_UPDATED")
+        {
+            return $"{prefix} El precio tambien fue actualizado.";
+        }
+
+        if (plan.PricingStatus == "PRICING_PENDING")
+        {
+            return $"{prefix} El precio queda pendiente de actualizacion.";
+        }
+
+        if (plan.PricingStatus == "NOT_YET_PRICED")
+        {
+            return $"{prefix} La propuesta aun no tiene pricing generado.";
+        }
+
+        return prefix;
+    }
     private static string ToAssistantMessage(ChatActionPlanReadModel plan)
     {
         if (plan.Actions.Count == 0)
@@ -733,6 +956,15 @@ public sealed class SendRequirementChatMessageService(
             return $"Voy a aplicar {plan.Actions.Count} cambios:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}{Environment.NewLine}Confirma para ejecutarlos.";
         }
 
+        var reasons = plan.Actions
+            .SelectMany(action => action.ValidationReasons)
+            .Concat(plan.ExecutionReasons)
+            .ToArray();
+        if (reasons.Contains("CHANGE_COMMERCIAL_LINE_NOT_SUPPORTED_YET", StringComparer.Ordinal))
+        {
+            return "Esa accion aun no esta disponible en el chat.";
+        }
+
         var availableOptions = plan.Actions
             .SelectMany(action => action.AvailableOptions)
             .ToArray();
@@ -744,10 +976,7 @@ public sealed class SendRequirementChatMessageService(
             return $"Necesito confirmar la accion antes de continuar. Opciones disponibles: {options}.";
         }
 
-        return plan.Actions
-            .SelectMany(action => action.ValidationReasons)
-            .Concat(plan.ExecutionReasons)
-            .FirstOrDefault()
+        return reasons.FirstOrDefault()
             ?? "No pude preparar una accion segura con ese mensaje.";
     }
 

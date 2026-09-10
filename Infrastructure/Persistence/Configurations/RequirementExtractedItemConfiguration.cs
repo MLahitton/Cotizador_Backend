@@ -49,6 +49,11 @@ public sealed class RequirementExtractedItemConfiguration
             .HasMaxLength(100)
             .IsRequired(false);
 
+        builder.Property(item => item.OccurrenceContext)
+            .HasColumnName("occurrence_context")
+            .HasMaxLength(200)
+            .IsRequired(false);
+
         builder.Property(item => item.Description)
             .HasColumnName("description")
             .HasMaxLength(500)

@@ -67,7 +67,8 @@ public sealed record RequirementTechnicalProposalItemResponse(
     RequirementTechnicalProposalHistoricalEvidenceResponse HistoricalEvidence,
     RequirementTechnicalProposalVisualModelResponse VisualModel,
     RequirementTechnicalProposalTraceResponse Trace,
-    IReadOnlyList<RequirementTechnicalProposalEvidenceResponse> Evidence);
+    IReadOnlyList<RequirementTechnicalProposalEvidenceResponse> Evidence,
+    string? OccurrenceContext = null);
 
 public sealed record RequirementTechnicalProposalReadinessResponse(
     string State,

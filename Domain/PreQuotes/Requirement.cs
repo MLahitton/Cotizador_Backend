@@ -622,6 +622,7 @@ public sealed class RequirementExtractedItem
     public string? Ai2ElementId { get; private set; }
     public int Sequence { get; private set; }
     public string? Reference { get; private set; }
+    public string? OccurrenceContext { get; private set; }
     public string Description { get; private set; } = string.Empty;
     public StructuredElementType ElementType { get; private set; }
     public int? Quantity { get; private set; }
@@ -718,7 +719,8 @@ public sealed class RequirementExtractedItem
         string? finishExplicitCode,
         bool? finishRequiresReview,
         DateTimeOffset createdAtUtc,
-        string? assemblyType = null)
+        string? assemblyType = null,
+        string? occurrenceContext = null)
     {
         if (requirementExtractionResultId == Guid.Empty)
         {
@@ -748,6 +750,7 @@ public sealed class RequirementExtractedItem
             Ai2ElementId = NormalizeOptional(ai2ElementId, 100),
             Sequence = sequence,
             Reference = NormalizeOptional(reference, 100),
+            OccurrenceContext = NormalizeOptional(occurrenceContext, 200),
             Description = Requirement.NormalizeRequired(
                 description,
                 nameof(description),

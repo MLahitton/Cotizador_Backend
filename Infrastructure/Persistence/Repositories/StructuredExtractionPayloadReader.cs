@@ -170,6 +170,7 @@ internal static class StructuredExtractionPayloadReader
 
         if (dto.Sequence != row.Sequence
             || dto.Reference != row.Reference
+            || dto.OccurrenceContext != row.OccurrenceContext
             || dto.Description != row.Description
             || MapElementType(dto.ElementType) != row.ElementType
             || dto.RawMeasurements != row.RawMeasurements
@@ -229,7 +230,8 @@ internal static class StructuredExtractionPayloadReader
             row.Modulation,
             row.OpeningDirection,
             row.SpecialFeatures ?? [],
-            row.GeometryType);
+            row.GeometryType,
+            row.OccurrenceContext);
     }
 
     private static StructuredItemTechnicalClassificationReadModel?
@@ -1027,6 +1029,7 @@ internal static class StructuredExtractionPayloadReader
     {
         public int Sequence { get; init; }
         public string? Reference { get; init; }
+        public string? OccurrenceContext { get; init; }
         public string? Description { get; init; }
         public string? ElementType { get; init; }
         public string? RawMeasurements { get; init; }

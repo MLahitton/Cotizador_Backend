@@ -246,7 +246,8 @@ public sealed record StructuredItemData(
     string? FinishExplicitCode = null,
     bool? FinishRequiresReview = null,
     string? AssemblyType = null,
-    IReadOnlyList<StructuredItemSegmentData>? Segments = null);
+    IReadOnlyList<StructuredItemSegmentData>? Segments = null,
+    string? OccurrenceContext = null);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,

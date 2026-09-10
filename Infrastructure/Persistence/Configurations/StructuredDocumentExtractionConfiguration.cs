@@ -1,4 +1,4 @@
-using Domain.PreQuotes;
+﻿using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -103,6 +103,7 @@ public sealed class StructuredExtractionItemConfiguration : StructuredChildConfi
     protected override void Properties(EntityTypeBuilder<StructuredExtractionItem> b)
     {
         b.Property(x => x.Reference).HasColumnName("reference").HasColumnType("text");
+        b.Property(x => x.OccurrenceContext).HasColumnName("occurrence_context").HasMaxLength(200);
         b.Property(x => x.Description).HasColumnName("description").HasColumnType("text");
         b.Property(x => x.ElementType).HasColumnName("element_type").HasConversion<string>().HasColumnType("varchar(30)");
         b.Property(x => x.RawMeasurements).HasColumnName("raw_measurements").HasColumnType("text");

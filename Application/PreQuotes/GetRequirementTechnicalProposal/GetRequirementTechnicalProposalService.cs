@@ -386,7 +386,8 @@ public sealed class GetRequirementTechnicalProposalService(
                 .ThenBy(evidence => evidence.CellRange)
                 .ThenBy(evidence => evidence.Id)
                 .Select(evidence => MapEvidence(evidence, sourcesById))
-                .ToArray());
+                .ToArray(),
+            extracted?.OccurrenceContext);
     }
 
     private static RequirementTechnicalProposalSystemAlternativeReadModel?
@@ -690,7 +691,8 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
     RequirementTechnicalProposalVisualModelReadModel VisualModel,
     RequirementTechnicalProposalTraceReadModel Trace,
-    IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence);
+    IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence,
+    string? OccurrenceContext = null);
 
 public sealed record RequirementTechnicalProposalSuggestedReadModel(
     RequirementTechnicalProposalSystemOptionReadModel? System,

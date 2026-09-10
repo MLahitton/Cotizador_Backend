@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Application.Common.Abstractions.DocumentProcessing;
@@ -332,6 +332,7 @@ public sealed class Ai2RequirementExtractionAdapter
                 {
                     sequence = item.Sequence,
                     reference = item.Reference,
+                    occurrenceContext = item.OccurrenceContext,
                     description = item.Description,
                     elementType = ElementType(item.ElementType),
                     rawMeasurements = item.RawMeasurements,
@@ -457,6 +458,7 @@ public sealed class Ai2RequirementExtractionAdapter
         var glass = MapGlass(element, evidenceById);
         var segments = MapSegments(element, evidenceById);
         var technical = MapTechnicalClassification(element);
+        var occurrenceContext = OccurrenceContext(element);
         var status = ItemStatus(element);
         var configuration = Object(element, "configuration");
         var geometry = Object(element, "geometry");
@@ -640,9 +642,34 @@ public sealed class Ai2RequirementExtractionAdapter
                     or CanonicalExtractionValueStatus.Unknown
                 : null,
             FlexibleString(element, "assembly_type"),
-            segments);
+            segments,
+            occurrenceContext);
     }
 
+
+
+    private static string? OccurrenceContext(JsonElement element)
+    {
+        foreach (var occurrence in Array(element, "occurrences").EnumerateArray())
+        {
+            var context = FirstNonEmpty(
+                TraceableString(occurrence, "location"),
+                TraceableString(occurrence, "level"),
+                String(occurrence, "location"),
+                String(occurrence, "level"));
+            if (!string.IsNullOrWhiteSpace(context))
+            {
+                return Limit(context, 200);
+            }
+        }
+
+        return FirstNonEmpty(
+            FlexibleString(element, "occurrence_context"),
+            FlexibleString(element, "location"),
+            FlexibleString(element, "level")) is { } direct
+                ? Limit(direct, 200)
+                : null;
+    }
 
     private static IReadOnlyList<StructuredItemSegmentData> MapSegments(
         JsonElement element,

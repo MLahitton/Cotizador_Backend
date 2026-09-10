@@ -63,6 +63,37 @@ public sealed class StructuredDocumentExtractionTests
     }
 
     [Fact]
+    public void Create_WithRepeatedReference_PreservesOccurrenceContextPerItem()
+    {
+        var extraction = StructuredDocumentExtraction.Create(
+            ResultId,
+            StructuredExtractionStatus.Completed,
+            null,
+            null,
+            null,
+            2,
+            0,
+            0,
+            2,
+            "rule_based_v1",
+            1,
+            [
+                Item(1) with { OccurrenceContext = "LEVEL A" },
+                Item(2) with { OccurrenceContext = "LEVEL B" }
+            ],
+            [],
+            [],
+            [],
+            [],
+            CreatedAt);
+
+        Assert.Equal(["LEVEL A", "LEVEL B"],
+            extraction.Items.OrderBy(item => item.Sequence)
+                .Select(item => item.OccurrenceContext));
+        Assert.All(extraction.Items, item => Assert.Equal("W-01", item.Reference));
+    }
+
+    [Fact]
     public void HistoricalV1Result_DoesNotRequireStructuredSnapshot()
     {
         var result = DocumentExtractionResult.Create(

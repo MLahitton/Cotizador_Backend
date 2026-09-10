@@ -1,5 +1,6 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Application.Common.Abstractions.PreQuotes;
 using Microsoft.Extensions.Logging;
 
@@ -117,6 +118,10 @@ public sealed class CotizadorAi2RequirementChatClient(
             throw new RequirementChatAiUnavailableException(exception);
         }
         catch (InvalidOperationException exception)
+        {
+            throw new RequirementChatAiUnavailableException(exception);
+        }
+        catch (JsonException exception)
         {
             throw new RequirementChatAiUnavailableException(exception);
         }

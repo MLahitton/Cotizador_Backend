@@ -297,7 +297,8 @@ public sealed class RequirementTechnicalProposalController(
                     evidence.SourceFileName,
                     evidence.ContextLabel,
                     evidence.Confidence,
-                    evidence.Status)).ToArray());
+                    evidence.Status)).ToArray(),
+            item.OccurrenceContext);
 
     private static RequirementTechnicalProposalReadinessResponse Map(
         RequirementTechnicalProposalReadinessReadModel readiness) =>
