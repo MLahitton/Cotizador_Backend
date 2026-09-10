@@ -1,4 +1,4 @@
-using Application.Common.Abstractions.DocumentProcessing;
+﻿using Application.Common.Abstractions.DocumentProcessing;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Storage;
 using Domain.Catalogs;
@@ -341,7 +341,8 @@ public sealed class ProcessClaimedDocumentProcessingAttemptService(
                 resolved.Item.Modulation,
                 resolved.Item.OpeningDirection,
                 resolved.Item.SpecialFeatures,
-                resolved.Item.GeometryType))
+                resolved.Item.GeometryType,
+                resolved.Item.OccurrenceContext))
                 .ToArray(),
             structured.Requirements.Select((x, index) =>
                 new StructuredRequirementInput(

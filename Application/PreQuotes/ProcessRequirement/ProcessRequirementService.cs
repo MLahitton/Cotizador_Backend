@@ -622,7 +622,8 @@ public sealed class ProcessRequirementService(
                 item.FinishExplicitCode,
                 item.FinishRequiresReview,
                 createdAtUtc,
-                item.AssemblyType);
+                item.AssemblyType,
+                item.OccurrenceContext);
             foreach (var invalidEvidence in invalidEvidenceSources)
             {
                 LogInvalidEvidence(

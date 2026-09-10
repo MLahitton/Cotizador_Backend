@@ -8,6 +8,9 @@ using Application.PreQuotes.GetRequirementDetails;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.RequirementChat;
 using Application.PreQuotes.RequirementChatActions;
+using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
@@ -54,6 +57,31 @@ public sealed class RequirementChatRoutingTests
             Arg.Is<RequirementChatAiRequest>(request => request.Scope == "REQUIREMENT"),
             Arg.Any<CancellationToken>());
         Assert.Empty(context.Store.Plans);
+    }
+
+    [Fact]
+    public async Task RequirementChat_ContextInstructions_AreCapabilityAware()
+    {
+        var context = CreateContext();
+        RequirementChatActionInterpretationRequest? interpretRequest = null;
+        context.Ai.InterpretActionAsync(
+                Arg.Do<RequirementChatActionInterpretationRequest>(request => interpretRequest = request),
+                Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.91m, false, null, "que sistema tiene V-9"));
+        context.Ai.RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("V-9 usa el sistema sugerido."));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "que sistema tiene V-9"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var json = Serialize(interpretRequest!.Context);
+        Assert.DoesNotContain("READ_ONLY_CHAT", json);
+        Assert.DoesNotContain("DO_NOT_MUTATE_SELECTION", json);
+        Assert.Contains("CAN_PREPARE_SUPPORTED_ACTIONS", json);
+        Assert.Contains("MUTATIONS_REQUIRE_CONFIRMATION", json);
+        Assert.Contains("BACKEND_VALIDATES_AND_EXECUTES_ACTIONS", json);
     }
 
     [Fact]
@@ -213,6 +241,41 @@ public sealed class RequirementChatRoutingTests
         Assert.Equal("K72", result.LastInteraction.RequestedValue);
         Assert.Null(item.SelectedSystemId);
         await context.Ai.DidNotReceive().RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_ActionPlanMessage_DoesNotSendUserToEditor()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CHANGE_SYSTEM", "REQUIREMENT", "V-9", "K72", null, null, null, 0.87m, false, null, "cambia V-9 a K72"));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a K72"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var message = result.Thread!.Messages.Last().Content;
+        Assert.Contains("Confirma", message);
+        Assert.DoesNotContain("editor", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("solo lectura", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RequirementChat_UnsupportedAction_DeclaresSpecificUnavailableCapability()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CHANGE_COMMERCIAL_LINE", "REQUIREMENT", null, "premium", null, null, null, 0.88m, false, null, "quiero toda la propuesta en premium"));
+
+        var result = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "quiero toda la propuesta en premium"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("CLARIFICATION", result.LastInteraction!.MessageType);
+        Assert.Equal("Esa accion aun no esta disponible en el chat.", result.Thread!.Messages.Last().Content);
+        Assert.Contains("CHANGE_COMMERCIAL_LINE_NOT_SUPPORTED_YET", result.LastInteraction.Reasons);
     }
 
     [Fact]
@@ -410,7 +473,7 @@ public sealed class RequirementChatRoutingTests
         Assert.Equal("CLARIFICATION", first.LastInteraction.MessageType);
         Assert.NotNull(firstPlanId);
         Assert.NotEmpty(first.LastInteraction.AvailableOptions);
-        Assert.True(second.IsSuccess);
+        Assert.True(second.IsSuccess, second.Failure.ToString());
         Assert.Equal("ACTION_PLAN", second.LastInteraction!.MessageType);
         Assert.Equal(firstPlanId, second.LastInteraction.PlanId);
         Assert.True(second.LastInteraction.RequiresConfirmation);
@@ -521,6 +584,126 @@ public sealed class RequirementChatRoutingTests
         Assert.DoesNotContain("\"pendingAction\"", Serialize(secondRequest!.Context));
     }
 
+    [Fact]
+    public async Task RequirementChat_PendingConfirmationBriefYes_ExecutesExistingPlanWithoutReplanning()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CHANGE_SYSTEM", "REQUIREMENT", "V-9", "K72", null, null, null, 0.87m, false, null, "cambia V-9 a K72"));
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a K72"),
+            TestContext.Current.CancellationToken);
+        context.Ai.ClearReceivedCalls();
+
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "si, hazlo"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(second.IsSuccess, second.Failure.ToString());
+        Assert.Equal("INFORMATIONAL", second.LastInteraction!.MessageType);
+        Assert.False(second.LastInteraction.RequiresConfirmation);
+        Assert.Contains("CHAT_ACTION_EXECUTED", second.LastInteraction.Reasons);
+        Assert.Equal("EXECUTED", context.Store.Find(context.Requirement.Id, first.LastInteraction!.PlanId!.Value)!.Status);
+        Assert.Contains("Listo", second.Thread!.Messages.Last().Content);
+        await context.Ai.DidNotReceive().InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>());
+        await context.SelectionExecutor.Received(1).ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemSelectionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_PendingConfirmationNegative_CancelsWithoutExecutionOrReplanning()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CHANGE_GLASS", "REQUIREMENT", "V-9", "TEMP_8", null, null, null, 0.87m, false, null, "cambia V-9 a TEMP_8"));
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a TEMP_8"),
+            TestContext.Current.CancellationToken);
+        context.Ai.ClearReceivedCalls();
+
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "mejor no"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(second.IsSuccess, second.Failure.ToString());
+        Assert.Equal("CANCELLED", context.Store.Find(context.Requirement.Id, first.LastInteraction!.PlanId!.Value)!.Status);
+        Assert.DoesNotContain("CHAT_ACTION_EXECUTED", second.LastInteraction!.Reasons);
+        await context.Ai.DidNotReceive().InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>());
+        await context.SelectionExecutor.DidNotReceive().ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemSelectionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_PendingConfirmationQuestion_DoesNotConfirm()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(new RequirementChatActionIntent(true, "CHANGE_QUANTITY", "REQUIREMENT", "V-9", null, 2, null, null, 0.87m, false, null, "cambia V-9 a dos unidades")),
+                _ => Task.FromResult(new RequirementChatActionIntent(false, null, null, null, null, null, null, null, 0.80m, false, null, "si se puede?")));
+        context.Ai.RespondAsync(Arg.Any<RequirementChatAiRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatAiResponse("Si, puedo preparar ese cambio."));
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "cambia V-9 a dos unidades"),
+            TestContext.Current.CancellationToken);
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "\u00bfsi se puede?"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(second.IsSuccess, second.Failure.ToString());
+        Assert.Equal("READY_FOR_CONFIRMATION", context.Store.Find(context.Requirement.Id, first.LastInteraction!.PlanId!.Value)!.Status);
+        await context.Ai.Received(2).InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>());
+        await context.SelectionExecutor.DidNotReceive().ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemSelectionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_ConfirmSelectionBriefYes_ExecutesProposalLevelPlan()
+    {
+        var context = CreateContext();
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CONFIRM_SELECTION", "REQUIREMENT", null, "CONFIRMED", null, null, null, 0.87m, false, null, "confirma la propuesta"));
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "confirma la propuesta"),
+            TestContext.Current.CancellationToken);
+        context.Ai.ClearReceivedCalls();
+
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "adelante"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(second.IsSuccess, second.Failure.ToString());
+        Assert.Equal("EXECUTED", context.Store.Find(context.Requirement.Id, first.LastInteraction!.PlanId!.Value)!.Status);
+        Assert.Contains("CHAT_ACTION_EXECUTED", second.LastInteraction!.Reasons);
+        await context.SelectionConfirmationExecutor.Received(1).ExecuteAsync(Arg.Any<ConfirmRequirementTechnicalProposalSelectionCommand>(), Arg.Any<CancellationToken>());
+        await context.Ai.DidNotReceive().InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RequirementChat_PendingConfirmationFromAnotherThread_IsNotExecutedByBriefYes()
+    {
+        var context = CreateContext();
+        var itemId = context.Proposal.Items.First().Id;
+        context.Ai.InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementChatActionIntent(true, "CHANGE_FINISH", "ITEM", null, "WHITE_MATTE", null, null, null, 0.87m, false, null, "ponlo blanco"));
+
+        var first = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, itemId, "ponlo blanco"),
+            TestContext.Current.CancellationToken);
+        context.Ai.ClearReceivedCalls();
+
+        var second = await context.Service.ExecuteAsync(
+            new SendRequirementChatMessageCommand(context.Requirement.Id, null, "si"),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(second.IsSuccess, second.Failure.ToString());
+        Assert.Equal("READY_FOR_CONFIRMATION", context.Store.Find(context.Requirement.Id, first.LastInteraction!.PlanId!.Value)!.Status);
+        Assert.Equal("No encontre un cambio pendiente para confirmar.", second.Thread!.Messages.Last().Content);
+        await context.SelectionExecutor.DidNotReceive().ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemSelectionCommand>(), Arg.Any<CancellationToken>());
+        await context.Ai.DidNotReceive().InterpretActionAsync(Arg.Any<RequirementChatActionInterpretationRequest>(), Arg.Any<CancellationToken>());
+    }
+
     private static Context CreateContext(
         bool duplicateReference = false,
         bool withPricingSnapshot = false,
@@ -574,6 +757,46 @@ public sealed class RequirementChatRoutingTests
             finishes,
             store,
             clock);
+        var selectionExecutor = Substitute.For<IRequirementChatSelectionExecutor>();
+        selectionExecutor.ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemSelectionCommand>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(UpdateRequirementTechnicalProposalItemSelectionResult.Success(
+                new RequirementTechnicalProposalItemSelectionReadModel(
+                    call.Arg<UpdateRequirementTechnicalProposalItemSelectionCommand>().TechnicalProposalId,
+                    call.Arg<UpdateRequirementTechnicalProposalItemSelectionCommand>().ItemId,
+                    "MODIFIED",
+                    At,
+                    UserId,
+                    null,
+                    null,
+                    null))));
+        var selectionConfirmationExecutor = Substitute.For<IRequirementChatSelectionConfirmationExecutor>();
+        selectionConfirmationExecutor.ExecuteAsync(Arg.Any<ConfirmRequirementTechnicalProposalSelectionCommand>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(ConfirmRequirementTechnicalProposalSelectionResult.Success(
+                new ConfirmRequirementTechnicalProposalSelectionReadModel(
+                    call.Arg<ConfirmRequirementTechnicalProposalSelectionCommand>().TechnicalProposalId,
+                    "CONFIRMED",
+                    At,
+                    UserId))));
+        var inclusionExecutor = Substitute.For<IRequirementChatInclusionExecutor>();
+        inclusionExecutor.ExecuteAsync(Arg.Any<UpdateRequirementTechnicalProposalItemInclusionCommand>(), Arg.Any<CancellationToken>())
+            .Returns(call => Task.FromResult(UpdateRequirementTechnicalProposalItemInclusionResult.Success(
+                new RequirementTechnicalProposalItemInclusionReadModel(
+                    proposal.Id,
+                    call.Arg<UpdateRequirementTechnicalProposalItemInclusionCommand>().ItemId,
+                    call.Arg<UpdateRequirementTechnicalProposalItemInclusionCommand>().IsIncluded,
+                    null,
+                    null,
+                    call.Arg<UpdateRequirementTechnicalProposalItemInclusionCommand>().Reason,
+                    1))));
+        var pricingExecutor = Substitute.For<IRequirementChatPricingExecutor>();
+        var confirm = new ConfirmRequirementChatActionService(
+            store,
+            requirements,
+            selectionExecutor,
+            selectionConfirmationExecutor,
+            inclusionExecutor,
+            pricingExecutor,
+            new RequirementChatTechnicalProposalReader(technical));
         var service = new SendRequirementChatMessageService(
             currentUser,
             chat,
@@ -582,11 +805,12 @@ public sealed class RequirementChatRoutingTests
             technical,
             requirements,
             plan,
+            confirm,
             store,
             clock,
             NullLogger<SendRequirementChatMessageService>.Instance);
 
-        return new Context(service, ai, store, requirement, proposal, clock);
+        return new Context(service, ai, store, selectionExecutor, selectionConfirmationExecutor, requirement, proposal, clock);
     }
 
     private static RequirementPricingSnapshot CreatePricingSnapshot(
@@ -745,6 +969,8 @@ public sealed class RequirementChatRoutingTests
         SendRequirementChatMessageService Service,
         IRequirementChatAiClient Ai,
         ObservablePlanStore Store,
+        IRequirementChatSelectionExecutor SelectionExecutor,
+        IRequirementChatSelectionConfirmationExecutor SelectionConfirmationExecutor,
         Requirement Requirement,
         RequirementTechnicalProposal Proposal,
         FixedTimeProvider Clock);
@@ -776,8 +1002,22 @@ public sealed class RequirementChatRoutingTests
                 technicalProposalItemId,
                 chatThreadId);
 
+        public IReadOnlyList<ChatActionPlanReadModel> FindPendingConfirmations(
+            Guid requirementId,
+            string scope,
+            Guid? technicalProposalItemId,
+            Guid chatThreadId) =>
+            _inner.FindPendingConfirmations(
+                requirementId,
+                scope,
+                technicalProposalItemId,
+                chatThreadId);
+
         public ChatActionPlanReadModel? StartExecution(Guid requirementId, Guid planId) =>
             _inner.StartExecution(requirementId, planId);
+
+        public ChatActionPlanReadModel? CancelPendingConfirmation(Guid requirementId, Guid planId) =>
+            _inner.CancelPendingConfirmation(requirementId, planId);
     }
 
     private sealed class FakeRequirementChatRepository : IRequirementChatRepository

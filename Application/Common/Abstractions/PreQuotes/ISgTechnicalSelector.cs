@@ -967,12 +967,6 @@ public sealed class DeterministicSgTechnicalSelector(
             };
         }
 
-        if (functionalType == "SLIDING_WINDOW"
-            && effectiveHeight > 2600)
-        {
-            return "SLIDING_DOOR";
-        }
-
         if (functionalType == "WINDOW")
         {
             return operation switch
@@ -1010,7 +1004,7 @@ public sealed class DeterministicSgTechnicalSelector(
 
     private static IReadOnlyList<string> FunctionalResolutionReasons(
         SgTechnicalSelectionInput input) =>
-        Code(input.FunctionalType) is "WINDOW" or "SLIDING_WINDOW"
+        Code(input.FunctionalType) == "WINDOW"
         && EffectiveFunctionalHeight(input) > 2600
             ? [SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor]
             : [];

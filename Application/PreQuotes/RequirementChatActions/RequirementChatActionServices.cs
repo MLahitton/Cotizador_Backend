@@ -1,8 +1,10 @@
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Abstractions.PreQuotes;
+using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.PriceRequirementTechnicalProposal;
+using Application.PreQuotes.TechnicalProposalReadiness;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using System.Globalization;
@@ -109,7 +111,13 @@ public interface IRequirementChatActionPlanStore
         string scope,
         Guid? technicalProposalItemId,
         Guid chatThreadId);
+    IReadOnlyList<ChatActionPlanReadModel> FindPendingConfirmations(
+        Guid requirementId,
+        string scope,
+        Guid? technicalProposalItemId,
+        Guid chatThreadId);
     ChatActionPlanReadModel? StartExecution(Guid requirementId, Guid planId);
+    ChatActionPlanReadModel? CancelPendingConfirmation(Guid requirementId, Guid planId);
 }
 
 public interface IRequirementChatTechnicalProposalReader
@@ -123,6 +131,13 @@ public interface IRequirementChatSelectionExecutor
 {
     Task<UpdateRequirementTechnicalProposalItemSelectionResult> ExecuteAsync(
         UpdateRequirementTechnicalProposalItemSelectionCommand command,
+        CancellationToken cancellationToken);
+}
+
+public interface IRequirementChatSelectionConfirmationExecutor
+{
+    Task<ConfirmRequirementTechnicalProposalSelectionResult> ExecuteAsync(
+        ConfirmRequirementTechnicalProposalSelectionCommand command,
         CancellationToken cancellationToken);
 }
 
@@ -195,6 +210,36 @@ public sealed class InMemoryRequirementChatActionPlanStore(TimeProvider timeProv
         }
     }
 
+    public IReadOnlyList<ChatActionPlanReadModel> FindPendingConfirmations(
+        Guid requirementId,
+        string scope,
+        Guid? technicalProposalItemId,
+        Guid chatThreadId)
+    {
+        lock (_gate)
+        {
+            return _plans.Values
+                .Where(plan => plan.RequirementId == requirementId)
+                .Select(plan => FindCore(plan.RequirementId, plan.PlanId))
+                .Where(plan => plan is
+                {
+                    Status: "READY_FOR_CONFIRMATION",
+                    RequiresConfirmation: true,
+                    ChatThreadId: not null
+                })
+                .Where(plan => plan!.ChatThreadId == chatThreadId)
+                .Where(plan => string.Equals(
+                    plan!.Scope,
+                    scope,
+                    StringComparison.OrdinalIgnoreCase))
+                .Where(plan => scope != "ITEM"
+                    || plan!.Actions.Any(action =>
+                        action.TargetTechnicalProposalItemId == technicalProposalItemId))
+                .OrderByDescending(plan => plan!.CreatedAtUtc)
+                .Select(plan => plan!)
+                .ToArray();
+        }
+    }
     public ChatActionPlanReadModel? StartExecution(Guid requirementId, Guid planId)
     {
         lock (_gate)
@@ -214,6 +259,29 @@ public sealed class InMemoryRequirementChatActionPlanStore(TimeProvider timeProv
         }
     }
 
+    public ChatActionPlanReadModel? CancelPendingConfirmation(Guid requirementId, Guid planId)
+    {
+        lock (_gate)
+        {
+            var plan = FindCore(requirementId, planId);
+            if (plan?.Status != "READY_FOR_CONFIRMATION")
+            {
+                return plan;
+            }
+
+            var cancelled = plan with
+            {
+                Status = "CANCELLED",
+                RequiresConfirmation = false,
+                ExecutionReasons = plan.ExecutionReasons
+                    .Concat(["CHAT_CONFIRMATION_CANCELLED"])
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            };
+            _plans[(requirementId, planId)] = cancelled;
+            return cancelled;
+        }
+    }
     private ChatActionPlanReadModel? FindCore(Guid requirementId, Guid planId)
     {
         if (!_plans.TryGetValue((requirementId, planId), out var plan))
@@ -252,6 +320,16 @@ public sealed class RequirementChatSelectionExecutor(
 {
     public Task<UpdateRequirementTechnicalProposalItemSelectionResult> ExecuteAsync(
         UpdateRequirementTechnicalProposalItemSelectionCommand command,
+        CancellationToken cancellationToken) =>
+        service.ExecuteAsync(command, cancellationToken);
+}
+
+public sealed class RequirementChatSelectionConfirmationExecutor(
+    ConfirmRequirementTechnicalProposalSelectionService service)
+    : IRequirementChatSelectionConfirmationExecutor
+{
+    public Task<ConfirmRequirementTechnicalProposalSelectionResult> ExecuteAsync(
+        ConfirmRequirementTechnicalProposalSelectionCommand command,
         CancellationToken cancellationToken) =>
         service.ExecuteAsync(command, cancellationToken);
 }
@@ -404,6 +482,25 @@ public sealed class PlanRequirementChatActionService(
             return Invalid(actionType, command, "CHANGE_COMMERCIAL_LINE_NOT_SUPPORTED_YET");
         }
 
+        if (actionType == "CONFIRM_SELECTION")
+        {
+            var reasons = proposal.Readiness.IsReadyForConfirmation
+                ? []
+                : ConfirmationReadinessReasons(proposal.Readiness);
+            return new ChatActionPlanActionReadModel(
+                Guid.NewGuid(),
+                actionType,
+                null,
+                null,
+                "CONFIRMED",
+                proposal.CommercialConfirmation.State,
+                null,
+                reasons.Count == 0 ? "VALID" : "INVALID",
+                reasons,
+                reasons.Count == 0,
+                []);
+        }
+
         var target = ResolveTarget(command, proposal, scope);
         if (target.State != "VALID")
         {
@@ -451,6 +548,15 @@ public sealed class PlanRequirementChatActionService(
             resolved.Options);
     }
 
+    private static IReadOnlyList<string> ConfirmationReadinessReasons(
+        RequirementTechnicalProposalReadinessReadModel readiness)
+    {
+        var reasons = new List<string> { "TECHNICAL_PROPOSAL_NOT_READY_FOR_CONFIRMATION" };
+        reasons.AddRange(readiness.Categories
+            .Where(category => category.Value > 0)
+            .Select(category => $"{category.Key}={category.Value}"));
+        return reasons;
+    }
     private static TargetResolution ResolveTarget(
         PlanRequirementChatActionCommand command,
         RequirementTechnicalProposalReadModel proposal,
@@ -1065,6 +1171,7 @@ public sealed class ConfirmRequirementChatActionService(
     IRequirementChatActionPlanStore store,
     IRequirementRepository requirementRepository,
     IRequirementChatSelectionExecutor selectionExecutor,
+    IRequirementChatSelectionConfirmationExecutor selectionConfirmationExecutor,
     IRequirementChatInclusionExecutor inclusionExecutor,
     IRequirementChatPricingExecutor pricingExecutor,
     IRequirementChatTechnicalProposalReader technicalProposalReader)
@@ -1097,11 +1204,15 @@ public sealed class ConfirmRequirementChatActionService(
         }
 
         var actions = plan.Actions;
+        var actionType = actions.FirstOrDefault()?.ActionType;
+        var isProposalLevelConfirmation = actionType == "CONFIRM_SELECTION"
+            && actions.Count == 1
+            && actions[0].TargetTechnicalProposalItemId is null;
         if (actions.Count == 0
             || actions.Select(action => action.ActionType)
                 .Distinct(StringComparer.Ordinal)
                 .Count() != 1
-            || actions.Any(action => action.TargetTechnicalProposalItemId is null))
+            || (!isProposalLevelConfirmation && actions.Any(action => action.TargetTechnicalProposalItemId is null)))
         {
             var invalid = plan with
             {
@@ -1113,18 +1224,39 @@ public sealed class ConfirmRequirementChatActionService(
             return RequirementChatActionPlanResult.Success(invalid);
         }
 
-        var actionType = actions[0].ActionType;
         var isBatch = actions.Count > 1;
-        var pricingExisted = await requirementRepository.GetCurrentPricingSnapshotAsync(
-            command.RequirementId,
-            cancellationToken) is not null;
-        var pricingStatus = pricingExisted ? "PRICING_UPDATED" : "NOT_YET_PRICED";
+        var pricingExisted = actionType != "CONFIRM_SELECTION"
+            && await requirementRepository.GetCurrentPricingSnapshotAsync(
+                command.RequirementId,
+                cancellationToken) is not null;
+        var pricingStatus = actionType == "CONFIRM_SELECTION"
+            ? null
+            : pricingExisted ? "PRICING_UPDATED" : "NOT_YET_PRICED";
         var reasons = new List<string>();
         var executed = false;
-        reasons.Add(isBatch ? "PRICING_MODE=FULL" : "PRICING_MODE=ITEM");
+        if (actionType != "CONFIRM_SELECTION")
+        {
+            reasons.Add(isBatch ? "PRICING_MODE=FULL" : "PRICING_MODE=ITEM");
+        }
         reasons.Add($"ACTION_COUNT={actions.Count}");
 
-        if (actionType is "CHANGE_SYSTEM" or "CHANGE_GLASS" or "CHANGE_FINISH" or "CHANGE_QUANTITY" or "CHANGE_DIMENSIONS")
+        if (actionType == "CONFIRM_SELECTION")
+        {
+            var confirmation = await selectionConfirmationExecutor.ExecuteAsync(
+                new ConfirmRequirementTechnicalProposalSelectionCommand(plan.TechnicalProposalId),
+                cancellationToken);
+            executed = confirmation.IsSuccess;
+            if (confirmation.IsSuccess && confirmation.Confirmation is not null)
+            {
+                reasons.Add("CONFIRM_SELECTION_CONFIRMED");
+                reasons.Add($"CONFIRMATION_STATE={confirmation.Confirmation.State}");
+            }
+            else
+            {
+                reasons.Add($"CONFIRM_SELECTION_FAILED_{confirmation.Failure}");
+            }
+        }
+        else if (actionType is "CHANGE_SYSTEM" or "CHANGE_GLASS" or "CHANGE_FINISH" or "CHANGE_QUANTITY" or "CHANGE_DIMENSIONS")
         {
             if (pricingExisted && !isBatch)
             {

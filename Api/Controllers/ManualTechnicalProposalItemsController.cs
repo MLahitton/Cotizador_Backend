@@ -146,6 +146,12 @@ public sealed class ManualTechnicalProposalItemsController(
                     RequirementErrorCodes.InvalidRequest,
                     "Sistema invalido",
                     "El sistema seleccionado no esta disponible para la propuesta."),
+            CreateManualRequirementTechnicalProposalItemFailure.FunctionalTypeMismatch =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    RequirementErrorCodes.TechnicalProposalFunctionalTypeMismatch,
+                    "Sistema incompatible",
+                    "El sistema seleccionado no pertenece a la funcion del requerimiento."),
             CreateManualRequirementTechnicalProposalItemFailure.InvalidGlassSelection =>
                 RequirementProblem(
                     StatusCodes.Status400BadRequest,

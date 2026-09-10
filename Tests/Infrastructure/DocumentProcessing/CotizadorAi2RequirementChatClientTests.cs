@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -187,6 +187,54 @@ public sealed class CotizadorAi2RequirementChatClientTests
         Assert.False(document.RootElement.TryGetProperty("userMessage", out _));
     }
 
+    [Fact]
+    public async Task InterpretActionAsync_WithMalformedJson_ThrowsUnavailableException()
+    {
+        var handler = new CaptureHandler(HttpStatusCode.OK, "{not-valid-json");
+        using var httpClient = CreateHttpClient(handler);
+        var client = CreateClient(httpClient);
+
+        var exception = await Assert.ThrowsAsync<RequirementChatAiUnavailableException>(
+            () => client.InterpretActionAsync(
+                new RequirementChatActionInterpretationRequest(
+                    "hola",
+                    "REQUIREMENT",
+                    null,
+                    [],
+                    new { }),
+                TestContext.Current.CancellationToken));
+
+        Assert.IsType<JsonException>(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task InterpretActionAsync_WithIncompatibleJsonShape_ThrowsUnavailableException()
+    {
+        var handler = new CaptureHandler(
+            HttpStatusCode.OK,
+            """
+            {
+              "isAction": "yes",
+              "actionType": "CHANGE_SYSTEM",
+              "scope": "REQUIREMENT",
+              "requiresClarification": false
+            }
+            """);
+        using var httpClient = CreateHttpClient(handler);
+        var client = CreateClient(httpClient);
+
+        var exception = await Assert.ThrowsAsync<RequirementChatAiUnavailableException>(
+            () => client.InterpretActionAsync(
+                new RequirementChatActionInterpretationRequest(
+                    "Cambia V-4 a Monza",
+                    "REQUIREMENT",
+                    null,
+                    [],
+                    new { }),
+                TestContext.Current.CancellationToken));
+
+        Assert.IsType<JsonException>(exception.InnerException);
+    }
     [Fact]
     public async Task InterpretActionAsync_WithUnprocessableEntity_LogsAi2Detail()
     {

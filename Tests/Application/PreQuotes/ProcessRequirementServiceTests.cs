@@ -213,7 +213,7 @@ public sealed class ProcessRequirementServiceTests
         "SLIDING", "GRILLE")]
     [InlineData("assembly_sliding_window_lower_fixed", "K50", false,
         "SLIDING", "FIXED")]
-    [InlineData("assembly_sliding_window_mobile_over_threshold", "K70", true,
+    [InlineData("assembly_sliding_window_mobile_over_threshold", "K50", true,
         "SLIDING", "FIXED")]
     [InlineData("assembly_sliding_window_unresolved_geometry", null, true,
         "SLIDING", "FIXED")]
@@ -269,7 +269,7 @@ public sealed class ProcessRequirementServiceTests
 
         if (scenario == "assembly_sliding_window_mobile_over_threshold")
         {
-            Assert.Contains(
+            Assert.DoesNotContain(
                 SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor,
                 proposalItem.SystemResolutionReasons);
         }

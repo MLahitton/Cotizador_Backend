@@ -111,7 +111,8 @@ public sealed record StructuredItemInput(
     string? Modulation = null,
     string? OpeningDirection = null,
     IReadOnlyList<string>? SpecialFeatures = null,
-    string? GeometryType = null);
+    string? GeometryType = null,
+    string? OccurrenceContext = null);
 public sealed record StructuredItemGlassEvidenceInput(
     int Sequence, int? PageNumber, EvidenceSourceType SourceType, string Text,
     string? SheetName = null, string? CellRange = null);
@@ -271,6 +272,7 @@ public sealed class StructuredExtractionItem
     public Guid StructuredDocumentExtractionId { get; private set; }
     public int Sequence { get; private set; }
     public string? Reference { get; private set; }
+    public string? OccurrenceContext { get; private set; }
     public string Description { get; private set; } = string.Empty;
     public StructuredElementType ElementType { get; private set; }
     public string? RawMeasurements { get; private set; }
@@ -308,6 +310,7 @@ public sealed class StructuredExtractionItem
             throw new ArgumentException("Item estructurado invalido.");
         var item = new StructuredExtractionItem { Id = Guid.NewGuid(), StructuredDocumentExtractionId = parentId,
             Sequence = x.Sequence, Reference = Trim(x.Reference),
+            OccurrenceContext = TrimLimited(x.OccurrenceContext, 200),
             Description = x.Description.Trim(), ElementType = x.ElementType,
             RawMeasurements = Trim(x.RawMeasurements), WidthMillimeters = x.WidthMillimeters,
             HeightMillimeters = x.HeightMillimeters, Quantity = x.Quantity,

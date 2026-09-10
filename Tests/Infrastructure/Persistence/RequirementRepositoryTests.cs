@@ -1,4 +1,6 @@
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
+using Application.PreQuotes.TechnicalProposalReadiness;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -491,6 +493,152 @@ public sealed class RequirementRepositoryTests(
         Assert.Equal(500m, item.CurrentLineExpected);
     }
 
+    [Theory]
+    [InlineData("GRILLE", "FIXED", "FIXED")]
+    [InlineData("FIXED", "CASEMENT", "CASEMENT")]
+    public async Task FindTechnicalProposalForUpdateAsync_LoadsSegmentsUsedByConfirmationReadiness(
+        string itemFunctionalType,
+        string segmentRole,
+        string systemFunctionalType)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedSegmentedTechnicalProposalAsync(
+            itemFunctionalType,
+            segmentRole,
+            Guid.NewGuid());
+
+        await using var readContext = fixture.CreateDbContext();
+        var proposal = await new RequirementRepository(readContext)
+            .FindTechnicalProposalForUpdateAsync(
+                seeded.TechnicalProposalId,
+                cancellationToken);
+
+        Assert.NotNull(proposal);
+        var item = Assert.Single(proposal!.Items);
+        Assert.NotNull(item.ExtractedItem);
+        Assert.Equal(
+            segmentRole,
+            Assert.Single(item.ExtractedItem!.Segments).Role);
+        Assert.False(TechnicalProposalReadinessEvaluator.BlocksConfirmation(
+            proposal,
+            new Dictionary<Guid, ProductSystemCatalogReadModel>
+            {
+                [seeded.SystemId] = ProductSystem(
+                    seeded.SystemId,
+                    systemFunctionalType)
+            }));
+    }
+
+    [Fact]
+    public async Task FindTechnicalProposalForUpdateAsync_WithNoSegments_UsesExistingFallbackBehavior()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedSegmentedTechnicalProposalAsync(
+            "GRILLE",
+            null,
+            Guid.NewGuid());
+
+        await using var readContext = fixture.CreateDbContext();
+        var proposal = await new RequirementRepository(readContext)
+            .FindTechnicalProposalForUpdateAsync(
+                seeded.TechnicalProposalId,
+                cancellationToken);
+
+        Assert.NotNull(proposal);
+        var item = Assert.Single(proposal!.Items);
+        Assert.NotNull(item.ExtractedItem);
+        Assert.Empty(item.ExtractedItem!.Segments);
+        Assert.True(TechnicalProposalReadinessEvaluator.BlocksConfirmation(
+            proposal,
+            new Dictionary<Guid, ProductSystemCatalogReadModel>
+            {
+                [seeded.SystemId] = ProductSystem(
+                    seeded.SystemId,
+                    "FIXED")
+            }));
+    }
+
+    private async Task<SeededTechnicalProposal> SeedSegmentedTechnicalProposalAsync(
+        string itemFunctionalType,
+        string? segmentRole,
+        Guid systemId)
+    {
+        var seeded = await SeedPreQuoteAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var requirement = Requirement.Create(
+            seeded.PreQuoteId,
+            seeded.UserId,
+            RequirementCommercialLine.Essential,
+            At.AddMinutes(1));
+        var attempt = RequirementProcessingAttempt.Create(
+            requirement.Id,
+            seeded.UserId,
+            Guid.NewGuid(),
+            At.AddMinutes(2));
+        attempt.Start(At.AddMinutes(3));
+        attempt.Complete(DocumentProcessingOutcome.Completed, At.AddMinutes(4));
+        var extraction = RequirementExtractionResult.Create(
+            attempt.Id,
+            "3.0",
+            "AI2",
+            "{}",
+            1,
+            0,
+            0,
+            0,
+            "test",
+            100,
+            At.AddMinutes(5));
+        var extracted = CreateExtractedItem(
+            extraction.Id,
+            1,
+            "V-01",
+            itemFunctionalType,
+            itemFunctionalType);
+        if (segmentRole is not null)
+        {
+            extracted.AddSegment(RequirementExtractedItemSegment.Create(
+                extracted.Id,
+                1,
+                segmentRole,
+                1000,
+                1000,
+                1,
+                segmentRole,
+                "RECTANGULAR",
+                $"segment {segmentRole}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                0.95m,
+                RequirementExtractionValueStatus.Explicit,
+                At.AddMinutes(6)));
+        }
+
+        var proposal = RequirementTechnicalProposal.Create(
+            requirement.Id,
+            extraction.Id,
+            attempt.Id,
+            false,
+            At.AddMinutes(7));
+        proposal.AddItem(CreateProposalItem(
+            proposal.Id,
+            extracted.Id,
+            systemId,
+            Guid.NewGuid(),
+            Guid.NewGuid()));
+
+        await using var context = fixture.CreateDbContext();
+        context.Requirements.Add(requirement);
+        context.RequirementProcessingAttempts.Add(attempt);
+        context.RequirementExtractionResults.Add(extraction);
+        context.RequirementExtractedItems.Add(extracted);
+        context.RequirementTechnicalProposals.Add(proposal);
+        await context.SaveChangesAsync(cancellationToken);
+        return new SeededTechnicalProposal(proposal.Id, systemId);
+    }
     private async Task<SeededPricedRequirement> SeedPricedRequirementAsync()
     {
         var seeded = await SeedPreQuoteAsync();
@@ -603,7 +751,9 @@ public sealed class RequirementRepositoryTests(
     private static RequirementExtractedItem CreateExtractedItem(
         Guid extractionId,
         int sequence,
-        string reference) =>
+        string reference,
+        string functionalType = "WINDOW",
+        string? operation = null) =>
         RequirementExtractedItem.Create(
             extractionId,
             $"ai2-{sequence}",
@@ -619,8 +769,8 @@ public sealed class RequirementRepositoryTests(
             RequirementExtractionValueStatus.Explicit,
             false,
             [],
-            "WINDOW",
-            null,
+            functionalType,
+            operation,
             null,
             null,
             null,
@@ -655,13 +805,16 @@ public sealed class RequirementRepositoryTests(
 
     private static RequirementTechnicalProposalItem CreateProposalItem(
         Guid proposalId,
-        Guid extractedItemId) =>
+        Guid extractedItemId,
+        Guid? suggestedSystemId = null,
+        Guid? suggestedGlassTypeId = null,
+        Guid? suggestedFinishTypeId = null) =>
         RequirementTechnicalProposalItem.Create(
             proposalId,
             extractedItemId,
-            null,
-            null,
-            null,
+            suggestedSystemId,
+            suggestedGlassTypeId,
+            suggestedFinishTypeId,
             1,
             "A",
             "Ventana",
@@ -685,6 +838,27 @@ public sealed class RequirementRepositoryTests(
             null,
             "NO_HISTORY",
             At.AddMinutes(6));
+
+    private static ProductSystemCatalogReadModel ProductSystem(
+        Guid id,
+        string functionalType) =>
+        new(
+            id,
+            $"SYS-{functionalType}-{id:N}",
+            $"Sistema {functionalType}",
+            null,
+            null,
+            functionalType,
+            null,
+            null,
+            "ESSENTIAL",
+            null,
+            true,
+            true,
+            true,
+            true,
+            false,
+            true);
 
     private static RequirementPricingItemSnapshot CreatePricingItem(
         Guid snapshotId,
@@ -746,6 +920,8 @@ public sealed class RequirementRepositoryTests(
     }
 
     private sealed record SeededPreQuote(Guid UserId, Guid PreQuoteId);
+
+    private sealed record SeededTechnicalProposal(Guid TechnicalProposalId, Guid SystemId);
 
     private sealed record SeededPricedRequirement(
         Guid UserId,

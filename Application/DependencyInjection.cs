@@ -102,6 +102,7 @@ public static class DependencyInjection
         services.AddSingleton<IRequirementChatActionPlanStore, InMemoryRequirementChatActionPlanStore>();
         services.AddScoped<IRequirementChatTechnicalProposalReader, RequirementChatTechnicalProposalReader>();
         services.AddScoped<IRequirementChatSelectionExecutor, RequirementChatSelectionExecutor>();
+        services.AddScoped<IRequirementChatSelectionConfirmationExecutor, RequirementChatSelectionConfirmationExecutor>();
         services.AddScoped<IRequirementChatInclusionExecutor, RequirementChatInclusionExecutor>();
         services.AddScoped<IRequirementChatPricingExecutor, RequirementChatPricingExecutor>();
         services.AddScoped<PlanRequirementChatActionService>();

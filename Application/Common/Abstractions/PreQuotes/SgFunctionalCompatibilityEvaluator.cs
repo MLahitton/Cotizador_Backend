@@ -36,31 +36,8 @@ public static class SgFunctionalCompatibilityEvaluator
         Evaluate(ToSelectionInput(item), system);
 
     public static SgTechnicalSelectionInput ToSelectionInput(
-        RequirementTechnicalProposalItem item)
-    {
-        var extracted = item.ExtractedItem;
-        return new SgTechnicalSelectionInput(
-            extracted?.FunctionalType ?? FunctionalTypeFromElementType(item.ElementType),
-            extracted?.Operation,
-            item.EffectiveWidthMillimeters,
-            item.EffectiveHeightMillimeters,
-            extracted?.AreaSquareMeters,
-            null,
-            null,
-            null,
-            extracted?.Modulation,
-            extracted?.OpeningDirection,
-            extracted?.SpecialFeatures ?? [],
-            extracted?.GeometryType,
-            null,
-            extracted?.RequestedSystemRaw ?? extracted?.RequestedProfileRaw,
-            null,
-            null,
-            extracted?.Description ?? item.Description,
-            null,
-            false,
-            null);
-    }
+        RequirementTechnicalProposalItem item) =>
+        RequirementFunctionalSelectionContextResolver.ResolveInput(item);
 
     public static string? EffectiveFunctionalType(
         SgTechnicalSelectionInput input)
@@ -79,12 +56,6 @@ public static class SgFunctionalCompatibilityEvaluator
             };
         }
 
-        if (functionalType == "SLIDING_WINDOW"
-            && effectiveHeight > 2600)
-        {
-            return "SLIDING_DOOR";
-        }
-
         if (functionalType == "WINDOW")
         {
             return operation switch
@@ -100,7 +71,7 @@ public static class SgFunctionalCompatibilityEvaluator
 
     public static IReadOnlyList<string> FunctionalResolutionReasons(
         SgTechnicalSelectionInput input) =>
-        Code(input.FunctionalType) is "WINDOW" or "SLIDING_WINDOW"
+        Code(input.FunctionalType) == "WINDOW"
         && EffectiveFunctionalHeight(input) > 2600
             ? [SgTechnicalSelectionRuleCodes.WindowHeightOver2600AsDoor]
             : [];
@@ -175,7 +146,7 @@ public static class SgFunctionalCompatibilityEvaluator
             : input.HeightMillimeters;
     }
 
-    private static string? FunctionalTypeFromElementType(
+    internal static string? FunctionalTypeFromElementType(
         StructuredElementType elementType) =>
         elementType switch
         {
