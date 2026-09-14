@@ -3,6 +3,7 @@ using Application.Administration.GetAdminDashboard;
 using Application.Administration.GetAdminPreQuotes;
 using Application.Administration.GetAdminUsers;
 using Application.Common.Abstractions.Authentication;
+using Domain.Identity;
 using Contracts.Administration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,7 @@ namespace Api.Controllers;
 [Authorize(Policy = AuthorizationPolicies.AdminOnly)]
 public sealed class AdminController(
     ICurrentUser currentUser,
+    IIdentityRepository identityRepository,
     GetAdminDashboardService getAdminDashboardService,
     GetAdminUsersService getAdminUsersService,
     GetAdminPreQuotesService getAdminPreQuotesService)
@@ -25,15 +27,57 @@ public sealed class AdminController(
         StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(
         StatusCodes.Status403Forbidden)]
-    public IActionResult GetAdminIdentity()
+    public async Task<IActionResult> GetAdminIdentity(
+        CancellationToken cancellationToken)
     {
+        if (!currentUser.IsAuthenticated
+            || currentUser.UserId is not Guid userId)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "No autorizado",
+                detail:
+                    "No fue posible identificar al usuario autenticado.");
+        }
+
+        var user = await identityRepository.FindUserByIdAsync(
+            userId,
+            cancellationToken);
+
+        if (user is null)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "No autorizado",
+                detail:
+                    "No fue posible identificar al usuario autenticado.");
+        }
+
+        if (!user.IsActive)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Usuario inactivo",
+                detail:
+                    "El usuario no tiene acceso a la aplicacion.");
+        }
+
+        if (user.Role != UserRole.Admin)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status403Forbidden,
+                title: "Acceso denegado",
+                detail:
+                    "El usuario no tiene permisos administrativos.");
+        }
+
         return Ok(new
         {
-            userId = currentUser.UserId,
-            role = currentUser.Role?
+            userId = user.Id,
+            role = user.Role
                 .ToString()
                 .ToUpperInvariant(),
-            isAdmin = currentUser.IsAdmin
+            isAdmin = true
         });
     }
 
