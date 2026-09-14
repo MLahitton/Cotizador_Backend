@@ -6,6 +6,7 @@ using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Domain.PreQuotes;
+using Domain.Identity;
 
 namespace Application.PreQuotes.PriceRequirementTechnicalProposal;
 
@@ -283,7 +284,7 @@ public sealed class PriceRequirementTechnicalProposalService(
                 PriceRequirementTechnicalProposalFailure.Unauthorized);
         }
 
-        var access = await ValidateAccessAsync(
+        var access = await ValidateReadAccessAsync(
             command.RequirementId,
             userId,
             cancellationToken);
@@ -1240,6 +1241,80 @@ public sealed class PriceRequirementTechnicalProposalService(
                 RequireSystemMatchedComparable = requireSystemMatchedComparable
             }
         };
+
+
+
+    private async Task<PriceRequirementTechnicalProposalFailure>
+    ValidateReadAccessAsync(
+        Guid requirementId,
+        Guid userId,
+        CancellationToken cancellationToken)
+{
+    var user = await identityRepository.FindUserByIdAsync(
+        userId,
+        cancellationToken);
+
+    if (user is null)
+    {
+        return PriceRequirementTechnicalProposalFailure.Unauthorized;
+    }
+
+    if (!user.IsActive)
+    {
+        return PriceRequirementTechnicalProposalFailure.InactiveUser;
+    }
+
+    var requirement = await requirementRepository.FindByIdAsync(
+        requirementId,
+        cancellationToken);
+
+    if (requirement is null || !requirement.IsActive)
+    {
+        return PriceRequirementTechnicalProposalFailure.RequirementNotFound;
+    }
+
+    var preQuote = await preQuoteRepository.FindByIdAsync(
+        requirement.PreQuoteId,
+        cancellationToken);
+
+    if (preQuote is null)
+    {
+        return PriceRequirementTechnicalProposalFailure.PreQuoteNotFound;
+    }
+
+    var project = await projectRepository.FindByIdAsync(
+        preQuote.ProjectId,
+        cancellationToken);
+
+    if (project is null)
+    {
+        return PriceRequirementTechnicalProposalFailure.ProjectNotFound;
+    }
+
+    if (user.Role != UserRole.Admin
+        && project.CreatedByUserId != userId)
+    {
+        return PriceRequirementTechnicalProposalFailure.RequirementNotFound;
+    }
+
+    if (!project.IsActive)
+    {
+        return PriceRequirementTechnicalProposalFailure.InactiveProject;
+    }
+
+    var client = await clientRepository.FindByIdAsync(
+        project.ClientId,
+        cancellationToken);
+
+    if (client is null)
+    {
+        return PriceRequirementTechnicalProposalFailure.ClientNotFound;
+    }
+
+    return client.IsActive
+        ? PriceRequirementTechnicalProposalFailure.None
+        : PriceRequirementTechnicalProposalFailure.InactiveClient;
+}
 
     private async Task<PriceRequirementTechnicalProposalFailure> ValidateAccessAsync(
         Guid requirementId,

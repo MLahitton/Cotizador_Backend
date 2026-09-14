@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.GetRequirementDetails;
@@ -30,11 +31,17 @@ public sealed record GetRequirementDetailsResult(
 {
     public static GetRequirementDetailsResult Success(
         RequirementDetailsReadModel requirement) =>
-        new(true, GetRequirementDetailsFailure.None, requirement);
+        new(
+            true,
+            GetRequirementDetailsFailure.None,
+            requirement);
 
     public static GetRequirementDetailsResult Failed(
         GetRequirementDetailsFailure failure) =>
-        new(false, failure, null);
+        new(
+            false,
+            failure,
+            null);
 }
 
 public sealed class GetRequirementDetailsService(
@@ -62,18 +69,21 @@ public sealed class GetRequirementDetailsService(
                 GetRequirementDetailsFailure.Unauthorized);
         }
 
-        Domain.Identity.User? user;
+        User? user;
         Requirement? requirement;
+
         try
         {
             user = await identityRepository.FindUserByIdAsync(
                 userId,
                 cancellationToken);
+
             requirement = await requirementRepository.FindByIdAsync(
                 command.RequirementId,
                 cancellationToken);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception)
+            when (!cancellationToken.IsCancellationRequested)
         {
             return GetRequirementDetailsResult.Failed(
                 GetRequirementDetailsFailure.QueryError);
@@ -100,7 +110,9 @@ public sealed class GetRequirementDetailsService(
         var access = await ValidateAccessAsync(
             requirement.PreQuoteId,
             userId,
+            user.Role,
             cancellationToken);
+
         if (access != GetRequirementDetailsFailure.None)
         {
             return GetRequirementDetailsResult.Failed(access);
@@ -137,6 +149,7 @@ public sealed class GetRequirementDetailsService(
     private async Task<GetRequirementDetailsFailure> ValidateAccessAsync(
         Guid preQuoteId,
         Guid userId,
+        UserRole userRole,
         CancellationToken cancellationToken)
     {
         try
@@ -144,6 +157,7 @@ public sealed class GetRequirementDetailsService(
             var preQuote = await preQuoteRepository.FindByIdAsync(
                 preQuoteId,
                 cancellationToken);
+
             if (preQuote is null)
             {
                 return GetRequirementDetailsFailure.PreQuoteNotFound;
@@ -152,12 +166,20 @@ public sealed class GetRequirementDetailsService(
             var project = await projectRepository.FindByIdAsync(
                 preQuote.ProjectId,
                 cancellationToken);
+
             if (project is null)
             {
                 return GetRequirementDetailsFailure.ProjectNotFound;
             }
 
-            if (project.CreatedByUserId != userId)
+            /*
+             * ADMIN puede consultar requirements de cualquier
+             * precotización.
+             *
+             * USER conserva la regla de ownership actual.
+             */
+            if (userRole != UserRole.Admin
+                && project.CreatedByUserId != userId)
             {
                 return GetRequirementDetailsFailure.RequirementNotFound;
             }
@@ -170,6 +192,7 @@ public sealed class GetRequirementDetailsService(
             var client = await clientRepository.FindByIdAsync(
                 project.ClientId,
                 cancellationToken);
+
             if (client is null)
             {
                 return GetRequirementDetailsFailure.ClientNotFound;
@@ -179,7 +202,8 @@ public sealed class GetRequirementDetailsService(
                 ? GetRequirementDetailsFailure.None
                 : GetRequirementDetailsFailure.InactiveClient;
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception)
+            when (!cancellationToken.IsCancellationRequested)
         {
             return GetRequirementDetailsFailure.QueryError;
         }

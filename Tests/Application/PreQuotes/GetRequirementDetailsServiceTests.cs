@@ -77,6 +77,71 @@ public sealed class GetRequirementDetailsServiceTests
         }
     }
 
+
+
+    [Fact]
+public async Task Execute_UserReadingOwnRequirement_ReturnsSuccess()
+{
+    var context = CreateAuthorizationContext(
+        ownerIsCurrentUser: true,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementDetailsCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementDetailsFailure.None,
+        result.Failure);
+    Assert.NotNull(result.Requirement);
+    Assert.Equal(
+        context.Requirement.Id,
+        result.Requirement.RequirementId);
+}
+
+[Fact]
+public async Task Execute_UserReadingAnotherUsersRequirement_ReturnsRequirementNotFound()
+{
+    var context = CreateAuthorizationContext(
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementDetailsCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.False(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementDetailsFailure.RequirementNotFound,
+        result.Failure);
+    Assert.Null(result.Requirement);
+}
+
+[Fact]
+public async Task Execute_AdminReadingAnotherUsersRequirement_ReturnsSuccess()
+{
+    var context = CreateAuthorizationContext(
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: true);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementDetailsCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementDetailsFailure.None,
+        result.Failure);
+    Assert.NotNull(result.Requirement);
+    Assert.Equal(
+        context.Requirement.Id,
+        result.Requirement.RequirementId);
+}
+
     private static Context CreateContext(string scenario)
     {
         var currentUser = Substitute.For<ICurrentUser>();
@@ -170,6 +235,132 @@ public sealed class GetRequirementDetailsServiceTests
 
         return new Context(service, requirement, file);
     }
+    
+    private static Context CreateAuthorizationContext(
+    bool ownerIsCurrentUser,
+    bool currentUserIsAdmin)
+{
+    var currentUser =
+        Substitute.For<ICurrentUser>();
+
+    var identity =
+        Substitute.For<IIdentityRepository>();
+
+    var preQuotes =
+        Substitute.For<IPreQuoteRepository>();
+
+    var projects =
+        Substitute.For<IProjectRepository>();
+
+    var clients =
+        Substitute.For<IClientRepository>();
+
+    var requirements =
+        Substitute.For<IRequirementRepository>();
+
+    var currentUserEntity =
+        User.CreateFromGoogle(
+            "current-user@example.com",
+            "Current",
+            "User",
+            null,
+            At);
+
+    if (currentUserIsAdmin)
+    {
+        currentUserEntity.ChangeRole(
+            UserRole.Admin,
+            At.AddSeconds(1));
+    }
+
+    var ownerUserId =
+        ownerIsCurrentUser
+            ? currentUserEntity.Id
+            : Guid.NewGuid();
+
+    var client = Client.Create(
+        ClientType.Company,
+        "Client",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        ownerUserId,
+        At);
+
+    var project = ProjectEntity.Create(
+        client.Id,
+        "P-AUTH",
+        "Authorization Project",
+        null,
+        null,
+        ownerUserId,
+        At);
+
+    var preQuote = PreQuote.Create(
+        project.Id,
+        ownerUserId,
+        "PC-2026-AUTH",
+        null,
+        At);
+
+    var requirement = Requirement.Create(
+        preQuote.Id,
+        ownerUserId,
+        RequirementCommercialLine.Essential,
+        At);
+
+    currentUser.IsAuthenticated.Returns(true);
+    currentUser.UserId.Returns(currentUserEntity.Id);
+
+    identity.FindUserByIdAsync(
+            currentUserEntity.Id,
+            Arg.Any<CancellationToken>())
+        .Returns(currentUserEntity);
+
+    requirements.FindByIdAsync(
+            requirement.Id,
+            Arg.Any<CancellationToken>())
+        .Returns(requirement);
+
+    preQuotes.FindByIdAsync(
+            preQuote.Id,
+            Arg.Any<CancellationToken>())
+        .Returns(
+            new PreQuoteDetails(
+                preQuote.Id,
+                preQuote.ProjectId,
+                0,
+                preQuote.CreatedAtUtc,
+                preQuote.UpdatedAtUtc));
+
+    projects.FindByIdAsync(
+            project.Id,
+            Arg.Any<CancellationToken>())
+        .Returns(project);
+
+    clients.FindByIdAsync(
+            client.Id,
+            Arg.Any<CancellationToken>())
+        .Returns(client);
+
+    var service =
+        new GetRequirementDetailsService(
+            currentUser,
+            identity,
+            preQuotes,
+            projects,
+            clients,
+            requirements);
+
+    return new Context(
+        service,
+        requirement,
+        null!);
+}
 
     private sealed record Context(
         GetRequirementDetailsService Service,

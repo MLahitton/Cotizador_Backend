@@ -20,6 +20,7 @@ public sealed class User
         LastName = NormalizeOptional(lastName);
         ProfilePictureUrl = NormalizeOptional(profilePictureUrl);
         IsActive = true;
+        Role = UserRole.User;
         LastLoginAtUtc = createdAtUtc;
         CreatedAtUtc = createdAtUtc;
         UpdatedAtUtc = createdAtUtc;
@@ -36,6 +37,8 @@ public sealed class User
     public string? ProfilePictureUrl { get; private set; }
 
     public bool IsActive { get; private set; }
+
+    public UserRole Role { get; private set; } = UserRole.User;
 
     public DateTimeOffset? LastLoginAtUtc { get; private set; }
 
@@ -86,12 +89,35 @@ public sealed class User
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    public void ChangeRole(
+        UserRole role,
+        DateTimeOffset updatedAtUtc)
+    {
+        if (!Enum.IsDefined(role))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(role),
+                role,
+                "El rol de usuario no es válido.");
+        }
+
+        if (Role == role)
+        {
+            return;
+        }
+
+        Role = role;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     private static string NormalizeEmail(string value)
     {
         return NormalizeRequired(value, nameof(value)).ToLowerInvariant();
     }
 
-    private static string NormalizeRequired(string value, string parameterName)
+    private static string NormalizeRequired(
+        string value,
+        string parameterName)
     {
         if (string.IsNullOrWhiteSpace(value))
         {

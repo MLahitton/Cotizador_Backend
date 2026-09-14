@@ -1,3 +1,5 @@
+using Domain.Identity;
+
 namespace Application.Authentication.GetCurrentUser;
 
 public enum GetCurrentUserFailure
@@ -14,7 +16,8 @@ public sealed record GetCurrentUserResult(
     string? FirstName,
     string? LastName,
     string? ProfilePictureUrl,
-    bool IsActive)
+    bool IsActive,
+    UserRole? Role)
 {
     public bool IsSuccess => Failure == GetCurrentUserFailure.None;
 
@@ -24,7 +27,8 @@ public sealed record GetCurrentUserResult(
         string firstName,
         string? lastName,
         string? profilePictureUrl,
-        bool isActive)
+        bool isActive,
+        UserRole role)
     {
         return new GetCurrentUserResult(
             GetCurrentUserFailure.None,
@@ -33,10 +37,12 @@ public sealed record GetCurrentUserResult(
             firstName,
             lastName,
             profilePictureUrl,
-            isActive);
+            isActive,
+            role);
     }
 
-    public static GetCurrentUserResult Failed(GetCurrentUserFailure failure)
+    public static GetCurrentUserResult Failed(
+        GetCurrentUserFailure failure)
     {
         return new GetCurrentUserResult(
             failure,
@@ -45,6 +51,7 @@ public sealed record GetCurrentUserResult(
             null,
             null,
             null,
-            false);
+            false,
+            null);
     }
 }

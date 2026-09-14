@@ -44,6 +44,7 @@ public sealed class GoogleSignInService(
         }
 
         var now = DateTimeOffset.UtcNow;
+
         var externalIdentity =
             await identityRepository.FindExternalIdentityForUpdateAsync(
                 ExternalIdentityProvider.Google,
@@ -122,7 +123,8 @@ public sealed class GoogleSignInService(
 
         try
         {
-            await identityRepository.SaveChangesAsync(cancellationToken);
+            await identityRepository.SaveChangesAsync(
+                cancellationToken);
         }
         catch (IdentityConflictException)
         {
@@ -147,6 +149,7 @@ public sealed class GoogleSignInService(
                 user.FirstName,
                 user.LastName,
                 user.ProfilePictureUrl,
-                user.IsActive));
+                user.IsActive,
+                user.Role));
     }
 }

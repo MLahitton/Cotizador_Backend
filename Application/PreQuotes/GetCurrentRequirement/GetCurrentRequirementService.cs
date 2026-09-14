@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 
 namespace Application.PreQuotes.GetCurrentRequirement;
 
@@ -29,11 +30,17 @@ public sealed record GetCurrentRequirementResult(
 {
     public static GetCurrentRequirementResult Success(
         CurrentRequirementReadModel requirement) =>
-        new(true, GetCurrentRequirementFailure.None, requirement);
+        new(
+            true,
+            GetCurrentRequirementFailure.None,
+            requirement);
 
     public static GetCurrentRequirementResult Failed(
         GetCurrentRequirementFailure failure) =>
-        new(false, failure, null);
+        new(
+            false,
+            failure,
+            null);
 }
 
 public sealed class GetCurrentRequirementService(
@@ -65,6 +72,7 @@ public sealed class GetCurrentRequirementService(
             command.PreQuoteId,
             userId,
             cancellationToken);
+
         if (access != GetCurrentRequirementFailure.None)
         {
             return GetCurrentRequirementResult.Failed(access);
@@ -79,10 +87,13 @@ public sealed class GetCurrentRequirementService(
 
             return requirement is null
                 ? GetCurrentRequirementResult.Failed(
-                    GetCurrentRequirementFailure.CurrentRequirementNotFound)
-                : GetCurrentRequirementResult.Success(requirement);
+                    GetCurrentRequirementFailure
+                        .CurrentRequirementNotFound)
+                : GetCurrentRequirementResult.Success(
+                    requirement);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception)
+            when (!cancellationToken.IsCancellationRequested)
         {
             return GetCurrentRequirementResult.Failed(
                 GetCurrentRequirementFailure.QueryError);
@@ -99,6 +110,7 @@ public sealed class GetCurrentRequirementService(
             var user = await identityRepository.FindUserByIdAsync(
                 userId,
                 cancellationToken);
+
             if (user is null)
             {
                 return GetCurrentRequirementFailure.Unauthorized;
@@ -112,6 +124,7 @@ public sealed class GetCurrentRequirementService(
             var preQuote = await preQuoteRepository.FindByIdAsync(
                 preQuoteId,
                 cancellationToken);
+
             if (preQuote is null)
             {
                 return GetCurrentRequirementFailure.PreQuoteNotFound;
@@ -120,12 +133,23 @@ public sealed class GetCurrentRequirementService(
             var project = await projectRepository.FindByIdAsync(
                 preQuote.ProjectId,
                 cancellationToken);
+
             if (project is null)
             {
                 return GetCurrentRequirementFailure.ProjectNotFound;
             }
 
-            if (project.CreatedByUserId != userId)
+            /*
+             * ADMIN puede consultar el requirement actual de cualquier
+             * precotización.
+             *
+             * USER conserva la regla normal de ownership.
+             *
+             * El rol se obtiene del usuario leído desde base de datos,
+             * por lo que no dependemos únicamente del claim del JWT.
+             */
+            if (user.Role != UserRole.Admin
+                && project.CreatedByUserId != userId)
             {
                 return GetCurrentRequirementFailure.PreQuoteNotFound;
             }
@@ -138,6 +162,7 @@ public sealed class GetCurrentRequirementService(
             var client = await clientRepository.FindByIdAsync(
                 project.ClientId,
                 cancellationToken);
+
             if (client is null)
             {
                 return GetCurrentRequirementFailure.ClientNotFound;
@@ -147,7 +172,8 @@ public sealed class GetCurrentRequirementService(
                 ? GetCurrentRequirementFailure.None
                 : GetCurrentRequirementFailure.InactiveClient;
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception)
+            when (!cancellationToken.IsCancellationRequested)
         {
             return GetCurrentRequirementFailure.QueryError;
         }

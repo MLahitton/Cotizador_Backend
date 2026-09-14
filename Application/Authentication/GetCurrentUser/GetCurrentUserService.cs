@@ -37,6 +37,7 @@ public sealed class GetCurrentUserService(
             user.FirstName,
             user.LastName,
             user.ProfilePictureUrl,
-            user.IsActive);
+            user.IsActive,
+            user.Role);
     }
 }

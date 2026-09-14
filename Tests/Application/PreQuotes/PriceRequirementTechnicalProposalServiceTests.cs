@@ -467,6 +467,67 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+public async Task GetCurrent_UserReadingOwnRequirement_ReturnsSuccess()
+{
+    var context = CreateContext(
+        [ProposalItem(Item())],
+        TechnicalEstimate(100m, 200m, 300m),
+        ownerIsCurrentUser: true,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.GetCurrentAsync(
+        new PriceRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        PriceRequirementTechnicalProposalFailure.None,
+        result.Failure);
+}
+
+[Fact]
+public async Task GetCurrent_UserReadingAnotherUsersRequirement_ReturnsRequirementNotFound()
+{
+    var context = CreateContext(
+        [ProposalItem(Item())],
+        TechnicalEstimate(100m, 200m, 300m),
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.GetCurrentAsync(
+        new PriceRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.False(result.IsSuccess);
+    Assert.Equal(
+        PriceRequirementTechnicalProposalFailure.RequirementNotFound,
+        result.Failure);
+    Assert.Null(result.Pricing);
+}
+
+[Fact]
+public async Task GetCurrent_AdminReadingAnotherUsersRequirement_ReturnsSuccess()
+{
+    var context = CreateContext(
+        [ProposalItem(Item())],
+        TechnicalEstimate(100m, 200m, 300m),
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: true);
+
+    var result = await context.Service.GetCurrentAsync(
+        new PriceRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        PriceRequirementTechnicalProposalFailure.None,
+        result.Failure);
+}
+
+    [Fact]
     public async Task GetCurrent_WithUnauthenticatedUser_ReturnsUnauthorizedWithoutSnapshotLookup()
     {
         var context = CreateContext(
@@ -1378,13 +1439,47 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         Assert.False(result.Pricing.IsCompleteTotal);
     }
 
+        [Fact]
+    public async Task Execute_AdminPricingAnotherUsersRequirement_ReturnsRequirementNotFound()
+    {
+        var context = CreateContext(
+            [ProposalItem(Item())],
+            TechnicalEstimate(100m, 200m, 300m),
+            ownerIsCurrentUser: false,
+            currentUserIsAdmin: true);
+
+        var result = await context.Service.ExecuteAsync(
+            new PriceRequirementTechnicalProposalCommand(
+                context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+
+        Assert.Equal(
+            PriceRequirementTechnicalProposalFailure.RequirementNotFound,
+            result.Failure);
+
+        await context.TechnicalEstimator
+            .DidNotReceive()
+            .EstimateAsync(
+                Arg.Any<HistoricalCandidateQuery>(),
+                Arg.Any<CancellationToken>());
+
+        await context.Requirements
+            .DidNotReceive()
+            .SaveChangesAsync(
+                Arg.Any<CancellationToken>());
+    }
+
     private static decimal Sqrt(decimal value) =>
         (decimal)Math.Sqrt((double)value);
     private static Context CreateContext(
-        IReadOnlyList<RequirementTechnicalProposalItem> items,
-        HistoricalTechnicalPriceEstimate technicalEstimate,
-        Action<HistoricalCandidateQuery>? captureQuery = null,
-        bool confirmProposal = true)
+    IReadOnlyList<RequirementTechnicalProposalItem> items,
+    HistoricalTechnicalPriceEstimate technicalEstimate,
+    Action<HistoricalCandidateQuery>? captureQuery = null,
+    bool confirmProposal = true,
+    bool ownerIsCurrentUser = true,
+    bool currentUserIsAdmin = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -1398,11 +1493,59 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
         var technicalEstimator = Substitute.For<IHistoricalTechnicalPriceEstimator>();
         var cancellationRegistry = Substitute.For<IOperationCancellationRegistry>();
 
-        var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
-        var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
-        var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, UserId, At);
-        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
-        var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
+        var user = User.CreateFromGoogle(
+            "user@example.com",
+            "User",
+            null,
+            null,
+            At);
+
+        if (currentUserIsAdmin)
+        {
+            user.ChangeRole(
+                UserRole.Admin,
+                At.AddSeconds(1));
+        }
+
+        var ownerUserId = ownerIsCurrentUser
+            ? UserId
+            : Guid.Parse(
+                "99999999-9999-9999-9999-999999999999");
+
+        var client = Client.Create(
+            ClientType.Company,
+            "Client",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            ownerUserId,
+            At);
+
+        var project = ProjectEntity.Create(
+            client.Id,
+            "P-001",
+            "Project",
+            null,
+            null,
+            ownerUserId,
+            At);
+
+        var preQuote = PreQuote.Create(
+            project.Id,
+            ownerUserId,
+            "PC-2020-0001",
+            null,
+            At);
+
+        var requirement = Requirement.Create(
+            preQuote.Id,
+            ownerUserId,
+            RequirementCommercialLine.Essential,
+            At);
         var proposal = RequirementTechnicalProposal.Create(requirement.Id, Guid.NewGuid(), Guid.NewGuid(), false, At);
         SetPrivateProperty(proposal, "Requirement", requirement);
         foreach (var (item, index) in items.Select((item, index) => (item, index)))

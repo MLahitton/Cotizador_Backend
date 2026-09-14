@@ -1,6 +1,7 @@
 using Application.Common.Abstractions.Authentication;
-using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 using FluentValidation;
 
 namespace Application.PreQuotes.GetPreQuoteDocuments;
@@ -17,7 +18,11 @@ public sealed class GetPreQuoteDocumentsService(
         GetPreQuoteDocumentsQuery query,
         CancellationToken cancellationToken)
     {
-        if (!(await validator.ValidateAsync(query, cancellationToken)).IsValid)
+        var validationResult = await validator.ValidateAsync(
+            query,
+            cancellationToken);
+
+        if (!validationResult.IsValid)
         {
             return GetPreQuoteDocumentsResult.Failed(
                 GetPreQuoteDocumentsFailure.InvalidRequest);
@@ -58,15 +63,28 @@ public sealed class GetPreQuoteDocumentsService(
                     GetPreQuoteDocumentsFailure.NotFound);
             }
 
-            var project = await projectRepository.FindByIdAsync(
-                preQuote.ProjectId,
-                cancellationToken);
-
-            if (project is null
-                || project.CreatedByUserId != userId)
+            /*
+             * ADMIN puede consultar documentos de cualquier precotización.
+             *
+             * USER conserva la regla de ownership existente:
+             * el proyecto de la precotización debe pertenecer al
+             * usuario autenticado.
+             *
+             * El rol se toma del usuario leído desde la base de datos,
+             * no únicamente del claim del JWT.
+             */
+            if (user.Role != UserRole.Admin)
             {
-                return GetPreQuoteDocumentsResult.Failed(
-                    GetPreQuoteDocumentsFailure.NotFound);
+                var project = await projectRepository.FindByIdAsync(
+                    preQuote.ProjectId,
+                    cancellationToken);
+
+                if (project is null
+                    || project.CreatedByUserId != userId)
+                {
+                    return GetPreQuoteDocumentsResult.Failed(
+                        GetPreQuoteDocumentsFailure.NotFound);
+                }
             }
 
             var documents = await repository.GetDocumentsAsync(
@@ -78,7 +96,8 @@ public sealed class GetPreQuoteDocumentsService(
             return documents is null
                 ? GetPreQuoteDocumentsResult.Failed(
                     GetPreQuoteDocumentsFailure.QueryError)
-                : GetPreQuoteDocumentsResult.Success(documents);
+                : GetPreQuoteDocumentsResult.Success(
+                    documents);
         }
         catch (PreQuoteDocumentQueryException)
         {

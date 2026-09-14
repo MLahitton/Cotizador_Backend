@@ -135,8 +135,36 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
         await context.Requirements.DidNotReceive()
             .SaveChangesAsync(Arg.Any<CancellationToken>());
     }
-    private static Context CreateContext(bool withoutSuggestedGlass = false)
-    {
+
+            [Fact]
+        public async Task Execute_AdminConfirmingAnotherUsersProposal_ReturnsRequirementNotFound()
+        {
+            var context = CreateContext(
+                currentUserIsAdmin: true,
+                ownerIsCurrentUser: false);
+
+            var result = await context.Service.ExecuteAsync(
+                new ConfirmRequirementTechnicalProposalSelectionCommand(
+                    context.Proposal.Id),
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(
+                ConfirmRequirementTechnicalProposalSelectionFailure.RequirementNotFound,
+                result.Failure);
+
+            Assert.False(context.Proposal.IsCommerciallyConfirmed);
+
+            await context.Requirements
+                .DidNotReceive()
+                .SaveChangesAsync(
+                    Arg.Any<CancellationToken>());
+        }
+        private static Context CreateContext(
+        bool withoutSuggestedGlass = false,
+        bool currentUserIsAdmin = false,
+        bool ownerIsCurrentUser = true)
+        {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
@@ -146,6 +174,18 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
         var productSystems = Substitute.For<IProductSystemCatalogRepository>();
 
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
+         if (currentUserIsAdmin)
+            {
+                user.ChangeRole(
+                    UserRole.Admin,
+                    At.AddSeconds(1));
+            }
+
+            var ownerUserId = ownerIsCurrentUser
+                ? UserId
+                : Guid.Parse(
+                    "99999999-9999-9999-9999-999999999999");
+                    
         var client = Client.Create(
             ClientType.Company,
             "Client",
@@ -156,20 +196,21 @@ public sealed class ConfirmRequirementTechnicalProposalSelectionServiceTests
             null,
             null,
             null,
-            UserId,
+            ownerUserId,
             At);
+
         var project = ProjectEntity.Create(
             client.Id,
             "P-001",
             "Project",
             null,
             null,
-            UserId,
+            ownerUserId,
             At);
-        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
+        var preQuote = PreQuote.Create(project.Id, ownerUserId, "PC-2020-0001", null, At);
         var requirement = Requirement.Create(
             preQuote.Id,
-            UserId,
+            ownerUserId,
             RequirementCommercialLine.Essential,
             At);
         var proposal = RequirementTechnicalProposal.Create(

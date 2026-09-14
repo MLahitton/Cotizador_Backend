@@ -50,6 +50,9 @@ using Application.Projects.UpdateProject;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Application.Administration.GetAdminDashboard;
+using Application.Administration.GetAdminUsers;
+using Application.Administration.GetAdminPreQuotes;
 
 namespace Application;
 
@@ -132,6 +135,9 @@ public static class DependencyInjection
         services.AddScoped<SetProjectActivationService>();
         services.AddScoped<UpdateProjectService>();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<GetAdminDashboardService>();
+        services.AddScoped<GetAdminUsersService>();
+        services.AddScoped<GetAdminPreQuotesService>();
 
         return services;
     }

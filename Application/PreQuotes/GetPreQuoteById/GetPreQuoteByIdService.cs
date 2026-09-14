@@ -1,6 +1,7 @@
 ﻿using Application.Common.Abstractions.Authentication;
-using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 using FluentValidation;
 
 namespace Application.PreQuotes.GetPreQuoteById;
@@ -69,22 +70,33 @@ public sealed class GetPreQuoteByIdService(
                 GetPreQuoteByIdFailure.NotFound);
         }
 
-        try
+        /*
+         * Un administrador puede consultar cualquier precotización.
+         *
+         * Para usuarios normales se conserva exactamente la regla
+         * de ownership existente: el proyecto debe pertenecer al
+         * usuario autenticado.
+         */
+        if (user.Role != UserRole.Admin)
         {
-            var project = await projectRepository.FindByIdAsync(
-                preQuote.ProjectId,
-                cancellationToken);
+            try
+            {
+                var project = await projectRepository.FindByIdAsync(
+                    preQuote.ProjectId,
+                    cancellationToken);
 
-            if (project is null || project.CreatedByUserId != userId)
+                if (project is null
+                    || project.CreatedByUserId != userId)
+                {
+                    return GetPreQuoteByIdResult.Failed(
+                        GetPreQuoteByIdFailure.NotFound);
+                }
+            }
+            catch (ProjectQueryException)
             {
                 return GetPreQuoteByIdResult.Failed(
-                    GetPreQuoteByIdFailure.NotFound);
+                    GetPreQuoteByIdFailure.QueryError);
             }
-        }
-        catch (ProjectQueryException)
-        {
-            return GetPreQuoteByIdResult.Failed(
-                GetPreQuoteByIdFailure.QueryError);
         }
 
         return GetPreQuoteByIdResult.Success(

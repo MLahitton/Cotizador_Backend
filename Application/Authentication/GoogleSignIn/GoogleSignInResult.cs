@@ -1,3 +1,5 @@
+using Domain.Identity;
+
 namespace Application.Authentication.GoogleSignIn;
 
 public enum GoogleSignInFailure
@@ -17,7 +19,8 @@ public sealed record GoogleSignInUserResult(
     string FirstName,
     string? LastName,
     string? ProfilePictureUrl,
-    bool IsActive);
+    bool IsActive,
+    UserRole Role);
 
 public sealed record GoogleSignInResult(
     GoogleSignInFailure Failure,
@@ -42,7 +45,8 @@ public sealed record GoogleSignInResult(
             user);
     }
 
-    public static GoogleSignInResult Failed(GoogleSignInFailure failure)
+    public static GoogleSignInResult Failed(
+        GoogleSignInFailure failure)
     {
         return new GoogleSignInResult(
             failure,

@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using System.Text;
 using Api.Authentication;
-using Api.OpenApi;
+using Api.Authorization;
 using Api.ErrorHandling;
-using Application.Common.Abstractions.Authentication;
+using Api.OpenApi;
 using Application;
+using Application.Common.Abstractions.Authentication;
 using Infrastructure;
 using Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -24,6 +26,7 @@ builder.Services.AddControllers();
 builder.Services.AddPreQuoteProblemDetailsContract();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
@@ -33,11 +36,13 @@ builder.Services.AddOpenApi(options =>
 });
 
 builder.Services.AddApplication();
+
 builder.Services.AddInfrastructure(
     builder.Configuration,
     authenticationOptions);
 
 builder.Services.AddHttpContextAccessor();
+
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services
@@ -45,51 +50,79 @@ builder.Services
     .AddJwtBearer(options =>
     {
         options.MapInboundClaims = false;
+
         options.RequireHttpsMetadata =
             !builder.Environment.IsDevelopment();
+
         options.SaveToken = false;
         options.IncludeErrorDetails = false;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
             ValidIssuer = authenticationOptions.Jwt.Issuer,
+
             ValidateAudience = true,
             ValidAudience = authenticationOptions.Jwt.Audience,
+
             ValidateLifetime = true,
             RequireExpirationTime = true,
+
             RequireSignedTokens = true,
             ValidateIssuerSigningKey = true,
+
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(
                     authenticationOptions.Jwt.SigningKey)),
-            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+
+            ValidAlgorithms =
+            [
+                SecurityAlgorithms.HmacSha256
+            ],
+
+            RoleClaimType = ClaimTypes.Role,
+
             ClockSkew = TimeSpan.FromMinutes(1)
         };
-                options.Events = new JwtBearerEvents
-                {
-                    OnChallenge = async context =>
-                    {
-                        if (ApiProblemDetailsFactory.IsContractualRequest(
-                                context.HttpContext))
-                        {
-                            context.HandleResponse();
-                            await ApiProblemDetailsFactory.WriteUnauthorizedAsync(
-                                context.HttpContext);
-                        }
-                    },
-                    OnForbidden = async context =>
-                    {
-                        if (ApiProblemDetailsFactory.IsContractualRequest(
-                                context.HttpContext))
-                        {
-                            await ApiProblemDetailsFactory.WriteForbiddenAsync(
-                                context.HttpContext);
-                        }
-                    }
-                };
-            });
 
-builder.Services.AddAuthorization();
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                if (ApiProblemDetailsFactory.IsContractualRequest(
+                        context.HttpContext))
+                {
+                    context.HandleResponse();
+
+                    await ApiProblemDetailsFactory
+                        .WriteUnauthorizedAsync(
+                            context.HttpContext);
+                }
+            },
+
+            OnForbidden = async context =>
+            {
+                if (ApiProblemDetailsFactory.IsContractualRequest(
+                        context.HttpContext))
+                {
+                    await ApiProblemDetailsFactory
+                        .WriteForbiddenAsync(
+                            context.HttpContext);
+                }
+            }
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(
+        AuthorizationPolicies.AdminOnly,
+        policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireRole("ADMIN");
+        });
+});
 
 if (builder.Environment.IsDevelopment())
 {
@@ -152,8 +185,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.UseContractualProblemDetails();
 
 app.MapControllers();

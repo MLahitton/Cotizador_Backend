@@ -63,16 +63,62 @@ public sealed class UpdatePreQuoteNameServiceTests
         await context.PreQuotes.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
-    private static Context CreateContext(string scenario, string? initialName = null)
+    [Fact]
+        public async Task Execute_AdminUpdatingAnotherUsersPreQuote_ReturnsNotFound()
+        {
+            var context = CreateContext(
+                "success",
+                currentUserIsAdmin: true,
+                ownerIsCurrentUser: false);
+
+            var originalName = context.PreQuote.Name;
+
+            var result = await context.Service.ExecuteAsync(
+                new UpdatePreQuoteNameCommand(
+                    context.PreQuote.Id,
+                    "Nombre que no debe aplicarse"),
+                TestContext.Current.CancellationToken);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(
+                UpdatePreQuoteNameFailure.NotFound,
+                result.Failure);
+
+            Assert.Equal(
+                originalName,
+                context.PreQuote.Name);
+
+            await context.PreQuotes
+                .DidNotReceive()
+                .SaveChangesAsync(
+                    Arg.Any<CancellationToken>());
+        }
+
+        private static Context CreateContext(
+        string scenario,
+        string? initialName = null,
+        bool currentUserIsAdmin = false,
+        bool ownerIsCurrentUser = true)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
         var projects = Substitute.For<IProjectRepository>();
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var user = User.CreateFromGoogle("user@example.com", "User", null, null, At);
-        var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, UserId, At);
-        var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, UserId, At);
-        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2026-0001", initialName, At);
+        if (currentUserIsAdmin)
+            {
+                user.ChangeRole(
+                    UserRole.Admin,
+                    At.AddSeconds(1));
+            }
+
+            var ownerUserId = ownerIsCurrentUser
+                ? UserId
+                : Guid.Parse(
+                    "99999999-9999-9999-9999-999999999999");
+        var client = Client.Create(ClientType.Company, "Client", null, null, null, null, null, null, null, ownerUserId, At);
+        var project = ProjectEntity.Create(client.Id, "P-001", "Project", null, null, ownerUserId, At);
+        var preQuote = PreQuote.Create(project.Id, ownerUserId, "PC-2026-0001", initialName, At);
         var clock = new FixedTimeProvider(At.AddMinutes(1));
 
         currentUser.IsAuthenticated.Returns(scenario != "unauthorized");

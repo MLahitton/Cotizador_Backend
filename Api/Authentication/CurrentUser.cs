@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Application.Common.Abstractions.Authentication;
+using Domain.Identity;
 
 namespace Api.Authentication;
 
@@ -23,4 +24,22 @@ public sealed class CurrentUser(IHttpContextAccessor httpContextAccessor)
                 : null;
         }
     }
+
+    public UserRole? Role
+    {
+        get
+        {
+            var role = Principal?.FindFirstValue(ClaimTypes.Role);
+
+            return Enum.TryParse<UserRole>(
+                role,
+                ignoreCase: true,
+                out var parsedRole)
+                ? parsedRole
+                : null;
+        }
+    }
+
+    public bool IsAdmin =>
+        Role == UserRole.Admin;
 }

@@ -1,5 +1,6 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 using Domain.Projects;
 using FluentValidation;
 
@@ -63,6 +64,13 @@ public sealed class GetProjectByIdService(
         }
 
         if (project is null)
+        {
+            return GetProjectByIdResult.Failed(
+                GetProjectByIdFailure.NotFound);
+        }
+
+        if (user.Role != UserRole.Admin
+            && project.CreatedByUserId != userId)
         {
             return GetProjectByIdResult.Failed(
                 GetProjectByIdFailure.NotFound);

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using Application.Common.Abstractions.Authentication;
 using Domain.Identity;
@@ -11,6 +12,7 @@ public sealed class JwtAccessTokenGenerator(
     : IAccessTokenGenerator
 {
     private readonly JsonWebTokenHandler _tokenHandler = new();
+
     private readonly SigningCredentials _signingCredentials = new(
         new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(options.SigningKey)),
@@ -19,6 +21,7 @@ public sealed class JwtAccessTokenGenerator(
     public AccessTokenResult Generate(User user)
     {
         var issuedAtUtc = DateTimeOffset.UtcNow;
+
         var expiresAtUtc = issuedAtUtc.AddMinutes(
             options.AccessTokenMinutes);
 
@@ -27,7 +30,8 @@ public sealed class JwtAccessTokenGenerator(
             [JwtRegisteredClaimNames.Sub] = user.Id.ToString(),
             [JwtRegisteredClaimNames.Email] = user.Email,
             [JwtRegisteredClaimNames.GivenName] = user.FirstName,
-            [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N")
+            [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString("N"),
+            [ClaimTypes.Role] = user.Role.ToString().ToUpperInvariant()
         };
 
         if (!string.IsNullOrWhiteSpace(user.LastName))

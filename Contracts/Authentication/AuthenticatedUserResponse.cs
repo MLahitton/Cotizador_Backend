@@ -6,4 +6,5 @@ public sealed record AuthenticatedUserResponse(
     string FirstName,
     string? LastName,
     string? ProfilePictureUrl,
-    bool IsActive);
+    bool IsActive,
+    string Role);

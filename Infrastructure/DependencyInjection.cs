@@ -20,6 +20,9 @@ using Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Application.Common.Abstractions.Administration;
+using Infrastructure.Persistence.Queries;
+
 
 namespace Infrastructure;
 
@@ -190,6 +193,18 @@ public static class DependencyInjection
             PreQuoteStoredDocumentRepository>();
         services.AddScoped<IPreQuoteDraftRepository, PreQuoteDraftRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+
+        services.AddScoped<
+             IAdministrationDashboardReader,
+             AdministrationDashboardReader>();
+
+        services.AddScoped<
+            IAdministrationUserReader,
+            AdministrationUserReader>();
+
+        services.AddScoped<
+            IAdministrationPreQuoteReader,
+            AdministrationPreQuoteReader>();
 
         return services;
     }

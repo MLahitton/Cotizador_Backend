@@ -6,6 +6,7 @@ using Application.Common.Abstractions.Projects;
 using Application.PreQuotes.TechnicalProposalReadiness;
 using Application.PreQuotes.VisualSystemModel;
 using Domain.PreQuotes;
+using Domain.Identity;
 
 namespace Application.PreQuotes.GetRequirementTechnicalProposal;
 
@@ -113,96 +114,118 @@ public sealed class GetRequirementTechnicalProposalService(
     }
 
     private async Task<AccessValidationResult> ValidateAccessAsync(
-        Guid requirementId,
-        Guid userId,
-        CancellationToken cancellationToken)
+    Guid requirementId,
+    Guid userId,
+    CancellationToken cancellationToken)
+{
+    Requirement? requirement;
+    User? user;
+
+    try
     {
-        Requirement? requirement;
-        try
-        {
-            var user = await identityRepository.FindUserByIdAsync(
-                userId,
-                cancellationToken);
-            if (user is null)
-            {
-                return new(GetRequirementTechnicalProposalFailure.Unauthorized);
-            }
-
-            if (!user.IsActive)
-            {
-                return new(GetRequirementTechnicalProposalFailure.InactiveUser);
-            }
-
-            requirement = await requirementRepository.FindByIdAsync(
-                requirementId,
-                cancellationToken);
-        }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            return new(GetRequirementTechnicalProposalFailure.QueryError);
-        }
-
-        if (requirement is null || !requirement.IsActive)
-        {
-            return new(GetRequirementTechnicalProposalFailure.RequirementNotFound);
-        }
-
-        return await ValidatePreQuoteAccessAsync(
-            requirement.PreQuoteId,
+        user = await identityRepository.FindUserByIdAsync(
             userId,
             cancellationToken);
+
+        if (user is null)
+        {
+            return new(
+                GetRequirementTechnicalProposalFailure.Unauthorized);
+        }
+
+        if (!user.IsActive)
+        {
+            return new(
+                GetRequirementTechnicalProposalFailure.InactiveUser);
+        }
+
+        requirement = await requirementRepository.FindByIdAsync(
+            requirementId,
+            cancellationToken);
     }
+    catch (Exception)
+        when (!cancellationToken.IsCancellationRequested)
+    {
+        return new(
+            GetRequirementTechnicalProposalFailure.QueryError);
+    }
+
+    if (requirement is null || !requirement.IsActive)
+    {
+        return new(
+            GetRequirementTechnicalProposalFailure.RequirementNotFound);
+    }
+
+    return await ValidatePreQuoteAccessAsync(
+        requirement.PreQuoteId,
+        userId,
+        user.Role,
+        cancellationToken);
+}
+
 
     private async Task<AccessValidationResult> ValidatePreQuoteAccessAsync(
-        Guid preQuoteId,
-        Guid userId,
-        CancellationToken cancellationToken)
+    Guid preQuoteId,
+    Guid userId,
+    UserRole userRole,
+    CancellationToken cancellationToken)
+{
+    try
     {
-        try
+        var preQuote = await preQuoteRepository.FindByIdAsync(
+            preQuoteId,
+            cancellationToken);
+
+        if (preQuote is null)
         {
-            var preQuote = await preQuoteRepository.FindByIdAsync(
-                preQuoteId,
-                cancellationToken);
-            if (preQuote is null)
-            {
-                return new(GetRequirementTechnicalProposalFailure.PreQuoteNotFound);
-            }
-
-            var project = await projectRepository.FindByIdAsync(
-                preQuote.ProjectId,
-                cancellationToken);
-            if (project is null)
-            {
-                return new(GetRequirementTechnicalProposalFailure.ProjectNotFound);
-            }
-
-            if (project.CreatedByUserId != userId)
-            {
-                return new(GetRequirementTechnicalProposalFailure.RequirementNotFound);
-            }
-
-            if (!project.IsActive)
-            {
-                return new(GetRequirementTechnicalProposalFailure.InactiveProject);
-            }
-
-            var client = await clientRepository.FindByIdAsync(
-                project.ClientId,
-                cancellationToken);
-            if (client is null)
-            {
-                return new(GetRequirementTechnicalProposalFailure.ClientNotFound);
-            }
-
-            return client.IsActive
-                ? new(GetRequirementTechnicalProposalFailure.None)
-                : new(GetRequirementTechnicalProposalFailure.InactiveClient);
+            return new(
+                GetRequirementTechnicalProposalFailure.PreQuoteNotFound);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+
+        var project = await projectRepository.FindByIdAsync(
+            preQuote.ProjectId,
+            cancellationToken);
+
+        if (project is null)
         {
-            return new(GetRequirementTechnicalProposalFailure.QueryError);
+            return new(
+                GetRequirementTechnicalProposalFailure.ProjectNotFound);
         }
+
+        if (userRole != UserRole.Admin
+            && project.CreatedByUserId != userId)
+        {
+            return new(
+                GetRequirementTechnicalProposalFailure.RequirementNotFound);
+        }
+
+        if (!project.IsActive)
+        {
+            return new(
+                GetRequirementTechnicalProposalFailure.InactiveProject);
+        }
+
+        var client = await clientRepository.FindByIdAsync(
+            project.ClientId,
+            cancellationToken);
+
+        if (client is null)
+        {
+            return new(
+                GetRequirementTechnicalProposalFailure.ClientNotFound);
+        }
+
+        return client.IsActive
+            ? new(GetRequirementTechnicalProposalFailure.None)
+            : new(GetRequirementTechnicalProposalFailure.InactiveClient);
     }
+    catch (Exception)
+        when (!cancellationToken.IsCancellationRequested)
+    {
+        return new(
+            GetRequirementTechnicalProposalFailure.QueryError);
+    }
+}
 
     private static RequirementTechnicalProposalReadModel MapProposal(
         RequirementTechnicalProposal proposal,

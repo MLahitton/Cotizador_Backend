@@ -50,7 +50,8 @@ public sealed class AuthController(
                 user.FirstName,
                 user.LastName,
                 user.ProfilePictureUrl,
-                user.IsActive)));
+                user.IsActive,
+                user.Role.ToString().ToUpperInvariant())));
     }
 
     [HttpGet("me")]
@@ -86,7 +87,8 @@ public sealed class AuthController(
             result.FirstName!,
             result.LastName,
             result.ProfilePictureUrl,
-            result.IsActive));
+            result.IsActive,
+            result.Role!.Value.ToString().ToUpperInvariant()));
     }
 
     private ActionResult<GoogleSignInResponse> MapGoogleSignInFailure(

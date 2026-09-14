@@ -755,12 +755,83 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Empty(forbidden);
     }
 
+    [Fact]
+public async Task Execute_UserReadingOwnTechnicalProposal_ReturnsSuccess()
+{
+    var context = CreateContext(
+        withProposal: true,
+        ownerIsCurrentUser: true,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementTechnicalProposalFailure.None,
+        result.Failure);
+
+    Assert.NotNull(result.Proposal);
+    Assert.Equal(
+        context.Requirement.Id,
+        result.Proposal.RequirementId);
+}
+
+[Fact]
+public async Task Execute_UserReadingAnotherUsersTechnicalProposal_ReturnsRequirementNotFound()
+{
+    var context = CreateContext(
+        withProposal: true,
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: false);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.False(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementTechnicalProposalFailure.RequirementNotFound,
+        result.Failure);
+
+    Assert.Null(result.Proposal);
+}
+
+[Fact]
+public async Task Execute_AdminReadingAnotherUsersTechnicalProposal_ReturnsSuccess()
+{
+    var context = CreateContext(
+        withProposal: true,
+        ownerIsCurrentUser: false,
+        currentUserIsAdmin: true);
+
+    var result = await context.Service.ExecuteAsync(
+        new GetRequirementTechnicalProposalCommand(
+            context.Requirement.Id),
+        TestContext.Current.CancellationToken);
+
+    Assert.True(result.IsSuccess);
+    Assert.Equal(
+        GetRequirementTechnicalProposalFailure.None,
+        result.Failure);
+
+    Assert.NotNull(result.Proposal);
+    Assert.Equal(
+        context.Requirement.Id,
+        result.Proposal.RequirementId);
+}
+
     private static Context CreateContext(
-        bool withProposal,
-        bool withSelected = false,
-        int extractedQuantity = 1,
-        int? manualQuantityOverride = null,
-        Action<RequirementTechnicalProposal>? configureProposal = null)
+    bool withProposal,
+    bool withSelected = false,
+    int extractedQuantity = 1,
+    int? manualQuantityOverride = null,
+    Action<RequirementTechnicalProposal>? configureProposal = null,
+    bool ownerIsCurrentUser = true,
+    bool currentUserIsAdmin = false)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -778,6 +849,18 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             null,
             null,
             At);
+
+            if (currentUserIsAdmin)
+                {
+                    user.ChangeRole(
+                      UserRole.Admin,
+                        At.AddSeconds(1));
+                }
+        var ownerUserId = ownerIsCurrentUser
+                ? UserId
+                : Guid.Parse(
+                    "99999999-9999-9999-9999-999999999999");
+            
         var client = Client.Create(
             ClientType.Company,
             "Client",
@@ -788,7 +871,7 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             null,
             null,
             null,
-            UserId,
+            ownerUserId,
             At);
         var project = ProjectEntity.Create(
             client.Id,
@@ -796,10 +879,10 @@ public sealed class GetRequirementTechnicalProposalServiceTests
             "Project",
             null,
             null,
-            UserId,
+            ownerUserId,
             At);
-        var preQuote = PreQuote.Create(project.Id, UserId, "PC-2020-0001", null, At);
-        var requirement = Requirement.Create(preQuote.Id, UserId, RequirementCommercialLine.Essential, At);
+        var preQuote = PreQuote.Create(project.Id, ownerUserId, "PC-2020-0001", null, At);
+        var requirement = Requirement.Create(preQuote.Id, ownerUserId, RequirementCommercialLine.Essential, At);
 
         var system = ProductSystem(
             Guid.Parse("22222222-2222-2222-2222-222222222222"),

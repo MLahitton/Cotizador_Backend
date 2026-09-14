@@ -8,7 +8,15 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
-        builder.ToTable("users", "identity");
+        builder.ToTable(
+            "users",
+            "identity",
+            table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_users_role",
+                    "role IN ('USER', 'ADMIN')");
+            });
 
         builder.HasKey(user => user.Id);
 
@@ -36,6 +44,17 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(user => user.IsActive)
             .HasColumnName("is_active")
+            .IsRequired();
+
+        builder.Property(user => user.Role)
+            .HasColumnName("role")
+            .HasConversion(
+                role => role.ToString().ToUpperInvariant(),
+                value => Enum.Parse<UserRole>(
+                    value,
+                    ignoreCase: true))
+            .HasMaxLength(20)
+            .HasDefaultValue(UserRole.User)
             .IsRequired();
 
         builder.Property(user => user.LastLoginAtUtc)
