@@ -101,6 +101,11 @@ public sealed class ProjectPreQuotesController(
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc,
+                new PreQuoteCreatedByResponse(
+                    preQuote.CreatedBy.Id,
+                    preQuote.CreatedBy.Email,
+                    preQuote.CreatedBy.FirstName,
+                    preQuote.CreatedBy.LastName),
                 preQuote.HasRequirement,
                 preQuote.LatestRequirementId,
                 preQuote.LatestRequirementStatus,

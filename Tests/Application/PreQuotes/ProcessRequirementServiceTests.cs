@@ -1068,6 +1068,124 @@ public sealed class ProcessRequirementServiceTests
             Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Execute_WhenAi2ReturnsServiceError_FinalizesFailureLifecycle()
+    {
+        var context = CreateContext("ai_service_error", File("source.pdf", PdfContentType));
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ProcessRequirementFailure.AiServiceError, result.Failure);
+        Assert.NotNull(result.Attempt);
+        Assert.Equal(DocumentProcessingState.Finished, result.Attempt!.ProcessingState);
+        Assert.Equal(DocumentProcessingOutcome.Failed, result.Attempt.Outcome);
+        Assert.Equal("AI2_SERVICE_ERROR", result.Attempt.ErrorCode);
+        Assert.Equal(RequirementStatus.Failed, context.Requirement.Status);
+        await context.Requirements.Received(1).FinalizeProcessingFailureAsync(
+            context.Requirement.Id,
+            result.Attempt.ProcessingAttemptId,
+            "AI2_SERVICE_ERROR",
+            Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_WhenAi2ThrowsNetworkException_FinalizesFailureLifecycle()
+    {
+        var context = CreateContext("ai_network_exception", File("source.pdf", PdfContentType));
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ProcessRequirementFailure.AiServiceUnavailable, result.Failure);
+        Assert.NotNull(result.Attempt);
+        Assert.Equal(DocumentProcessingState.Finished, result.Attempt!.ProcessingState);
+        Assert.Equal(DocumentProcessingOutcome.Failed, result.Attempt.Outcome);
+        Assert.Equal("AI2_SERVICE_UNAVAILABLE", result.Attempt.ErrorCode);
+        Assert.Equal(RequirementStatus.Failed, context.Requirement.Status);
+    }
+
+    [Fact]
+    public async Task Execute_WhenAi2FailureCancelsRequest_StillFinalizesFailureWithCleanupToken()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var context = CreateContext("success", File("source.pdf", PdfContentType));
+        context.CancellationRegistry.Register(
+                Arg.Any<string>(),
+                Arg.Any<CancellationToken>())
+            .Returns(call => call.ArgAt<CancellationToken>(1));
+        context.Ai2.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(DocumentProcessingClientResult.RemoteFailure(
+                    DocumentProcessingClientFailure.ServiceError,
+                    new DocumentProcessingRemoteError(
+                        500,
+                        "AI2-1.0",
+                        "AI2_SERVICE_ERROR",
+                        "Cotizador_AI2 no pudo completar la extraccion.")));
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            cancellation.Token);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ProcessRequirementFailure.AiServiceError, result.Failure);
+        Assert.NotNull(result.Attempt);
+        Assert.Equal(DocumentProcessingState.Finished, result.Attempt!.ProcessingState);
+        Assert.Equal(RequirementStatus.Failed, context.Requirement.Status);
+        await context.Requirements.Received(1).FinalizeProcessingFailureAsync(
+            context.Requirement.Id,
+            result.Attempt.ProcessingAttemptId,
+            "AI2_SERVICE_ERROR",
+            Arg.Any<DateTimeOffset>(),
+            Arg.Is<CancellationToken>(token => !token.IsCancellationRequested));
+    }
+
+    [Fact]
+    public async Task Execute_AfterFailedAttempt_AllowsNewProcessingAttempt()
+    {
+        var context = CreateContext("success", File("source.pdf", PdfContentType));
+        context.Ai2.ProcessAsync(
+                Arg.Any<DocumentProcessingClientRequest>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => Task.FromResult(DocumentProcessingClientResult.RemoteFailure(
+                    DocumentProcessingClientFailure.ServiceError,
+                    new DocumentProcessingRemoteError(
+                        500,
+                        "AI2-1.0",
+                        "AI2_SERVICE_ERROR",
+                        "Cotizador_AI2 no pudo completar la extraccion."))),
+                call => Task.FromResult(DocumentProcessingClientResult.Success(
+                    CreateResponse(
+                        call.Arg<DocumentProcessingClientRequest>()))));
+
+        var first = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+        var second = await context.Service.ExecuteAsync(
+            new ProcessRequirementCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(first.IsSuccess);
+        Assert.Equal(ProcessRequirementFailure.AiServiceError, first.Failure);
+        Assert.True(second.IsSuccess);
+        Assert.Equal(RequirementStatus.Processed, context.Requirement.Status);
+        await context.Ai2.Received(2).ProcessAsync(
+            Arg.Any<DocumentProcessingClientRequest>(),
+            Arg.Any<CancellationToken>());
+    }
+
     [Theory]
     [InlineData("not_found", ProcessRequirementFailure.RequirementNotFound)]
     [InlineData("no_files", ProcessRequirementFailure.NoFiles)]
@@ -1218,6 +1336,16 @@ public sealed class ProcessRequirementServiceTests
                 "ai_invalid" => Task.FromResult(
                     DocumentProcessingClientResult.Failed(
                         DocumentProcessingClientFailure.InvalidResponse)),
+                "ai_service_error" => Task.FromResult(
+                    DocumentProcessingClientResult.RemoteFailure(
+                        DocumentProcessingClientFailure.ServiceError,
+                        new DocumentProcessingRemoteError(
+                            500,
+                            "AI2-1.0",
+                            "AI2_SERVICE_ERROR",
+                            "Cotizador_AI2 no pudo completar la extraccion."))),
+                "ai_network_exception" => Task.FromException<DocumentProcessingClientResult>(
+                    new IOException("connection aborted")),
                 "requires_review" => Task.FromResult(
                     DocumentProcessingClientResult.Success(
                         CreateResponse(

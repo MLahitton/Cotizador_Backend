@@ -56,6 +56,12 @@ public sealed record PreQuoteDetails(
     }
 }
 
+public sealed record PreQuoteCreatedBy(
+    Guid Id,
+    string Email,
+    string FirstName,
+    string? LastName);
+
 public sealed record PreQuoteSearchItem(
     Guid Id,
     Guid ProjectId,
@@ -64,6 +70,7 @@ public sealed record PreQuoteSearchItem(
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
+    PreQuoteCreatedBy CreatedBy,
     bool HasRequirement,
     Guid? LatestRequirementId,
     RequirementStatus? LatestRequirementStatus,
@@ -88,7 +95,8 @@ public sealed record PreQuoteSearchItem(
         int? technicalProposalItemCount,
         DocumentProcessingState? latestAttemptState,
         DocumentProcessingOutcome? latestAttemptOutcome,
-        string? latestAttemptErrorCode)
+        string? latestAttemptErrorCode,
+        PreQuoteCreatedBy? createdBy = null)
         : this(
             id,
             projectId,
@@ -97,6 +105,11 @@ public sealed record PreQuoteSearchItem(
             documentCount,
             createdAtUtc,
             updatedAtUtc,
+            createdBy ?? new PreQuoteCreatedBy(
+                Guid.Empty,
+                string.Empty,
+                string.Empty,
+                null),
             hasRequirement,
             latestRequirementId,
             latestRequirementStatus,

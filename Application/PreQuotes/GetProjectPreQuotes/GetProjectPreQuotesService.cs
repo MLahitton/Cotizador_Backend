@@ -1,6 +1,7 @@
 ﻿using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Domain.Identity;
 using FluentValidation;
 
 namespace Application.PreQuotes.GetProjectPreQuotes;
@@ -69,7 +70,7 @@ public sealed class GetProjectPreQuotesService(
                 GetProjectPreQuotesFailure.ProjectNotFound);
         }
 
-        if (project.CreatedByUserId != userId)
+        if (user.Role != UserRole.Admin && project.CreatedByUserId != userId)
         {
             return GetProjectPreQuotesResult.Failed(
                 GetProjectPreQuotesFailure.ProjectNotFound);
@@ -106,6 +107,11 @@ public sealed class GetProjectPreQuotesService(
                 preQuote.DocumentCount,
                 preQuote.CreatedAtUtc,
                 preQuote.UpdatedAtUtc,
+                new PreQuoteCreatedByResult(
+                    preQuote.CreatedBy.Id,
+                    preQuote.CreatedBy.Email,
+                    preQuote.CreatedBy.FirstName,
+                    preQuote.CreatedBy.LastName),
                 preQuote.HasRequirement,
                 preQuote.LatestRequirementId,
                 preQuote.LatestRequirementStatus?.ToString(),

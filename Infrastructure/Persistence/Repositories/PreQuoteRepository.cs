@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Data.Common;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
@@ -92,7 +92,12 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                     dbContext.PreQuoteDocuments.Count(document =>
                         document.PreQuoteId == preQuote.Id),
                     preQuote.CreatedAtUtc,
-                    preQuote.UpdatedAtUtc))
+                    preQuote.UpdatedAtUtc,
+                    new PreQuoteCreatedBy(
+                        preQuote.CreatedByUser.Id,
+                        preQuote.CreatedByUser.Email,
+                        preQuote.CreatedByUser.FirstName,
+                        preQuote.CreatedByUser.LastName)))
                 .ToListAsync(cancellationToken);
 
             var preQuoteIds = items
@@ -178,6 +183,7 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
                         preQuote.DocumentCount,
                         preQuote.CreatedAtUtc,
                         preQuote.UpdatedAtUtc,
+                        preQuote.CreatedBy,
                         requirement is not null,
                         requirement?.RequirementId,
                         requirement?.Status,
@@ -291,7 +297,8 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
         string? Name,
         int DocumentCount,
         DateTimeOffset CreatedAtUtc,
-        DateTimeOffset UpdatedAtUtc);
+        DateTimeOffset UpdatedAtUtc,
+        PreQuoteCreatedBy CreatedBy);
 
     private sealed record PreQuoteRequirementProjection(
         Guid RequirementId,

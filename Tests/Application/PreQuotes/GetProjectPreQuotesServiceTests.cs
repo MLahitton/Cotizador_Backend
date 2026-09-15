@@ -54,6 +54,11 @@ public sealed class GetProjectPreQuotesServiceTests
             "44444444-4444-4444-4444-444444444444");
         var proposalId = Guid.Parse(
             "55555555-5555-5555-5555-555555555555");
+        var createdBy = new PreQuoteCreatedBy(
+            UserId,
+            "creator@example.com",
+            "Creator",
+            "One");
 
         context.PreQuoteRepository.SearchByProjectAsync(
                 context.Project.Id,
@@ -76,7 +81,8 @@ public sealed class GetProjectPreQuotesServiceTests
                         15,
                         DocumentProcessingState.Finished,
                         DocumentProcessingOutcome.Completed,
-                        null),
+                        null,
+                        createdBy),
                     new PreQuoteSearchItem(
                         secondPreQuoteId,
                         context.Project.Id,
@@ -111,6 +117,10 @@ public sealed class GetProjectPreQuotesServiceTests
         Assert.Equal(15, result.Page.Items[0].TechnicalProposalItemCount);
         Assert.Equal("Finished", result.Page.Items[0].LatestAttemptState);
         Assert.Equal("Completed", result.Page.Items[0].LatestAttemptOutcome);
+        Assert.Equal(UserId, result.Page.Items[0].CreatedBy.Id);
+        Assert.Equal("creator@example.com", result.Page.Items[0].CreatedBy.Email);
+        Assert.Equal("Creator", result.Page.Items[0].CreatedBy.FirstName);
+        Assert.Equal("One", result.Page.Items[0].CreatedBy.LastName);
         Assert.False(result.Page.Items[1].HasRequirement);
         Assert.False(result.Page.Items[1].HasTechnicalProposal);
     }
@@ -141,7 +151,64 @@ public sealed class GetProjectPreQuotesServiceTests
             .SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
-    private static Context CreateContext()
+
+    [Fact]
+    public async Task Execute_WithForeignProjectAndUserRole_ReturnsProjectNotFound()
+    {
+        var projectOwnerId = Guid.Parse(
+            "66666666-6666-6666-6666-666666666666");
+        var context = CreateContext(projectOwnerUserId: projectOwnerId);
+
+        var result = await context.Service.ExecuteAsync(
+            new GetProjectPreQuotesQuery(context.Project.Id, 1, 20),
+            TestContext.Current.CancellationToken);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(GetProjectPreQuotesFailure.ProjectNotFound, result.Failure);
+        await context.PreQuoteRepository.DidNotReceive()
+            .SearchByProjectAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Execute_WithForeignProjectAndAdminRole_ReturnsPage()
+    {
+        var projectOwnerId = Guid.Parse(
+            "77777777-7777-7777-7777-777777777777");
+        var context = CreateContext(
+            UserRole.Admin,
+            projectOwnerId);
+
+        context.PreQuoteRepository.SearchByProjectAsync(
+                context.Project.Id,
+                1,
+                20,
+                Arg.Any<CancellationToken>())
+            .Returns(new PreQuoteSearchPage(
+                Array.Empty<PreQuoteSearchItem>(),
+                0));
+
+        var result = await context.Service.ExecuteAsync(
+            new GetProjectPreQuotesQuery(context.Project.Id, 1, 20),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Page);
+        await context.PreQuoteRepository.Received(1)
+            .SearchByProjectAsync(
+                context.Project.Id,
+                1,
+                20,
+                Arg.Any<CancellationToken>());
+    }
+
+
+    private static Context CreateContext(
+        UserRole role = UserRole.User,
+        Guid? projectOwnerUserId = null)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identityRepository = Substitute.For<IIdentityRepository>();
@@ -153,13 +220,18 @@ public sealed class GetProjectPreQuotesServiceTests
             null,
             null,
             At);
+        if (role != UserRole.User)
+        {
+            user.ChangeRole(role, At.AddMinutes(1));
+        }
+
         var project = ProjectEntity.Create(
             Guid.NewGuid(),
             "PR-001",
             "Project",
             null,
             null,
-            UserId,
+            projectOwnerUserId ?? UserId,
             At);
 
         currentUser.IsAuthenticated.Returns(true);

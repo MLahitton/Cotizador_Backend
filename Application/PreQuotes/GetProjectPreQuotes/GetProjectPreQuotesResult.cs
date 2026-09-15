@@ -10,6 +10,12 @@ public enum GetProjectPreQuotesFailure
     QueryError = 5
 }
 
+public sealed record PreQuoteCreatedByResult(
+    Guid Id,
+    string Email,
+    string FirstName,
+    string? LastName);
+
 public sealed record PreQuoteListItemResult(
     Guid Id,
     Guid ProjectId,
@@ -18,6 +24,7 @@ public sealed record PreQuoteListItemResult(
     int DocumentCount,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
+    PreQuoteCreatedByResult CreatedBy,
     bool HasRequirement,
     Guid? LatestRequirementId,
     string? LatestRequirementStatus,

@@ -332,7 +332,7 @@ public sealed class ProcessRequirementService(
                     preQuote,
                     attempt,
                     MapAiFailure(aiResult.Failure),
-                    operationCancellationToken);
+                    CancellationToken.None);
             }
 
             if (aiResult.Response.StructuredExtraction is null)
@@ -344,7 +344,7 @@ public sealed class ProcessRequirementService(
                     new AiFailure(
                         ProcessRequirementFailure.AiInvalidResponse,
                         AiInvalidResponseErrorCode),
-                    operationCancellationToken);
+                    CancellationToken.None);
             }
 
             return await CompleteAttemptAsync(
@@ -384,7 +384,7 @@ public sealed class ProcessRequirementService(
                 preQuote,
                 attempt,
                 failure,
-                cancellationToken);
+                CancellationToken.None);
         }
         finally
         {
@@ -521,7 +521,7 @@ public sealed class ProcessRequirementService(
                 new AiFailure(
                     ProcessRequirementFailure.PersistenceError,
                     PersistenceErrorCode),
-                cancellationToken);
+                CancellationToken.None);
         }
 
         totalStopwatch.Stop();
