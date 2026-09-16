@@ -11,30 +11,65 @@ public sealed class AdministrationDashboardReader(
         DateTimeOffset nowUtc,
         CancellationToken cancellationToken)
     {
-        var startOfTodayUtc = new DateTimeOffset(
-            nowUtc.UtcDateTime.Date,
-            TimeSpan.Zero);
+        var colombiaTimeZone = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows()
+                ? "SA Pacific Standard Time"
+                : "America/Bogota");
 
-        var startOfLast7DaysUtc =
-            startOfTodayUtc.AddDays(-6);
+        var nowColombia = TimeZoneInfo.ConvertTime(
+            nowUtc,
+            colombiaTimeZone);
 
-        var startOfLast30DaysUtc =
-            startOfTodayUtc.AddDays(-29);
+        var startOfTodayColombia = new DateTimeOffset(
+            nowColombia.Year,
+            nowColombia.Month,
+            nowColombia.Day,
+            0,
+            0,
+            0,
+            nowColombia.Offset);
+
+        var startOfTomorrowColombia =
+            startOfTodayColombia.AddDays(1);
+
+        var startOfLast7DaysColombia =
+            startOfTodayColombia.AddDays(-6);
+
+        var startOfLast30DaysColombia =
+            startOfTodayColombia.AddDays(-29);
 
         var daysSinceMonday =
-            ((int)startOfTodayUtc.DayOfWeek + 6) % 7;
+            ((int)startOfTodayColombia.DayOfWeek + 6) % 7;
 
-        var startOfWeekUtc =
-            startOfTodayUtc.AddDays(-daysSinceMonday);
+        var startOfWeekColombia =
+            startOfTodayColombia.AddDays(-daysSinceMonday);
 
-        var startOfMonthUtc = new DateTimeOffset(
-            nowUtc.Year,
-            nowUtc.Month,
+        var startOfMonthColombia = new DateTimeOffset(
+            nowColombia.Year,
+            nowColombia.Month,
             1,
             0,
             0,
             0,
-            TimeSpan.Zero);
+            nowColombia.Offset);
+
+        var startOfTodayUtc =
+            startOfTodayColombia.ToUniversalTime();
+
+        var startOfTomorrowUtc =
+            startOfTomorrowColombia.ToUniversalTime();
+
+        var startOfLast7DaysUtc =
+            startOfLast7DaysColombia.ToUniversalTime();
+
+        var startOfLast30DaysUtc =
+            startOfLast30DaysColombia.ToUniversalTime();
+
+        var startOfWeekUtc =
+            startOfWeekColombia.ToUniversalTime();
+
+        var startOfMonthUtc =
+            startOfMonthColombia.ToUniversalTime();
 
         var userMetrics = await dbContext.Users
             .AsNoTracking()
@@ -49,7 +84,8 @@ public sealed class AdministrationDashboardReader(
                 UsersActiveToday = group.Count(
                     user =>
                         user.LastLoginAtUtc != null &&
-                        user.LastLoginAtUtc >= startOfTodayUtc),
+                        user.LastLoginAtUtc >= startOfTodayUtc &&
+                        user.LastLoginAtUtc < startOfTomorrowUtc),
 
                 UsersActiveLast7Days = group.Count(
                     user =>
@@ -72,7 +108,8 @@ public sealed class AdministrationDashboardReader(
 
                 PreQuotesToday = group.Count(
                     preQuote =>
-                        preQuote.CreatedAtUtc >= startOfTodayUtc),
+                        preQuote.CreatedAtUtc >= startOfTodayUtc &&
+                        preQuote.CreatedAtUtc < startOfTomorrowUtc),
 
                 PreQuotesThisWeek = group.Count(
                     preQuote =>
