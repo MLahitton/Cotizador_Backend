@@ -30,6 +30,19 @@ public sealed class GetProjectsQueryValidator
 
         RuleFor(query => query.PageSize)
             .InclusiveBetween(1, 100);
+
+        RuleFor(query => query.Attention)
+         .Must(BeValidAttention);
+    }
+
+        private static bool BeValidAttention(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return true;
+        }
+
+        return value.Trim().ToLowerInvariant() is "pending";
     }
 
     private static bool BeValidStatus(string? value)

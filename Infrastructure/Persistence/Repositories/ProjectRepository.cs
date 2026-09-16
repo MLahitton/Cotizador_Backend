@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Projects;
 using Domain.Projects;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Domain.PreQuotes;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -144,7 +145,35 @@ public sealed class ProjectRepository(ApplicationDbContext dbContext)
             {
                 query = query.Where(project =>
                     project.Client.DocumentType == documentType);
+                
             }
+
+            if (criteria.PendingAttentionOnly)
+{
+    query = query.Where(project =>
+        dbContext.Requirements.Any(requirement =>
+            requirement.PreQuote.ProjectId == project.Id
+            && requirement.IsActive
+            && requirement.Status != RequirementStatus.Cancelled
+            && requirement.Status != RequirementStatus.Superseded
+            && requirement.SupersededByRequirementId == null
+            && (
+                requirement.Status == RequirementStatus.Processing
+                ||
+                dbContext.RequirementTechnicalProposals
+                    .Where(proposal =>
+                        proposal.RequirementId == requirement.Id)
+                    .OrderByDescending(proposal =>
+                        proposal.CreatedAtUtc)
+                    .ThenByDescending(proposal =>
+                        proposal.Id)
+                    .Select(proposal =>
+                        (RequirementTechnicalProposalStatus?)
+                            proposal.Status)
+                    .FirstOrDefault()
+                    == RequirementTechnicalProposalStatus.RequiresReview
+            )));
+}
 
             if (criteria.Search is { } search)
             {

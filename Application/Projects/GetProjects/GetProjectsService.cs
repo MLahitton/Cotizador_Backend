@@ -73,6 +73,10 @@ public sealed class GetProjectsService(
                     ParseOptional<ClientType>(query.ClientType),
                     ParseOptional<ClientDocumentType>(
                         query.DocumentType),
+                    string.Equals(
+                        query.Attention?.Trim(),
+                        "pending",
+                        StringComparison.OrdinalIgnoreCase),
                     query.Page,
                     query.PageSize),
                 cancellationToken);

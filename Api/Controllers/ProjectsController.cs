@@ -35,6 +35,7 @@ public sealed class ProjectsController(
         [FromQuery] Guid? clientId = null,
         [FromQuery] string? clientType = null,
         [FromQuery] string? documentType = null,
+        [FromQuery] string? attention = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
@@ -46,6 +47,7 @@ public sealed class ProjectsController(
                 clientId,
                 clientType,
                 documentType,
+                attention,
                 page,
                 pageSize),
             cancellationToken);

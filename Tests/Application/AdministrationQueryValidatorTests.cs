@@ -20,7 +20,9 @@ public sealed class AdministrationQueryValidatorTests
             50);
 
         var result = await new GetClientsQueryValidator()
-            .ValidateAsync(query, TestContext.Current.CancellationToken);
+            .ValidateAsync(
+                query,
+                TestContext.Current.CancellationToken);
 
         Assert.True(result.IsValid);
     }
@@ -42,7 +44,9 @@ public sealed class AdministrationQueryValidatorTests
             20);
 
         var result = await new GetClientsQueryValidator()
-            .ValidateAsync(query, TestContext.Current.CancellationToken);
+            .ValidateAsync(
+                query,
+                TestContext.Current.CancellationToken);
 
         Assert.False(result.IsValid);
     }
@@ -56,11 +60,14 @@ public sealed class AdministrationQueryValidatorTests
             Guid.NewGuid(),
             "Person",
             "CitizenshipCard",
+            null,
             1,
             100);
 
         var result = await new GetProjectsQueryValidator()
-            .ValidateAsync(query, TestContext.Current.CancellationToken);
+            .ValidateAsync(
+                query,
+                TestContext.Current.CancellationToken);
 
         Assert.True(result.IsValid);
     }
@@ -80,11 +87,14 @@ public sealed class AdministrationQueryValidatorTests
             null,
             clientType,
             documentType,
+            null,
             1,
             20);
 
         var result = await new GetProjectsQueryValidator()
-            .ValidateAsync(query, TestContext.Current.CancellationToken);
+            .ValidateAsync(
+                query,
+                TestContext.Current.CancellationToken);
 
         Assert.False(result.IsValid);
     }
@@ -101,7 +111,9 @@ public sealed class AdministrationQueryValidatorTests
             isActive);
 
         var result = await new SetProjectActivationCommandValidator()
-            .ValidateAsync(command, TestContext.Current.CancellationToken);
+            .ValidateAsync(
+                command,
+                TestContext.Current.CancellationToken);
 
         Assert.False(result.IsValid);
     }

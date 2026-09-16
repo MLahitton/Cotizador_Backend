@@ -6,5 +6,6 @@ public sealed record GetProjectsQuery(
     Guid? ClientId,
     string? ClientType,
     string? DocumentType,
+    string? Attention,
     int Page,
     int PageSize);

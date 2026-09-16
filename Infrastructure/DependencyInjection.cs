@@ -22,6 +22,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Application.Common.Abstractions.Administration;
 using Infrastructure.Persistence.Queries;
+using Application.Common.Abstractions.Dashboard;
 
 
 namespace Infrastructure;
@@ -193,6 +194,10 @@ public static class DependencyInjection
             PreQuoteStoredDocumentRepository>();
         services.AddScoped<IPreQuoteDraftRepository, PreQuoteDraftRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+
+        services.AddScoped<
+            IUserDashboardReader,
+            UserDashboardReader>();
 
         services.AddScoped<
              IAdministrationDashboardReader,

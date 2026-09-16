@@ -53,6 +53,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Application.Administration.GetAdminDashboard;
 using Application.Administration.GetAdminUsers;
 using Application.Administration.GetAdminPreQuotes;
+using Application.Dashboard.GetUserDashboard;
 
 namespace Application;
 
@@ -135,6 +136,7 @@ public static class DependencyInjection
         services.AddScoped<SetProjectActivationService>();
         services.AddScoped<UpdateProjectService>();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddScoped<GetUserDashboardService>();
         services.AddScoped<GetAdminDashboardService>();
         services.AddScoped<GetAdminUsersService>();
         services.AddScoped<GetAdminPreQuotesService>();

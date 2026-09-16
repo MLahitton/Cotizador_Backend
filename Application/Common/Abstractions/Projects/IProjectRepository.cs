@@ -48,6 +48,7 @@ public sealed record ProjectSearchCriteria(
     Guid? ClientId,
     ClientType? ClientType,
     ClientDocumentType? DocumentType,
+    bool PendingAttentionOnly,
     int Page,
     int PageSize);
 
