@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using Application.Common.Abstractions.DocumentProcessing;
@@ -65,6 +67,11 @@ public sealed class CotizadorAi2DocumentProcessingClient(
                     request,
                     payload,
                     payloadDiagnostics);
+
+                await TryWriteRawAi2ResponseAsync(
+                    payload,
+                    request,
+                    timeoutSource.Token);
                 return DocumentProcessingClientResult.Success(
                     adapter.Adapt(payload, request));
             }
@@ -157,6 +164,53 @@ public sealed class CotizadorAi2DocumentProcessingClient(
             payloadDiagnostics.ExtractionModel,
             payloadDiagnostics.ExtractionElementCount,
             payloadDiagnostics.ExtractionStatus);
+    }
+
+    private async Task TryWriteRawAi2ResponseAsync(
+        string payload,
+        DocumentProcessingClientRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            if (!string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var baseDirectory = Directory.GetCurrentDirectory();
+            var debugDirectory = Path.Combine(
+                baseDirectory,
+                "debug",
+                "ai2-responses");
+            Directory.CreateDirectory(debugDirectory);
+
+            var timestamp = DateTimeOffset.UtcNow.ToString(
+                "yyyyMMdd_HHmmssfff",
+                CultureInfo.InvariantCulture);
+            var requirementId = request.RequirementId?.ToString("N") ?? "unknown";
+            var processingAttemptId = request.ProcessingAttemptId.ToString("N");
+            var filePath = Path.Combine(
+                debugDirectory,
+                $"{timestamp}_{requirementId}_{processingAttemptId}.json");
+
+            await File.WriteAllTextAsync(filePath, payload, Encoding.UTF8, cancellationToken);
+
+            logger.LogInformation(
+                "AI2 raw response captured. Path={Path} RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId}",
+                filePath,
+                request.RequirementId,
+                request.ProcessingAttemptId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Failed to persist AI2 raw response. RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId}",
+                request.RequirementId,
+                request.ProcessingAttemptId);
+        }
     }
 
     private static Ai2PayloadDiagnostics InspectPayload(string? payload)
