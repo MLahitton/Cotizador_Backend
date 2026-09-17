@@ -23,6 +23,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Application.Common.Abstractions.Administration;
 using Infrastructure.Persistence.Queries;
 using Application.Common.Abstractions.Dashboard;
+using Application.Common.Abstractions.Search;
 
 
 namespace Infrastructure;
@@ -198,6 +199,10 @@ public static class DependencyInjection
         services.AddScoped<
             IUserDashboardReader,
             UserDashboardReader>();
+
+        services.AddScoped<
+            IGlobalSearchReader,
+            GlobalSearchReader>();
 
         services.AddScoped<
              IAdministrationDashboardReader,

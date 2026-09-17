@@ -54,6 +54,7 @@ using Application.Administration.GetAdminDashboard;
 using Application.Administration.GetAdminUsers;
 using Application.Administration.GetAdminPreQuotes;
 using Application.Dashboard.GetUserDashboard;
+using Application.Search.GetGlobalSearch;
 
 namespace Application;
 
@@ -140,6 +141,7 @@ public static class DependencyInjection
         services.AddScoped<GetAdminDashboardService>();
         services.AddScoped<GetAdminUsersService>();
         services.AddScoped<GetAdminPreQuotesService>();
+        services.AddScoped<GetGlobalSearchService>();
 
         return services;
     }
