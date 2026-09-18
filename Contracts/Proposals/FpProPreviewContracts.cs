@@ -31,7 +31,8 @@ public sealed record GenerateFpProQuotationReportRequest(
     string? Order,
     string? Description,
     string? Location,
-    int? ProfileBarCount);
+    int? ProfileBarCount,
+    int? DoorCount);
 
 public sealed record GenerateFpProQuotationItemRequest(
     string? ItemNumber,
@@ -62,7 +63,8 @@ public sealed record FpProReportResponse(
     int? Revision,
     int ItemsDetected,
     decimal? AluminumWastePercent,
-    int? ProfileBarCount);
+    int? ProfileBarCount,
+    int? DoorCount);
 
 public sealed record FpProPreviewItemResponse(
     string ItemNumber,

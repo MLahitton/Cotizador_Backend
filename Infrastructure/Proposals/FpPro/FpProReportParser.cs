@@ -55,9 +55,10 @@ public sealed partial class FpProReportParser : IFpProReportParser
         {
             items = ParseListItems(tokens).ToArray();
         }
+        var doorCount = ParseDoorCount(items);
 
         return new FpProReportPreviewData(
-            new FpProReportData(orderId, description, revision, items.Length, aluminumWastePercent, profileBarCount),
+            new FpProReportData(orderId, description, revision, items.Length, aluminumWastePercent, profileBarCount, doorCount),
             items,
             items.SelectMany(item => item.PendingFields)
                 .Concat(aluminumWastePercent is null ? ["aluminumWastePercent"] : [])
@@ -66,6 +67,16 @@ public sealed partial class FpProReportParser : IFpProReportParser
                 .ToArray());
     }   
 
+    internal static int? ParseDoorCount(IReadOnlyList<FpProPreviewItemData> items)
+{
+    var total = items
+        .Where(item => item.FpProProfiles.Any(profile =>
+            profile.Contains("KONCEPT70", StringComparison.OrdinalIgnoreCase)))
+        .Sum(item => item.Quantity ?? 0);
+
+    return total == 0 ? null : total;
+}
+        
     internal static decimal ParseLatinDecimal(string value)
     {
         var normalized = value.Trim().Replace(".", string.Empty, StringComparison.Ordinal).Replace(',', '.');

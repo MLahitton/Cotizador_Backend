@@ -122,7 +122,8 @@ public sealed class QuotationWorkbookGeneratorTests
                 15m,
                 74.5m,
                 5m,
-                request.Report.ProfileBarCount)
+                request.Report.ProfileBarCount,
+                request.Report.DoorCount)
         };
         var generator = new QuotationWorkbookGenerator();
 
@@ -840,7 +841,7 @@ public sealed class QuotationWorkbookGeneratorTests
             : preview.Items.Take(take.Value).ToArray();
 
         return new QuotationWorkbookRequest(
-            new FpProQuotationReportInput(order, preview.Report.Description, "BGA", preview.Report.AluminumWastePercent!.Value, 60m, 0m, preview.Report.ProfileBarCount),
+            new FpProQuotationReportInput(order, preview.Report.Description, "BGA", preview.Report.AluminumWastePercent!.Value, 60m, 0m, preview.Report.ProfileBarCount,preview.Report.DoorCount),
             order,
             "Cliente S&G",
             preview.Report.Description ?? order,
@@ -912,9 +913,21 @@ public sealed class QuotationWorkbookGeneratorTests
         if (order == "S&G648")
         {
             Assert.Equal("238", ReadCell(archive, worksheet, "T369"));
+            Assert.Equal("8", ReadCell(archive, worksheet, "V369"));
             Assert.Equal("15.613", ReadCell(archive, worksheet, "BK50"));
             Assert.Equal("16.605", ReadCell(archive, worksheet, "BK64"));
             Assert.Equal("15.495", ReadCell(archive, worksheet, "BK113"));
+        }
+        if (order == "S&G1043")
+        {
+            Assert.Equal("147", ReadCell(archive, worksheet, "T369"));
+            Assert.Equal("3", ReadCell(archive, worksheet, "V369"));
+        }
+
+        if (order == "S&G1049")
+        {
+            Assert.Equal("242", ReadCell(archive, worksheet, "T369"));
+            Assert.Equal("12", ReadCell(archive, worksheet, "V369"));
         }
     }
 

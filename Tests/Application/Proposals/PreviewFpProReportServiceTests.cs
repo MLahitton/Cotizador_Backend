@@ -17,7 +17,7 @@ public sealed class PreviewFpProReportServiceTests
         var resolver = Substitute.For<IFpProPreviewConfigurationResolver>();
         var moduleInference = Substitute.For<IFpProModuleInferenceService>();
         var preview = new FpProReportPreviewData(
-            new FpProReportData("S&G648", "CASA PS", 6, 1, 20m, null),
+            new FpProReportData("S&G648", "CASA PS", 6, 1, 20m, null, null),
             [new FpProPreviewItemData(
                 "01",
                 "V-1",
@@ -31,7 +31,7 @@ public sealed class PreviewFpProReportServiceTests
                 1,
                 14.56m,
                 null,
-                [],
+                [], 
                 null,
                 null,
                 null,
@@ -216,7 +216,7 @@ public sealed class PreviewFpProReportServiceTests
             []);
 
         return new FpProReportPreviewData(
-            new FpProReportData("S&G648", "CASA PS", 6, 1, 20m, null),
+            new FpProReportData("S&G648", "CASA PS", 6, 1, 20m, null, null),
             [item],
             pendingFields);
     }

@@ -80,7 +80,14 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
     {
         SetNumber(worksheet, "T369", report.ProfileBarCount.Value);
     }
+
+    if (report.DoorCount is not null)
+    {
+        SetNumber(worksheet, "V369", report.DoorCount.Value);
+    }
 }
+
+        
 
     private static void WriteGlobalHeader(XDocument worksheet, QuotationWorkbookRequest request)
     {

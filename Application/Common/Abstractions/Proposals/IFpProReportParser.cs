@@ -24,7 +24,8 @@ public sealed record FpProReportData(
     int? Revision,
     int ItemsDetected,
     decimal? AluminumWastePercent,
-    int? ProfileBarCount);
+    int? ProfileBarCount,
+    int? DoorCount);
 
 public sealed record FpProPreviewItemData(
     string ItemNumber,
@@ -112,7 +113,8 @@ public sealed record FpProQuotationReportInput(
     decimal AluminumWastePercent,
     decimal BenefitPercent,
     decimal CommissionPercent,
-    int? ProfileBarCount);
+    int? ProfileBarCount,
+    int? DoorCount);
 
 public sealed record FpProQuotationItemInput(
     string ItemNumber,

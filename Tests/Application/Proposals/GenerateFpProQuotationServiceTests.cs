@@ -106,6 +106,7 @@ public sealed class GenerateFpProQuotationServiceTests
                 aluminumWastePercent,
                 benefitPercent,
                 commissionPercent,
+                null,
                 null)
         };
 
@@ -132,7 +133,7 @@ public sealed class GenerateFpProQuotationServiceTests
             generator);
         var item = CreateItem();
         var request = new QuotationWorkbookRequest(
-            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null),
+            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null, null),
             "Casa PS",
             "Cliente",
             "Casa PS",
@@ -158,7 +159,7 @@ public sealed class GenerateFpProQuotationServiceTests
         var service = new GenerateFpProQuotationService(CreateCatalogReader(), generator);
         var item = CreateItem();
         var request = new QuotationWorkbookRequest(
-            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null),
+            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null, null),
             "Casa PS",
             "Cliente",
             "Casa PS",
@@ -274,7 +275,7 @@ public sealed class GenerateFpProQuotationServiceTests
 
     private static QuotationWorkbookRequest CreateRequest(FpProQuotationItemInput? item = null) =>
         new(
-            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null),
+            new FpProQuotationReportInput("S&G648", "CASA PS", "BGA", 20m, 60m, 0m, null, null),
             "Casa PS",
             "Cliente",
             "Casa PS",
