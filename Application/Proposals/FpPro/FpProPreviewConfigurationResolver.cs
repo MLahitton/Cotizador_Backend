@@ -49,17 +49,18 @@ public sealed class FpProPreviewConfigurationResolver(
             lockValue = null;
         }
 
-        var pendingFields = BuildPendingFields(system, glassDescription, finish, lockValue);
+        var glassPrice = ResolveGlassPrice(item);
+            var pendingFields = BuildPendingFields(system, glassDescription, finish, lockValue, glassPrice);
 
-        return item with
-        {
-            System = system,
-            GlassDescription = glassDescription,
-            Finish = finish,
-            Lock = lockValue,
-            GlassPrice = null,
-            PendingFields = pendingFields
-        };
+            return item with
+            {
+                System = system,
+                GlassDescription = glassDescription,
+                Finish = finish,
+                Lock = lockValue,
+                GlassPrice = glassPrice,
+                PendingFields = pendingFields
+            };
     }
 
     private static string? ResolveSystem(
@@ -169,11 +170,81 @@ public sealed class FpProPreviewConfigurationResolver(
             string.Equals(value.Label, expected, StringComparison.Ordinal))?.Value;
     }
 
+    private static decimal? ResolveGlassPrice(FpProPreviewItemData item)
+{
+    if (item.Glass.Count == 0 || item.Quantity is null or <= 0)
+    {
+        return null;
+    }
+
+    var groups = item.Glass
+        .Select(pane => new
+        {
+            Rate = ResolveGlassRate(pane),
+            Area = ResolvePaneAreaM2(pane)
+        })
+        .ToArray();
+
+    if (groups.Any(value => value.Rate is null || value.Area is null))
+    {
+        return null;
+    }
+
+    var byRate = groups
+        .GroupBy(value => value.Rate!.Value)
+        .Select(group => new
+        {
+            Rate = group.Key,
+            Area = group.Sum(value => value.Area!.Value)
+        })
+        .ToArray();
+
+    if (byRate.Length == 1)
+    {
+        var areaPerStructure = byRate[0].Area / item.Quantity.Value;
+        var billableArea = Math.Max(1m, areaPerStructure);
+        return Math.Round(billableArea * byRate[0].Rate, 1, MidpointRounding.AwayFromZero);
+    }
+
+    if (byRate.Any(value => value.Area / item.Quantity.Value < 1m))
+    {
+        return null;
+    }
+
+    var total = byRate.Sum(value => (value.Area / item.Quantity.Value) * value.Rate);
+    return Math.Round(total, 1, MidpointRounding.AwayFromZero);
+}
+
+private static decimal? ResolvePaneAreaM2(FpProGlassPaneData pane)
+{
+    if (pane.WidthMm is null or <= 0 || pane.HeightMm is null or <= 0 || pane.Quantity is null or <= 0)
+    {
+        return null;
+    }
+
+    return (pane.WidthMm.Value / 1000m)
+        * (pane.HeightMm.Value / 1000m)
+        * pane.Quantity.Value;
+}
+
+private static decimal? ResolveGlassRate(FpProGlassPaneData pane)
+{
+    return NormalizeToken(pane.Code) switch
+    {
+        "05MM" => 74000m,
+        "06MM" => 74000m,
+        "08MM" => 90000m,
+        "10MM" => 126000m,
+        _ => null
+    };
+}
+
     private static string[] BuildPendingFields(
-        string? system,
-        string? glassDescription,
-        string? finish,
-        string? lockValue)
+    string? system,
+    string? glassDescription,
+    string? finish,
+    string? lockValue,
+    decimal? glassPrice)
     {
         var result = new List<string>();
         if (system is null)
@@ -191,12 +262,15 @@ public sealed class FpProPreviewConfigurationResolver(
             result.Add(FinishField);
         }
 
+        if (glassPrice is null)
+        {
+            result.Add(GlassPriceField);
+        }
         if (lockValue is null)
         {
             result.Add(LockField);
         }
 
-        result.Add(GlassPriceField);
         result.Add(ModuleField);
         return result.ToArray();
     }

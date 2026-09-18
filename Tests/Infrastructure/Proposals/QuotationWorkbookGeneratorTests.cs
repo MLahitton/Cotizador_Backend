@@ -71,7 +71,7 @@ public sealed class QuotationWorkbookGeneratorTests
         Assert.Equal("0.22", ReadCell(archive, worksheet, "T13"));
         Assert.Equal("101352.1", ReadCell(archive, worksheet, "Q16"));
         Assert.Equal("629905.1", ReadCell(archive, worksheet, "R16"));
-        Assert.Equal("100000", ReadCell(archive, worksheet, "S16"));
+        Assert.Equal("1734416.0", ReadCell(archive, worksheet, "S16"));
         Assert.Equal("0.6", ReadCell(archive, worksheet, "AG13"));
         Assert.Equal("0", ReadCell(archive, worksheet, "AI13"));
         Assert.Equal("3", ReadCell(archive, worksheet, "BE15"));
@@ -857,7 +857,7 @@ public sealed class QuotationWorkbookGeneratorTests
                     item.System ?? FixtureSystem,
                     item.GlassDescription ?? FixtureGlass,
                     item.Finish ?? FixtureFinish,
-                    100000m,
+                    Required(item.GlassPrice, item.ItemNumber, "glassPrice"),
                     Required(item.AccessoriesBase, item.ItemNumber, "accessoriesBase"),
                     Required(item.AluminumBase, item.ItemNumber, "aluminumBase"),
                     Required(item.SelectedThicknessMm, item.ItemNumber, "selectedThicknessMm"),

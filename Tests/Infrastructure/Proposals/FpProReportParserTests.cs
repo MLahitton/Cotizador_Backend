@@ -157,7 +157,7 @@ public sealed class FpProReportParserTests
         Assert.Equal("COMPOSICION MONOLITICO TEMPLADO 10 MM INC", fixedFermo.GlassDescription?.Trim());
         Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", fixedFermo.Finish?.Trim());
         Assert.Equal("N.A", fixedFermo.Lock);
-        Assert.Equal(["glassPrice", "module"], fixedFermo.PendingFields);
+        Assert.Equal(["module"], fixedFermo.PendingFields);
 
         var napoles = preview.Items.First(item =>
             item.FpProProfiles.SequenceEqual(["KONCEPT70", "ANGULOS"])
@@ -259,8 +259,7 @@ public sealed class FpProReportParserTests
         Assert.Equal("COMPOSICION MONOLITICO TEMPLADO 5 MM INC", item01.GlassDescription?.Trim());
         Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", item01.Finish?.Trim());
         Assert.Equal("CIERRE EMBUTIDO DE IMPACTO AUTOMATICO", item01.Lock);
-        Assert.Equal(["glassPrice", "module"], item01.PendingFields);
-
+        Assert.Equal(["module"], item01.PendingFields);
         var item03 = preview.Items.Single(item => item.ItemNumber == "03");
         Assert.Equal(["KONCEPT50", "ALFAJIA"], item03.FpProProfiles);
         Assert.Equal("VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA", item03.System?.Trim());

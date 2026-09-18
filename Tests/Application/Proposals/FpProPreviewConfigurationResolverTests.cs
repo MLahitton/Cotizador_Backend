@@ -99,12 +99,18 @@ public sealed class FpProPreviewConfigurationResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_WithResolvedValues_LeavesOnlyGlassPricePending()
+    public async Task ResolveAsync_WithResolvedValuesAndSafeGlassPrice_LeavesOnlyModulePending()
     {
         var resolver = CreateResolver();
 
         var result = await resolver.ResolveAsync(
-            Preview(Item(["KONCEPT50", "ALFAJIA"], selectedThicknessMm: 5m)),
+            Preview(Item(
+                ["KONCEPT50", "ALFAJIA"],
+                selectedThicknessMm: 5m,
+                glass:
+                [
+                    new FpProGlassPaneData("05MM", 5m, 1000, 1000, 1)
+                ])),
             TestContext.Current.CancellationToken);
 
         var item = Assert.Single(result.Items);
@@ -112,10 +118,141 @@ public sealed class FpProPreviewConfigurationResolverTests
         Assert.Equal("COMPOSICION MONOLITICO TEMPLADO 5 MM INC", item.GlassDescription);
         Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", item.Finish);
         Assert.Equal("CIERRE EMBUTIDO DE IMPACTO AUTOMATICO", item.Lock);
-        Assert.Null(item.GlassPrice);
-        Assert.Equal(["glassPrice", "module"], item.PendingFields);
-        Assert.Equal(["glassPrice", "module"], result.PendingFields);
+        Assert.Equal(74000m, item.GlassPrice);
+        Assert.Equal(["module"], item.PendingFields);
+        Assert.Equal(["module"], result.PendingFields);
     }
+
+        [Fact]
+    public async Task ResolveAsync_WithUnknownGlassCode_KeepsGlassPricePending()
+    {
+        var resolver = CreateResolver();
+
+        var result = await resolver.ResolveAsync(
+            Preview(Item(
+                ["KONCEPT50", "ALFAJIA"],
+                selectedThicknessMm: 5m,
+                glass:
+                [
+                    new FpProGlassPaneData("LAMINADO", null, 1000, 1000, 1)
+                ])),
+            TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(result.Items);
+        Assert.Null(item.GlassPrice);
+        Assert.Contains("glassPrice", item.PendingFields);
+        Assert.Contains("glassPrice", result.PendingFields);
+    }
+
+    [Theory]
+[InlineData("05MM", 5, 74000)]
+[InlineData("06MM", 6, 74000)]
+[InlineData("08MM", 8, 90000)]
+[InlineData("10MM", 10, 126000)]
+public async Task ResolveAsync_WithKnownGlassCode_CalculatesSafeGlassPrice(
+    string code,
+    decimal thickness,
+    decimal expectedGlassPrice)
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT50", "ALFAJIA"],
+            selectedThicknessMm: thickness,
+            glass:
+            [
+                new FpProGlassPaneData(code, thickness, 1000, 1000, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+    Assert.Equal(expectedGlassPrice, item.GlassPrice);
+    Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithSingleKnownGlassBelowOneSquareMeter_AppliesOneSquareMeterMinimum()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT50", "ALFAJIA"],
+            selectedThicknessMm: 5m,
+            glass:
+            [
+                new FpProGlassPaneData("05MM", 5m, 500, 500, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+    Assert.Equal(74000m, item.GlassPrice);
+    Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithSingleKnownGlassAboveOneSquareMeter_UsesMeasuredArea()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT50", "ALFAJIA"],
+            selectedThicknessMm: 6m,
+            glass:
+            [
+                new FpProGlassPaneData("06MM", 6m, 1890, 1224, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+    Assert.Equal(171188.6m, item.GlassPrice);
+    Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithMixedKnownGlassAboveOneSquareMeterPerClass_CalculatesCombinedPrice()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT50", "ALFAJIA"],
+            selectedThicknessMm: 8m,
+            glass:
+            [
+                new FpProGlassPaneData("05MM", 5m, 2000, 1000, 1),
+                new FpProGlassPaneData("08MM", 8m, 3000, 1000, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+    Assert.Equal(418000m, item.GlassPrice);
+    Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithMixedKnownGlassBelowOneSquareMeterForAnyClass_KeepsGlassPricePending()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT50", "ALFAJIA"],
+            selectedThicknessMm: 8m,
+            glass:
+            [
+                new FpProGlassPaneData("05MM", 5m, 500, 500, 1),
+                new FpProGlassPaneData("08MM", 8m, 3000, 1000, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+    Assert.Null(item.GlassPrice);
+    Assert.Contains("glassPrice", item.PendingFields);
+    Assert.Contains("glassPrice", result.PendingFields);
+}
 
     private static FpProPreviewConfigurationResolver CreateResolver()
     {
@@ -151,10 +288,11 @@ public sealed class FpProPreviewConfigurationResolverTests
         new(new FpProReportData("S&G", "Fixture", 1, 1, 20m, null, null), [item], item.PendingFields);
 
     private static FpProPreviewItemData Item(
-        IReadOnlyList<string> profiles,
-        decimal? selectedThicknessMm = 5m,
-        string? notes = null,
-        IReadOnlyList<string>? technicalDescriptions = null) =>
+    IReadOnlyList<string> profiles,
+    decimal? selectedThicknessMm = 5m,
+    string? notes = null,
+    IReadOnlyList<string>? technicalDescriptions = null,
+    IReadOnlyList<FpProGlassPaneData>? glass = null) =>
         new(
             ItemNumber: "01",
             Typology: "V-1",
@@ -168,8 +306,7 @@ public sealed class FpProPreviewConfigurationResolverTests
             Quantity: 1,
             NominalAreaM2: 1m,
             Notes: notes,
-            Glass: [],
-            SelectedThicknessMm: selectedThicknessMm,
+            Glass: glass ?? [],            SelectedThicknessMm: selectedThicknessMm,
             System: null,
             GlassDescription: null,
             Finish: null,
