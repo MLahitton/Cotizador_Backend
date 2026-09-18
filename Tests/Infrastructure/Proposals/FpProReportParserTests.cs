@@ -65,6 +65,17 @@ public sealed class FpProReportParserTests
             TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData("S&G648_t2.PDF")]
+    [InlineData("S&G1049.PDF")]
+    [InlineData("S&G1043.PDF")]
+    public async Task Debug_ProfileBarCount(string fileName)
+    {
+        var preview = await ParseFixtureAsync(fileName);
+
+        Console.WriteLine($"{fileName} -> ProfileBarCount: {preview.Report.ProfileBarCount}");
+    }
+
     [Fact]
     public async Task ParseAsync_CasaPsFixture_ExtractsPreviewItemsAndItem01()
     {
@@ -72,6 +83,7 @@ public sealed class FpProReportParserTests
 
         Assert.Equal("S&G648", preview.Report.OrderId);
         Assert.Equal(22m, preview.Report.AluminumWastePercent);
+        Assert.Equal(238, preview.Report.ProfileBarCount);
         Assert.Equal(28, preview.Report.ItemsDetected);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V-1", item01.Typology);
@@ -166,6 +178,7 @@ public sealed class FpProReportParserTests
         var preview = await ParseFixtureAsync("S&G1043.PDF");
 
         Assert.Equal(20m, preview.Report.AluminumWastePercent);
+        Assert.Equal(147, preview.Report.ProfileBarCount);
         Assert.Equal(13, preview.Report.ItemsDetected);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V1", item01.Typology);
@@ -214,6 +227,7 @@ public sealed class FpProReportParserTests
         var preview = await ParseFixtureAsync("S&G1049.PDF");
 
         Assert.Equal(15m, preview.Report.AluminumWastePercent);
+        Assert.Equal(242, preview.Report.ProfileBarCount);
         Assert.Equal(40, preview.Report.ItemsDetected);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V-1", item01.Typology);

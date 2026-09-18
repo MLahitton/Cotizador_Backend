@@ -121,7 +121,8 @@ public sealed class QuotationWorkbookGeneratorTests
                 request.Report.Location,
                 15m,
                 74.5m,
-                5m)
+                5m,
+                request.Report.ProfileBarCount)
         };
         var generator = new QuotationWorkbookGenerator();
 
@@ -839,7 +840,7 @@ public sealed class QuotationWorkbookGeneratorTests
             : preview.Items.Take(take.Value).ToArray();
 
         return new QuotationWorkbookRequest(
-            new FpProQuotationReportInput(order, preview.Report.Description, "BGA", preview.Report.AluminumWastePercent!.Value, 60m, 0m),
+            new FpProQuotationReportInput(order, preview.Report.Description, "BGA", preview.Report.AluminumWastePercent!.Value, 60m, 0m, preview.Report.ProfileBarCount),
             order,
             "Cliente S&G",
             preview.Report.Description ?? order,
@@ -910,6 +911,7 @@ public sealed class QuotationWorkbookGeneratorTests
         Assert.Equal((expectedAluminumWastePercent / 100m).ToString(CultureInfo.InvariantCulture), ReadCell(archive, worksheet, "T13"));
         if (order == "S&G648")
         {
+            Assert.Equal("238", ReadCell(archive, worksheet, "T369"));
             Assert.Equal("15.613", ReadCell(archive, worksheet, "BK50"));
             Assert.Equal("16.605", ReadCell(archive, worksheet, "BK64"));
             Assert.Equal("15.495", ReadCell(archive, worksheet, "BK113"));

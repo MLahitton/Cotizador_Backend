@@ -44,6 +44,8 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
 
             WriteGlobalHeader(worksheet, request);
             WriteGlobalPercentages(worksheet, request.Report);
+            WriteGlobalCounts(worksheet, request.Report);
+
             for (var index = 0; index < request.Items.Count; index++)
             {
                 WriteItem(worksheet, request.Items[index], ItemBaseRow(index));
@@ -71,6 +73,14 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
         SetNumber(worksheet, "AG13", ToExcelPercent(report.BenefitPercent));
         SetNumber(worksheet, "AI13", ToExcelPercent(report.CommissionPercent));
     }
+
+    private static void WriteGlobalCounts(XDocument worksheet, FpProQuotationReportInput report)
+{
+    if (report.ProfileBarCount is not null)
+    {
+        SetNumber(worksheet, "T369", report.ProfileBarCount.Value);
+    }
+}
 
     private static void WriteGlobalHeader(XDocument worksheet, QuotationWorkbookRequest request)
     {

@@ -47,23 +47,24 @@ public sealed partial class FpProReportParser : IFpProReportParser
             ?? ValueAfter(tokens, "Revisión")
             ?? ValueAfter(tokens, "Revisi"));
         var aluminumWastePercent = FirstDecimal(fullText, @"Retal\s+\S*til\s*\(\s*([0-9]+(?:[,.][0-9]+)?)\s*%\s*\)");
+        var profileBarCount = ParseProfileBarCount(fullText);
 
         var weights = ParseStructureWeights(pages);
-        var items = ParseDetailedItems(pages, weights).ToArray();
+        var items = ParseDetailedItems(pages, weights).ToArray();   
         if (items.Length == 0)
         {
             items = ParseListItems(tokens).ToArray();
         }
 
         return new FpProReportPreviewData(
-            new FpProReportData(orderId, description, revision, items.Length, aluminumWastePercent),
+            new FpProReportData(orderId, description, revision, items.Length, aluminumWastePercent, profileBarCount),
             items,
             items.SelectMany(item => item.PendingFields)
                 .Concat(aluminumWastePercent is null ? ["aluminumWastePercent"] : [])
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .ToArray());
-    }
+    }   
 
     internal static decimal ParseLatinDecimal(string value)
     {
@@ -602,6 +603,106 @@ public sealed partial class FpProReportParser : IFpProReportParser
             .ToArray();
     }
 
+    internal static int? ParseProfileBarCount(string content)
+{
+    return ParseCostProfileBarCount(content);
+}
+private static int? ParseCostProfileBarCount(string content)
+{
+    var sectionStart = content.IndexOf(
+        "Costos Pedido Completo - Barras",
+        StringComparison.OrdinalIgnoreCase);
+
+    if (sectionStart < 0)
+    {
+        return null;
+    }
+
+    var sectionEnd = content.IndexOf(
+        "Accesorios",
+        sectionStart,
+        StringComparison.OrdinalIgnoreCase);
+
+    if (sectionEnd < 0)
+    {
+        sectionEnd = content.Length;
+    }
+
+    var section = content[sectionStart..sectionEnd];
+    var matches = ProfileBarPackedCostRegex().Matches(section);
+
+    if (matches.Count == 0)
+    {
+        return null;
+    }
+
+    var total = 0;
+
+    foreach (Match match in matches)
+    {
+        var count = ResolveProfileBarCount(
+            match.Groups["rawCount"].Value,
+            ParseLatinDecimal(match.Groups["length"].Value),
+            ParseLatinDecimal(match.Groups["unitPrice"].Value),
+            ParseLatinDecimal(match.Groups["totalPrice"].Value));
+
+        if (count is > 0)
+        {
+            total += count.Value;
+        }
+    }
+
+    return total == 0 ? null : total;
+}
+
+
+private static int? ResolveProfileBarCount(
+    string rawCount,
+    decimal lengthMeters,
+    decimal unitPrice,
+    decimal totalPrice)
+{
+    var digits = new string(rawCount.Where(char.IsDigit).ToArray());
+    if (digits.Length == 0 || lengthMeters <= 0 || unitPrice <= 0 || totalPrice <= 0)
+    {
+        return null;
+    }
+
+    var value = int.Parse(digits, CultureInfo.InvariantCulture);
+    var candidates = new List<int>();
+
+    if (value is > 0 and <= 100)
+    {
+        candidates.Add(value);
+    }
+
+    var lastTwo = value % 100;
+    if (lastTwo is > 0 and <= 100)
+    {
+        candidates.Add(lastTwo);
+    }
+
+    var lastOne = value % 10;
+    if (lastOne is > 0 and <= 9)
+    {
+        candidates.Add(lastOne);
+    }
+
+    foreach (var candidate in candidates.Distinct().OrderByDescending(candidate => candidate))
+    {
+        var expectedTotal = candidate * lengthMeters * unitPrice;
+        var difference = Math.Abs(expectedTotal - totalPrice);
+        var tolerance = Math.Max(5m, totalPrice * 0.001m);
+
+        if (difference <= tolerance)
+        {
+            return candidate;
+        }
+    }
+
+    return null;
+}
+
     private static decimal? SumNullable(params decimal?[] values)
     {
         var present = values.Where(value => value is not null).Select(value => value!.Value).ToArray();
@@ -810,6 +911,26 @@ public sealed partial class FpProReportParser : IFpProReportParser
     private sealed record PngChunk(
         string Type,
         byte[] Data);
+
+    [GeneratedRegex(
+    @"(?<!\d)(?:\d+)?(?<count>\d{1,2})\s*x\s*6[.,]0",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ProfileBarCountRegex();
+
+    [GeneratedRegex(
+    @"\b(?:6000|\d{1,2}(?:[.,]\d+)?)\s+(?<count>\d{1,3})\b\s*$",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex OrderedProfileBarLineRegex();
+
+    [GeneratedRegex(
+    @"(?<rawCount>\d{1,6})\s*x\s*6[.,]0",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ProfileBarPackedCountRegex();
+
+    [GeneratedRegex(
+    @"(?<rawCount>\d{1,6})\s*x\s*(?<length>6[.,]0)(?<unitPrice>[0-9.]+,\d)(?<totalPrice>[0-9.]+,\d{1,3})",
+    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ProfileBarPackedCostRegex();
 
     [GeneratedRegex("Costos por Item\\s+(\\d{1,2})\\s+-\\s+Piezas", RegexOptions.IgnoreCase)]
     private static partial Regex DetailHeaderRegex();
