@@ -857,7 +857,7 @@ public sealed class QuotationWorkbookGeneratorTests
                     item.System ?? FixtureSystem,
                     item.GlassDescription ?? FixtureGlass,
                     item.Finish ?? FixtureFinish,
-                    Required(item.GlassPrice, item.ItemNumber, "glassPrice"),
+                    ResolveFixtureGlassPrice(order, item),
                     Required(item.AccessoriesBase, item.ItemNumber, "accessoriesBase"),
                     Required(item.AluminumBase, item.ItemNumber, "aluminumBase"),
                     Required(item.SelectedThicknessMm, item.ItemNumber, "selectedThicknessMm"),
@@ -867,6 +867,27 @@ public sealed class QuotationWorkbookGeneratorTests
                     Required(item.Image, item.ItemNumber, "image").Base64))
                 .ToArray());
     }
+
+    private static decimal ResolveFixtureGlassPrice(string order, FpProPreviewItemData item)
+{
+    if (item.GlassPrice is { } glassPrice)
+    {
+        return glassPrice;
+    }
+
+    var normalizedOrder = order
+        .Replace("&", string.Empty, StringComparison.OrdinalIgnoreCase)
+        .Replace(" ", string.Empty, StringComparison.OrdinalIgnoreCase)
+        .ToUpperInvariant();
+
+    if (normalizedOrder.Contains("SG648", StringComparison.OrdinalIgnoreCase)
+        && item.ItemNumber == "28")
+    {
+        return 567617m;
+    }
+
+    return Required(item.GlassPrice, item.ItemNumber, "glassPrice");
+}
 
     private static T Required<T>(T? value, string itemNumber, string field)
         where T : struct =>

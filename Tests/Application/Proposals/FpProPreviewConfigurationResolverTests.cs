@@ -109,7 +109,7 @@ public sealed class FpProPreviewConfigurationResolverTests
                 selectedThicknessMm: 5m,
                 glass:
                 [
-                    new FpProGlassPaneData("05MM", 5m, 1000, 1000, 1)
+                    new FpProGlassPaneData("05MM", null, 5m, 1000, 1000, 1)
                 ])),
             TestContext.Current.CancellationToken);
 
@@ -134,7 +134,7 @@ public sealed class FpProPreviewConfigurationResolverTests
                 selectedThicknessMm: 5m,
                 glass:
                 [
-                    new FpProGlassPaneData("LAMINADO", null, 1000, 1000, 1)
+                    new FpProGlassPaneData("LAMINADO",null, null, 1000, 1000, 1)
                 ])),
             TestContext.Current.CancellationToken);
 
@@ -162,13 +162,57 @@ public async Task ResolveAsync_WithKnownGlassCode_CalculatesSafeGlassPrice(
             selectedThicknessMm: thickness,
             glass:
             [
-                new FpProGlassPaneData(code, thickness, 1000, 1000, 1)
+                new FpProGlassPaneData(code, null, thickness, 1000, 1000, 1)
             ])),
         TestContext.Current.CancellationToken);
 
     var item = Assert.Single(result.Items);
     Assert.Equal(expectedGlassPrice, item.GlassPrice);
     Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithTemperedSixMillimeterGlass_CalculatesTemperedGlassPrice()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["KONCEPT70"],
+            selectedThicknessMm: 6m,
+            glass:
+            [
+                new FpProGlassPaneData("06MM", "TEMPLADO", 6m, 1665, 2333, 2),
+                new FpProGlassPaneData("06MM", "TEMPLADO", 6m, 1665, 2334, 1)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+
+    Assert.Equal(1002330m, item.GlassPrice);
+    Assert.DoesNotContain("glassPrice", item.PendingFields);
+}
+
+[Fact]
+public async Task ResolveAsync_WithSpecialGlassModifier_KeepsGlassPricePending()
+{
+    var resolver = CreateResolver();
+
+    var result = await resolver.ResolveAsync(
+        Preview(Item(
+            ["TUBULARES"],
+            selectedThicknessMm: 6m,
+            notes: "INCLUYE OFF SIDE DE 15CM PERIMETRAL",
+            glass:
+            [
+                new FpProGlassPaneData("06MM", "TEMPLADO", 6m, 1653, 844, 3)
+            ])),
+        TestContext.Current.CancellationToken);
+
+    var item = Assert.Single(result.Items);
+
+    Assert.Null(item.GlassPrice);
+    Assert.Contains("glassPrice", item.PendingFields);
 }
 
 [Fact]
@@ -182,7 +226,7 @@ public async Task ResolveAsync_WithSingleKnownGlassBelowOneSquareMeter_AppliesOn
             selectedThicknessMm: 5m,
             glass:
             [
-                new FpProGlassPaneData("05MM", 5m, 500, 500, 1)
+                new FpProGlassPaneData("05MM", null, 5m, 500, 500, 1)
             ])),
         TestContext.Current.CancellationToken);
 
@@ -202,7 +246,7 @@ public async Task ResolveAsync_WithSingleKnownGlassAboveOneSquareMeter_UsesMeasu
             selectedThicknessMm: 6m,
             glass:
             [
-                new FpProGlassPaneData("06MM", 6m, 1890, 1224, 1)
+                new FpProGlassPaneData("06MM", null, 6m, 1890, 1224, 1)
             ])),
         TestContext.Current.CancellationToken);
 
@@ -222,8 +266,8 @@ public async Task ResolveAsync_WithMixedKnownGlassAboveOneSquareMeterPerClass_Ca
             selectedThicknessMm: 8m,
             glass:
             [
-                new FpProGlassPaneData("05MM", 5m, 2000, 1000, 1),
-                new FpProGlassPaneData("08MM", 8m, 3000, 1000, 1)
+                new FpProGlassPaneData("05MM", null, 5m, 2000, 1000, 1),
+                new FpProGlassPaneData("08MM", null, 8m, 3000, 1000, 1)
             ])),
         TestContext.Current.CancellationToken);
 
@@ -243,8 +287,8 @@ public async Task ResolveAsync_WithMixedKnownGlassBelowOneSquareMeterForAnyClass
             selectedThicknessMm: 8m,
             glass:
             [
-                new FpProGlassPaneData("05MM", 5m, 500, 500, 1),
-                new FpProGlassPaneData("08MM", 8m, 3000, 1000, 1)
+                new FpProGlassPaneData("05MM", null, 5m, 500, 500, 1),
+                new FpProGlassPaneData("08MM", null, 8m, 3000, 1000, 1)
             ])),
         TestContext.Current.CancellationToken);
 

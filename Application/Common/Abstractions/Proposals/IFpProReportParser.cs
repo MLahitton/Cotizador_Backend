@@ -62,6 +62,7 @@ public sealed record FpProPreviewItemData(
 
 public sealed record FpProGlassPaneData(
     string Code,
+    string? Treatment,
     decimal? ThicknessMm,
     int? WidthMm,
     int? HeightMm,

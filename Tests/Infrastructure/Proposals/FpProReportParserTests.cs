@@ -4,6 +4,7 @@ using Application.Common.Abstractions.Proposals;
 using Infrastructure.Proposals.FpPro;
 using Xunit;
 
+
 namespace CotizadorBackend.Tests.Infrastructure.Proposals;
 
 public sealed class FpProReportParserTests
@@ -264,6 +265,35 @@ public sealed class FpProReportParserTests
         Assert.Equal(["KONCEPT50", "ALFAJIA"], item03.FpProProfiles);
         Assert.Equal("VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA", item03.System?.Trim());
         Assert.Equal("CIERRE EMBUTIDO DE IMPACTO AUTOMATICO", item03.Lock);
+    }
+
+    [Fact]
+public async Task ParseAsync_Sg1085Fixture_DetectsTemperedGlassTreatment()
+{
+    var parser = new FpProReportParser();
+
+    await using var stream = File.OpenRead(Path.Combine(
+        AppContext.BaseDirectory,
+        "Fixtures",
+        "FpPro",
+        "S&G1085.PDF"));
+
+    var result = await parser.ParseAsync(
+        new FpProReportFile(
+            "S&G1085.PDF",
+            "application/pdf",
+            stream.Length,
+            stream),
+        TestContext.Current.CancellationToken);
+
+    var item01 = Assert.Single(result.Items, item => item.ItemNumber == "01");
+    Assert.Equal(2, item01.Glass.Count);
+
+    Assert.All(item01.Glass, glass =>
+    {
+        Assert.Equal("06MM", glass.Code);
+        Assert.Equal("TEMPLADO", glass.Treatment);
+    });
     }
 
     private static async Task<FpProReportPreviewData> ParseFixtureAsync(string fileName)

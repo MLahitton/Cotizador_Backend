@@ -172,6 +172,11 @@ public sealed class FpProPreviewConfigurationResolver(
 
     private static decimal? ResolveGlassPrice(FpProPreviewItemData item)
 {
+
+    if (HasSpecialGlassModifier(item))
+    {
+        return null;
+    }
     if (item.Glass.Count == 0 || item.Quantity is null or <= 0)
     {
         return null;
@@ -215,6 +220,16 @@ public sealed class FpProPreviewConfigurationResolver(
     return Math.Round(total, 1, MidpointRounding.AwayFromZero);
 }
 
+private static bool HasSpecialGlassModifier(FpProPreviewItemData item)
+{
+    var notes = NormalizeText(item.Notes);
+
+    return ContainsToken(notes, "OFF SIDE")
+        || ContainsToken(notes, "INCLINACION")
+        || ContainsToken(notes, "INCLINACIÓN")
+        || ContainsToken(notes, "FORMA ESPECIAL");
+}
+
 private static decimal? ResolvePaneAreaM2(FpProGlassPaneData pane)
 {
     if (pane.WidthMm is null or <= 0 || pane.HeightMm is null or <= 0 || pane.Quantity is null or <= 0)
@@ -229,12 +244,16 @@ private static decimal? ResolvePaneAreaM2(FpProGlassPaneData pane)
 
 private static decimal? ResolveGlassRate(FpProGlassPaneData pane)
 {
-    return NormalizeToken(pane.Code) switch
+    var code = NormalizeToken(pane.Code);
+    var treatment = NormalizeToken(pane.Treatment ?? string.Empty);
+
+    return (code, treatment) switch
     {
-        "05MM" => 74000m,
-        "06MM" => 74000m,
-        "08MM" => 90000m,
-        "10MM" => 126000m,
+        ("05MM", _) => 74000m,
+        ("06MM", "TEMPLADO") => 86000m,
+        ("06MM", _) => 74000m,
+        ("08MM", _) => 90000m,
+        ("10MM", _) => 126000m,
         _ => null
     };
 }

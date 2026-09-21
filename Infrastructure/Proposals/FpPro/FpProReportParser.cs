@@ -92,8 +92,7 @@ public sealed partial class FpProReportParser : IFpProReportParser
             : null;
     }
 
-    internal static IReadOnlyList<FpProGlassPaneData> ParseGlass(string? value)
-    {
+    internal static IReadOnlyList<FpProGlassPaneData> ParseGlass(string? value, string? treatment = null)    {
         if (string.IsNullOrWhiteSpace(value))
         {
             return [];
@@ -102,11 +101,19 @@ public sealed partial class FpProReportParser : IFpProReportParser
         return GlassRegex().Matches(value)
             .Select(match => new FpProGlassPaneData(
                 match.Groups[1].Value.Trim(),
+                treatment,
                 TryThickness(match.Groups[1].Value),
                 int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture),
                 int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture),
                 int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture)))
             .ToArray();
+    }
+
+    private static string? ResolveGlassTreatment(string totalText)
+    {
+        return totalText.Contains("TEMPLADO", StringComparison.OrdinalIgnoreCase)
+            ? "TEMPLADO"
+            : null;
     }
 
     private static IReadOnlyList<FpProPreviewItemData> ParseDetailedItems(
@@ -143,7 +150,9 @@ public sealed partial class FpProReportParser : IFpProReportParser
             var gaskets = SectionTotal(detailText, "Guarniciones Marca", "Vidrios Código");
             var rawAccessoriesBase = SumNullable(accessories, accessoryMl, gaskets);
             var rawWeight = structureWeights.GetValueOrDefault(itemNumber);
-            var glass = ParseGlass(FirstGroup(detailText, @"Vidrios(.*?)Coste unitario"));
+            var rawGlassText = FirstGroup(detailText, @"Vidrios(.*?)Coste unitario");
+            var glassTreatment = ResolveGlassTreatment(detailText);
+            var glass = ParseGlass(rawGlassText, glassTreatment);
             var pending = PendingFields();
             var technicalProfileDescriptions = ParseTechnicalProfileDescriptions(detailText);
             var profileCodes = SplitProfiles(FirstGroup(detailText, @"Perfiles(.*?)Dimension"));

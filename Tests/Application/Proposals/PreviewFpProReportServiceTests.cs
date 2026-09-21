@@ -198,7 +198,7 @@ public sealed class PreviewFpProReportServiceTests
             1,
             14.56m,
             null,
-            [new FpProGlassPaneData("05MM", 5m, 4550, 3200, 1)],
+            [new FpProGlassPaneData("05MM",null, 5m, 4550, 3200, 1)],
             5m,
             null,
             null,
