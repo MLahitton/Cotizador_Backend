@@ -456,6 +456,24 @@ public sealed class QuotationWorkbookGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateAsync_WithBgaLocation_WritesTwoViaticsPeople()
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(fixtureRequest, "BGA", fixtureRequest.Items);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var templateArchive = new ZipArchive(File.OpenRead(TemplatePath()), ZipArchiveMode.Read);
+        var templateWorksheet = ReadXml(templateArchive, ResolveWorksheetEntryName(templateArchive, QuotationSheetName(templateArchive)));
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+
+        Assert.Equal("BGA", ReadCell(archive, worksheet, "C12"));
+        Assert.Equal(2m, ReadDecimalBelowHeader(archive, worksheet, ["N\u00ba PERSONAS", "N PERSONAS", "PERSONAS"]));
+    }
+
+    [Fact]
     public async Task GenerateAsync_WithAntqLocation_SetsOnlyMatchingViaticsAndIntermunicipalRows()
     {
         var fixtureRequest = await CreateSg648Item01RequestAsync();
@@ -468,10 +486,9 @@ public sealed class QuotationWorkbookGeneratorTests
         var templateWorksheet = ReadXml(templateArchive, ResolveWorksheetEntryName(templateArchive, QuotationSheetName(templateArchive)));
         using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
         var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
-        var projectDays = ReadCell(archive, worksheet, "BT14");
+        var projectDays = CalculateExpectedProjectDays(request.Items).ToString(CultureInfo.InvariantCulture);
 
         Assert.Equal("ANTQ", ReadCell(archive, worksheet, "C12"));
-        Assert.False(string.IsNullOrWhiteSpace(projectDays));
         AssertOnlySelectedLogisticsRowChanged(
             templateArchive,
             templateWorksheet,
@@ -481,6 +498,7 @@ public sealed class QuotationWorkbookGeneratorTests
             "ANTQ",
             ["N DIAS", "DIAS"],
             projectDays);
+        Assert.Equal(1m, ReadDecimalBelowHeader(archive, worksheet, ["N\u00ba PERSONAS", "N PERSONAS", "PERSONAS"]));
         AssertOnlySelectedLogisticsRowChanged(
             templateArchive,
             templateWorksheet,
@@ -525,10 +543,9 @@ public sealed class QuotationWorkbookGeneratorTests
 
         using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
         var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
-        var projectDays = ReadCell(archive, worksheet, "BT14");
+        var projectDays = CalculateExpectedProjectDays(request.Items).ToString(CultureInfo.InvariantCulture);
 
         Assert.Equal(alternativeLocation, ReadCell(archive, worksheet, "C12"));
-        Assert.False(string.IsNullOrWhiteSpace(projectDays));
         AssertOnlySelectedLogisticsRowChanged(
             templateArchive,
             templateWorksheet,
@@ -549,6 +566,110 @@ public sealed class QuotationWorkbookGeneratorTests
             "1");
     }
 
+    [Fact]
+    public async Task GenerateAsync_WithSyntheticArea10777_CalculatesViaticsFormulaCachedValues()
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(
+            fixtureRequest,
+            "ANTQ",
+            [BuildSyntheticItem(fixtureRequest.Items[0], "01", widthM: 107.77m, heightM: 1m, quantity: 1, selectedThicknessMm: 10m, structureWeightKg: 1m)]);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+
+        Assert.Equal(11m, ReadLogisticsDecimal(archive, worksheet, "VIATICOS", "ANTQ", ["N DIAS", "DIAS"]));
+        Assert.Equal(1m, ReadDecimalBelowHeader(archive, worksheet, ["N\u00ba PERSONAS", "N PERSONAS", "PERSONAS"]));
+        Assert.Equal(1m, ReadLogisticsDecimal(archive, worksheet, "TRANSPORTES INTERMUNICIPALES", "ANTQ", ["N RETORNOS", "RETORNOS", "N RETORNO"]));
+
+        AssertFormulaHasCachedValue(worksheet, "CC6");
+        AssertFormulaHasCachedValue(worksheet, "CD6");
+        AssertFormulaHasCachedValue(worksheet, "CI6");
+        AssertFormulaHasCachedValue(worksheet, "CH11");
+        AssertFormulaHasCachedValue(worksheet, "CI11");
+        AssertFormulaHasCachedValue(worksheet, "AF15");
+
+        Assert.Equal(495000m, ReadDecimalCell(archive, worksheet, "CC6"));
+        Assert.Equal(715000m, ReadDecimalCell(archive, worksheet, "CD6"));
+        Assert.Equal(280000m, ReadDecimalCell(archive, worksheet, "CI6"));
+        Assert.Equal(1490000m, ReadDecimalCell(archive, worksheet, "CH11"));
+        Assert.True(ReadDecimalCell(archive, worksheet, "CI11") > 0m);
+        Assert.True(ReadDecimalCell(archive, worksheet, "AF15") > 0m);
+    }
+    [Theory]
+    [InlineData(100, 10.4, 10)]
+    [InlineData(120, 11.0, 11)]
+    [InlineData(140, 11.6, 12)]
+    [InlineData(280, 15.8, 16)]
+    public async Task GenerateAsync_RoundsCalculatedProjectDaysBeforeWritingViatics(
+        decimal totalArea,
+        decimal calculatedProjectDays,
+        decimal expectedViaticsDays)
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(
+            fixtureRequest,
+            "ANTQ",
+            [BuildSyntheticItem(fixtureRequest.Items[0], "01", widthM: totalArea, heightM: 1m, quantity: 1, selectedThicknessMm: 10m, structureWeightKg: 1m)]);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+
+        Assert.Equal(calculatedProjectDays, CalculateExpectedProjectDays(request.Items));
+        Assert.Equal(expectedViaticsDays, ReadLogisticsDecimal(archive, worksheet, "VIATICOS", "ANTQ", ["N DIAS", "DIAS"]));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_WithRoundedViaticsDays_PropagatesToLogisticsFormulaCaches()
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(
+            fixtureRequest,
+            "ANTQ",
+            [BuildSyntheticItem(fixtureRequest.Items[0], "01", widthM: 140m, heightM: 1m, quantity: 1, selectedThicknessMm: 10m, structureWeightKg: 1m)]);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+
+        Assert.Equal(11.6m, CalculateExpectedProjectDays(request.Items));
+        Assert.Equal(12m, ReadLogisticsDecimal(archive, worksheet, "VIATICOS", "ANTQ", ["N DIAS", "DIAS"]));
+        Assert.Equal(1m, ReadDecimalBelowHeader(archive, worksheet, ["N\u00ba PERSONAS", "N PERSONAS", "PERSONAS"]));
+        Assert.Equal(1m, ReadLogisticsDecimal(archive, worksheet, "TRANSPORTES INTERMUNICIPALES", "ANTQ", ["N RETORNOS", "RETORNOS", "N RETORNO"]));
+
+        Assert.Equal(540000m, ReadDecimalCell(archive, worksheet, "CC6"));
+        Assert.Equal(780000m, ReadDecimalCell(archive, worksheet, "CD6"));
+        Assert.Equal(280000m, ReadDecimalCell(archive, worksheet, "CI6"));
+        Assert.Equal(1600000m, ReadDecimalCell(archive, worksheet, "CH11"));
+    }
+    [Fact]
+    public async Task GenerateAsync_WithSyntheticArea10777_WritesCalculatedProjectDaysToViatics()
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(
+            fixtureRequest,
+            "ANTQ",
+            [BuildSyntheticItem(fixtureRequest.Items[0], "01", widthM: 107.77m, heightM: 1m, quantity: 1, selectedThicknessMm: 10m, structureWeightKg: 1m)]);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+        var viaticsRows = ReadLogisticsRows(archive, worksheet, "VIATICOS", ["N DIAS", "DIAS"]);
+        var antqViaticsRow = Assert.Single(viaticsRows, row => string.Equals(row.Location, "ANTQ", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(11m, decimal.Parse(antqViaticsRow.Value, NumberStyles.Number, CultureInfo.InvariantCulture));
+    }
+
     private static async Task<QuotationWorkbookRequest> CreateSg648Item01RequestAsync()
     {
         return await CreateFixtureRequestAsync("S&G648_t2.PDF", "S&G648", take: 1);
@@ -557,6 +678,62 @@ public sealed class QuotationWorkbookGeneratorTests
     private sealed record TransportLocationRow(string Location, decimal MinimumTransport, decimal RatePerKg);
 
     private sealed record LogisticsRow(string Location, string TargetCell, string Value);
+
+    private static decimal ReadDecimalCell(ZipArchive archive, XDocument worksheet, string reference) =>
+        decimal.Parse(ReadCell(archive, worksheet, reference), NumberStyles.Number, CultureInfo.InvariantCulture);
+
+    private static decimal ReadLogisticsDecimal(
+        ZipArchive archive,
+        XDocument worksheet,
+        string blockTitle,
+        string location,
+        IReadOnlyList<string> valueHeaderCandidates)
+    {
+        var row = ReadLogisticsRows(archive, worksheet, blockTitle, valueHeaderCandidates)
+            .Single(value => string.Equals(value.Location, location, StringComparison.OrdinalIgnoreCase));
+        return decimal.Parse(row.Value, NumberStyles.Number, CultureInfo.InvariantCulture);
+    }
+    private static decimal ReadDecimalBelowHeader(
+        ZipArchive archive,
+        XDocument worksheet,
+        IReadOnlyList<string> headerCandidates)
+    {
+        var value = ReadCellBelowHeader(archive, worksheet, headerCandidates);
+        return decimal.Parse(value, NumberStyles.Number, CultureInfo.InvariantCulture);
+    }
+
+    private static string ReadCellBelowHeader(
+        ZipArchive archive,
+        XDocument worksheet,
+        IReadOnlyList<string> headerCandidates)
+    {
+        var normalizedHeaderCandidates = headerCandidates
+            .Select(NormalizeLogisticsText)
+            .ToHashSet(StringComparer.Ordinal);
+        var sharedStrings = ReadSharedStrings(archive);
+        foreach (var cell in worksheet.Descendants(SpreadsheetNamespace + "c"))
+        {
+            var header = NormalizeLogisticsText(NormalizeCell(cell, sharedStrings));
+            if (!normalizedHeaderCandidates.Contains(header))
+            {
+                continue;
+            }
+
+            var cellReference = cell.Attribute("r")!.Value;
+            var column = new string(cellReference.TakeWhile(char.IsLetter).ToArray());
+            var row = int.Parse(new string(cellReference.SkipWhile(char.IsLetter).ToArray()), CultureInfo.InvariantCulture);
+            return ReadCell(archive, worksheet, $"{column}{row + 1}");
+        }
+
+        throw new InvalidDataException("No se encontro la celda debajo del encabezado solicitado.");
+    }
+
+    private static decimal CalculateExpectedProjectDays(IReadOnlyList<FpProQuotationItemInput> items)
+    {
+        var totalArea = items.Sum(item => item.WidthM * item.HeightM * item.Quantity);
+        var br14 = decimal.Ceiling(totalArea * 0.05m) + 7m + 1.5m;
+        return decimal.Ceiling(br14) * 0.6m + 2m;
+    }
 
     private static QuotationWorkbookRequest CreateRequestWithSyntheticItems(
         QuotationWorkbookRequest sourceRequest,
@@ -811,8 +988,8 @@ public sealed class QuotationWorkbookGeneratorTests
 
     private static string NormalizeLogisticsText(string value) =>
         NormalizeHeaderText(value)
-            .Replace("°", string.Empty, StringComparison.Ordinal)
-            .Replace("º", string.Empty, StringComparison.Ordinal)
+            .Replace("Â°", string.Empty, StringComparison.Ordinal)
+            .Replace("Âº", string.Empty, StringComparison.Ordinal)
             .Replace(".", string.Empty, StringComparison.Ordinal)
             .Replace("/", " ", StringComparison.Ordinal)
             .Replace("  ", " ", StringComparison.Ordinal)

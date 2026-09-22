@@ -15,7 +15,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
     private const int ItemBlockHeight = 7;
     private const int ImageRows = 4;
     private const int ImageStartRowOffset = 2;
-    private const string SheetName = "COTIZACIÓN";
+    private const string SheetName = "COTIZACI\u00d3N";
     private static readonly XNamespace SpreadsheetNamespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelationshipNamespace = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelationshipNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -52,7 +52,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             }
 
             SetTransportGlobalCorrection(worksheet, archive, request.Report.Location, request.Items);
-            SetViaticsAndIntermunicipalValues(worksheet, archive, request.Report.Location);
+            SetViaticsAndIntermunicipalValues(worksheet, archive, request.Report.Location, request.Items);
             NormalizeFormulaCellsForRecalculation(worksheet, request.Items.Count);
             ReplaceXml(archive, worksheetEntryName, worksheet);
             AddImages(archive, worksheetEntryName, request.Items);
@@ -129,7 +129,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
         var drawingTarget = worksheetRelationships.Root?.Elements(PackageRelationshipNamespace + "Relationship")
             .FirstOrDefault(value => value.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing")
             ?.Attribute("Target")?.Value
-            ?? throw new InvalidDataException("La hoja COTIZACIÓN no tiene drawing asociado.");
+            ?? throw new InvalidDataException("La hoja COTIZACIÃƒâ€œN no tiene drawing asociado.");
         var drawingEntryName = ResolveRelativeEntryName(worksheetEntryName, drawingTarget);
         var drawingRelationshipsName = DrawingRelationshipsEntryName(drawingEntryName);
         var drawingRelationships = ReadXml(archive, drawingRelationshipsName);
@@ -375,6 +375,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             {
                 var worksheet = ReadXml(archive, worksheetEntryName);
                 worksheet.Root!.Elements(SpreadsheetNamespace + "drawing").Remove();
+                RemoveLogisticsFormulaCachedValues(worksheet);
                 ReplaceXml(archive, worksheetEntryName, worksheet);
 
                 var relationshipsEntryName = WorksheetRelationshipsEntryName(worksheetEntryName);
@@ -392,6 +393,31 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
         }
 
         return stream.ToArray();
+    }
+
+    private static void RemoveLogisticsFormulaCachedValues(XDocument worksheet)
+    {
+        foreach (var cell in worksheet.Descendants(SpreadsheetNamespace + "c")
+            .Where(cell => cell.Element(SpreadsheetNamespace + "f") is not null))
+        {
+            var reference = cell.Attribute("r")?.Value;
+            if (reference is null || !ShouldRecalculateLogisticsFormula(reference))
+            {
+                continue;
+            }
+
+            cell.Attribute("t")?.Remove();
+            cell.Element(SpreadsheetNamespace + "v")?.Remove();
+            cell.Element(SpreadsheetNamespace + "is")?.Remove();
+        }
+    }
+
+    private static bool ShouldRecalculateLogisticsFormula(string cellReference)
+    {
+        var column = ReadCellColumn(cellReference);
+        var row = ReadRowNumber(cellReference);
+        return column == "F" && row == 339
+            || row <= 14 && (column is "CC" or "CD" or "CI" || row == 11 && column is "CH");
     }
 
     private static void WriteFormulaCachedValue(XElement cell, FormulaCachedValue cachedValue)
@@ -472,13 +498,11 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
     private static void SetViaticsAndIntermunicipalValues(
         XDocument cotizacionWorksheet,
         ZipArchive archive,
-        string location)
+        string location,
+        IReadOnlyList<FpProQuotationItemInput> items)
     {
-        var projectDays = ReadCellDecimalValue(cotizacionWorksheet, "BT14");
-        if (projectDays is null)
-        {
-            throw new InvalidDataException("No se encontr\u00f3 el n\u00famero de d\u00edas del proyecto en BT14.");
-        }
+        var projectDays = CalculateProjectDays(items);
+        var viaticsDays = decimal.Round(projectDays, 0, MidpointRounding.AwayFromZero);
 
         ApplyLogisticsValue(
             cotizacionWorksheet,
@@ -487,7 +511,9 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             location,
             new[] { "CIUDAD", "UBICACION", "UBICACION", "ZONA", "MUNICIPIO", "CITY" },
             new[] { "N\u00ba DIAS", "N \u00ba DIAS", "N D\u00cdAS", "N\u00ba D\u00cdAS", "DIAS", "D\u00cdAS", "N\u00ba D\u00cdA" },
-            projectDays.Value);
+            viaticsDays);
+
+        SetViaticsPeopleValue(cotizacionWorksheet, archive, CalculateViaticsPeople(location));
 
         ApplyLogisticsValue(
             cotizacionWorksheet,
@@ -497,6 +523,54 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             new[] { "CIUDAD", "UBICACION", "UBICACION", "ZONA", "MUNICIPIO", "CITY" },
             new[] { "N\u00ba RETORNOS", "N \u00ba RETORNOS", "RETORNOS", "N\u00ba RETORNO" },
             1m);
+    }
+
+    private static decimal CalculateProjectDays(IReadOnlyList<FpProQuotationItemInput> items)
+    {
+        var totalArea = items.Sum(item => item.WidthM * item.HeightM * item.Quantity);
+        var br14 = decimal.Ceiling(totalArea * 0.05m) + 7m + 1.5m;
+        return decimal.Ceiling(br14) * 0.6m + 2m;
+    }
+
+    private static decimal CalculateViaticsPeople(string location) =>
+        string.Equals(NormalizeHeaderForLogistics(location), "BGA", StringComparison.Ordinal)
+            ? 2m
+            : 1m;
+
+    private static void SetViaticsPeopleValue(
+        XDocument cotizacionWorksheet,
+        ZipArchive archive,
+        decimal value)
+    {
+        var targetCell = ResolveCellBelowHeader(
+            cotizacionWorksheet,
+            archive,
+            new[] { "N\u00ba PERSONAS", "N \u00ba PERSONAS", "N PERSONAS", "PERSONAS" });
+        SetNumber(cotizacionWorksheet, targetCell, value);
+    }
+
+    private static string ResolveCellBelowHeader(
+        XDocument worksheet,
+        ZipArchive archive,
+        IReadOnlyList<string> headerCandidates)
+    {
+        var normalizedHeaderCandidates = headerCandidates
+            .Select(NormalizeHeaderForLogistics)
+            .ToHashSet(StringComparer.Ordinal);
+        var sharedStrings = ReadSharedStrings(archive);
+        foreach (var cell in worksheet.Descendants(SpreadsheetNamespace + "c"))
+        {
+            var header = NormalizeHeaderForLogistics(ReadCellValueFromElement(cell, sharedStrings));
+            if (!normalizedHeaderCandidates.Contains(header))
+            {
+                continue;
+            }
+
+            var cellReference = cell.Attribute("r")!.Value;
+            return $"{ReadCellColumn(cellReference)}{ReadRowNumber(cellReference) + 1}";
+        }
+
+        throw new InvalidDataException("No se encontro la celda N PERSONAS en la hoja COTIZACION.");
     }
 
     private static void ApplyLogisticsValue(
@@ -632,7 +706,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
         var headerRow = DetectTransportHeaderRow(bdSheet, sharedStrings);
         if (headerRow is null)
         {
-            throw new InvalidDataException("No se encontró la fila de encabezados de transporte en BD GN.");
+            throw new InvalidDataException("No se encontrÃƒÂ³ la fila de encabezados de transporte en BD GN.");
         }
 
         var headers = ReadRowCells(headerRow)
@@ -645,7 +719,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             .FirstOrDefault();
         if (string.IsNullOrEmpty(locationColumn))
         {
-            throw new InvalidDataException("No se encontró la columna 'CIUDAD' en BD GN.");
+            throw new InvalidDataException("No se encontrÃƒÂ³ la columna 'CIUDAD' en BD GN.");
         }
 
         var minimumColumn = headers
@@ -656,7 +730,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             .FirstOrDefault();
         if (string.IsNullOrEmpty(minimumColumn))
         {
-            throw new InvalidDataException("No se encontró la columna del mínimo de transporte en BD GN.");
+            throw new InvalidDataException("No se encontrÃƒÂ³ la columna del mÃƒÂ­nimo de transporte en BD GN.");
         }
 
         var rateColumn = headers
@@ -665,7 +739,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             .FirstOrDefault();
         if (string.IsNullOrEmpty(rateColumn))
         {
-            throw new InvalidDataException("No se encontró la columna del valor por kilo de transporte en BD GN.");
+            throw new InvalidDataException("No se encontrÃƒÂ³ la columna del valor por kilo de transporte en BD GN.");
         }
 
         return (locationColumn, minimumColumn, rateColumn);
@@ -723,23 +797,23 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
             var rateRaw = ReadCellValueFromRow(row, rateColumn, sharedStrings);
             if (string.IsNullOrWhiteSpace(minimumRaw) || string.IsNullOrWhiteSpace(rateRaw))
             {
-                throw new InvalidDataException($"No se encontró tarifa o mínimo para la ubicación {location} en BD GN.");
+                throw new InvalidDataException($"No se encontrÃƒÂ³ tarifa o mÃƒÂ­nimo para la ubicaciÃƒÂ³n {location} en BD GN.");
             }
 
             if (!decimal.TryParse(minimumRaw, NumberStyles.Number, CultureInfo.InvariantCulture, out var minimumTransport))
             {
-                throw new InvalidDataException($"El mínimo de transporte de la ubicación {location} no es numérico.");
+                throw new InvalidDataException($"El mÃƒÂ­nimo de transporte de la ubicaciÃƒÂ³n {location} no es numÃƒÂ©rico.");
             }
 
             if (!decimal.TryParse(rateRaw, NumberStyles.Number, CultureInfo.InvariantCulture, out var ratePerKg))
             {
-                throw new InvalidDataException($"La tarifa por kilo de transporte de la ubicación {location} no es numérica.");
+                throw new InvalidDataException($"La tarifa por kilo de transporte de la ubicaciÃƒÂ³n {location} no es numÃƒÂ©rica.");
             }
 
             return (minimumTransport, ratePerKg);
         }
 
-        throw new InvalidDataException($"No se encontró la ubicación {location} en BD GN.");
+        throw new InvalidDataException($"No se encontrÃƒÂ³ la ubicaciÃƒÂ³n {location} en BD GN.");
     }
 
     private static string ReadCellValueFromRow(XElement row, string columnReference, IReadOnlyList<string> sharedStrings) =>
@@ -793,7 +867,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
     private static string NormalizeHeader(string? value)
     {
         var normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
-        return normalized.Replace("Í", "I").Replace("Ó", "O");
+        return normalized.Replace("ÃƒÂ", "I").Replace("Ãƒâ€œ", "O");
     }
 
 
@@ -814,8 +888,8 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
 
         return normalizedBuilder.ToString()
             .Normalize(NormalizationForm.FormC)
-            .Replace("°", string.Empty)
-            .Replace("º", string.Empty)
+            .Replace("Ã‚Â°", string.Empty)
+            .Replace("Ã‚Âº", string.Empty)
             .Replace(".", string.Empty)
             .Replace("/", " ")
             .Trim();
