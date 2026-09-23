@@ -145,10 +145,7 @@ public sealed partial class FpProReportParser : IFpProReportParser
                 : Math.Round(widthM.Value * heightM.Value * quantity.Value, 4, MidpointRounding.AwayFromZero);
             var divisor = quantity is > 1 ? quantity.Value : 1;
             var rawAluminumBase = FirstDecimal(detailText, @"Tot\. Perfiles\s*([0-9.]+,[0-9]+)");
-            var accessories = SectionTotal(detailText, "Accesorios Marca", "Acc. ml Marca", "Guarniciones Marca", "Vidrios Código");
-            var accessoryMl = SectionTotal(detailText, "Acc. ml Marca", "Guarniciones Marca", "Vidrios Código");
-            var gaskets = SectionTotal(detailText, "Guarniciones Marca", "Vidrios Código");
-            var rawAccessoriesBase = SumNullable(accessories, accessoryMl, gaskets);
+            var rawAccessoriesBase = CalculateRawAccessoriesBase(detailText);
             var rawWeight = structureWeights.GetValueOrDefault(itemNumber);
             var rawGlassText = FirstGroup(detailText, @"Vidrios(.*?)Coste unitario");
             var glassTreatment = ResolveGlassTreatment(detailText);
@@ -203,6 +200,17 @@ public sealed partial class FpProReportParser : IFpProReportParser
             .Select(group => group.First())
             .OrderBy(item => int.Parse(item.ItemNumber, CultureInfo.InvariantCulture))
             .ToArray();
+    }
+
+    internal static decimal? CalculateRawAccessoriesBase(string detailText)
+    {
+        var accessories = SectionTotal(detailText, "Accesorios", "Acc. ml", "Guarniciones Marca", "Guarniciones", "Vidrios Código", "Vidrios")
+            ?? SectionTotalExact(detailText, "Accesorios Marca", "Acc. ml Marca", "Guarniciones Marca", "Vidrios Código");
+        var accessoryMl = SectionTotal(detailText, "Acc. ml", "Guarniciones Marca", "Guarniciones", "Vidrios Código", "Vidrios")
+            ?? SectionTotalExact(detailText, "Acc. ml Marca", "Guarniciones", "Vidrios Código");
+        var gaskets = SectionTotalExact(detailText, "Guarniciones Marca", "Vidrios Código")
+            ?? SectionTotal(detailText, "Guarniciones", "Vidrios Código", "Vidrios");
+        return SumNullable(accessories, accessoryMl, gaskets);
     }
 
     private static string BuildDetailSection(IReadOnlyList<PdfPageData> pages, int startIndex, string itemNumber)
@@ -806,7 +814,7 @@ private static int? ResolveProfileBarCount(
         return value is null ? null : ParseLatinDecimal(value);
     }
 
-    private static decimal? SectionTotal(string content, string sectionName, params string[] followingSections)
+    private static decimal? SectionTotalExact(string content, string sectionName, params string[] followingSections)
     {
         var sectionIndex = content.IndexOf(sectionName, StringComparison.Ordinal);
         if (sectionIndex < 0)
@@ -830,6 +838,58 @@ private static int? ResolveProfileBarCount(
             ? null
             : ParseLatinDecimal(matches[^1].Value);
     }
+
+    private static decimal? SectionTotal(string content, string sectionName, params string[] followingSections)
+    {
+        var sectionHeader = FindSectionHeader(content, sectionName, 0);
+        if (sectionHeader is null)
+        {
+            return null;
+        }
+
+        var sectionIndex = sectionHeader.Value.Index;
+        var searchStart = sectionIndex + sectionHeader.Value.Length;
+        var endIndex = followingSections
+            .Select(section => FindSectionHeader(content, section, searchStart)?.Index ?? -1)
+            .Where(index => index >= 0)
+            .DefaultIfEmpty(content.Length)
+            .Min();
+        if (endIndex <= sectionIndex)
+        {
+            return null;
+        }
+
+        var section = content[sectionIndex..endIndex];
+        var matches = LatinDecimalRegex().Matches(section);
+        return matches.Count == 0
+            ? null
+            : ParseLatinDecimal(matches[^1].Value);
+    }
+
+    private static SectionHeaderMatch? FindSectionHeader(string content, string sectionName, int startIndex)
+    {
+        var pattern = SectionHeaderPattern(sectionName);
+        var match = Regex.Match(
+            content[startIndex..],
+            pattern,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant,
+            TimeSpan.FromMilliseconds(100));
+        return match.Success
+            ? new SectionHeaderMatch(startIndex + match.Index, match.Length)
+            : null;
+    }
+
+    private static string SectionHeaderPattern(string sectionName) =>
+        sectionName switch
+        {
+            "Acc. ml" => @"\bAcc\.?\s*ml\b\s+(?:Marca|Codigo|Código|Cant(?:idad)?|Valor|Total)",
+            "Accesorios" => @"\bAccesorios\b\s+(?:Marca|Codigo|Código|Cant(?:idad)?|Valor|Total)",
+            "Guarniciones" => @"\bGuarniciones\b(?=[\s\S]{0,260}(?:Marca|Art-Nr|Codigo|Código|Cant\.?|Cant(?:idad)?|Precio|Valor|Total|Prezzo))",
+            "Vidrios" => @"\bVidrios\b(?=[\s\S]{0,260}(?:Codigo|Código|Cant\.?|Cant(?:idad)?|Precio|Valor|Total|Prezzo))",
+            _ => @"\b" + Regex.Escape(sectionName).Replace(@"\ ", @"\s+") + @"\b"
+        };
+
+    private readonly record struct SectionHeaderMatch(int Index, int Length);
 
     private static string ExtractPdfText(byte[] bytes)
     {

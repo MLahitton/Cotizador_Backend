@@ -882,7 +882,16 @@ public sealed class QuotationWorkbookGeneratorTests
                 continue;
             }
 
-            var header = FindLogisticsHeader(rows, rowIndex, sharedStrings, valueHeaderCandidates);
+            (int RowIndex, string LocationColumn, string TargetColumn) header;
+            try
+            {
+                header = FindLogisticsHeader(rows, rowIndex, sharedStrings, valueHeaderCandidates);
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+
             var result = new List<LogisticsRow>();
             foreach (var row in rows.Skip(header.RowIndex + 1).Take(140))
             {
@@ -951,6 +960,14 @@ public sealed class QuotationWorkbookGeneratorTests
             return string.Empty;
         }
 
+        var inlineString = cell.Element(SpreadsheetNamespace + "is")
+            ?.Element(SpreadsheetNamespace + "t")
+            ?.Value;
+        if (inlineString is not null)
+        {
+            return inlineString;
+        }
+
         var value = cell.Element(SpreadsheetNamespace + "v")?.Value;
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -988,8 +1005,8 @@ public sealed class QuotationWorkbookGeneratorTests
 
     private static string NormalizeLogisticsText(string value) =>
         NormalizeHeaderText(value)
-            .Replace("Â°", string.Empty, StringComparison.Ordinal)
-            .Replace("Âº", string.Empty, StringComparison.Ordinal)
+            .Replace("\u00b0", string.Empty, StringComparison.Ordinal)
+            .Replace("\u00ba", string.Empty, StringComparison.Ordinal)
             .Replace(".", string.Empty, StringComparison.Ordinal)
             .Replace("/", " ", StringComparison.Ordinal)
             .Replace("  ", " ", StringComparison.Ordinal)

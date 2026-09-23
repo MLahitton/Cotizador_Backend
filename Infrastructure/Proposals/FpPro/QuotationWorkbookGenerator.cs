@@ -888,8 +888,8 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
 
         return normalizedBuilder.ToString()
             .Normalize(NormalizationForm.FormC)
-            .Replace("Ã‚Â°", string.Empty)
-            .Replace("Ã‚Âº", string.Empty)
+            .Replace("\u00b0", string.Empty)
+            .Replace("\u00ba", string.Empty)
             .Replace(".", string.Empty)
             .Replace("/", " ")
             .Trim();

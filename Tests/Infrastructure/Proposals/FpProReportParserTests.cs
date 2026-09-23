@@ -24,6 +24,101 @@ public sealed class FpProReportParserTests
     }
 
     [Fact]
+    public void CalculateRawAccessoriesBase_IncludesAccessoryMlSection()
+    {
+        const string detailText = """
+            Accesorios Marca Cantidad Valor Total
+            CIERRE 1,0 10.000,0 10.000,0
+            Acc. ml Marca Cantidad Valor Total
+            CALZA VIDRIO 24X10MM 0,2 8.021,0 1.604,2
+            Guarniciones Marca Cantidad Valor Total
+            FELPA 2,0 3.000,0 6.000,0
+            Vidrios Codigo Cantidad Valor Total
+            """;
+
+        var result = FpProReportParser.CalculateRawAccessoriesBase(detailText);
+
+        Assert.Equal(17604.2m, result);
+    }
+
+    [Fact]
+    public void CalculateRawAccessoriesBase_IncludesAccessoryMlWithoutDot()
+    {
+        const string detailText = """
+            Accesorios Marca Cantidad Valor Total
+            TOPE 1,0 100,0 100,0
+            Acc ml Marca Cantidad Valor Total
+            CALZA VIDRIO 24X10MM 0,4 8.021,0 3.208,4
+            Guarniciones Marca Cantidad Valor Total
+            EMPAQUE 1,0 20,0 20,0
+            Vidrios Codigo Cantidad Valor Total
+            """;
+
+        var result = FpProReportParser.CalculateRawAccessoriesBase(detailText);
+
+        Assert.Equal(3328.4m, result);
+    }
+
+    [Fact]
+    public void CalculateRawAccessoriesBase_IncludesAccessoryMlWithFpProRealHeader()
+    {
+        const string detailText = """
+            Accesorios MarcaArt-NrDescripcionTratt.Sup.Cant.Precio $Var.%Prezzototale $
+            S&G0001ACCESORIO BASE EXTRUSI1,025.497,90 $25.497,9
+            Acc. ml MarcaArt-NrDescripcionTratt.Sup.Cant.Precio $Var.%Prezzototale $
+            ALUMINA9448CALZA VIDRIO 24X10MM REF C210258 EXTRUSI0,28.021,00 $1.604,2
+            1.604,2
+            Guarniciones Fecha: 19/09/2026S&G1035 - Revision 2Pagina 10PedidoS&G1035
+            MarcaArt-NrDescripcionTratt.Sup.mPrecio $Var.%Prezzototale $
+            ALUMINA100639EMPAQUE CUNA FIJO PISAVIDRIO GRUESO CK77,12.520,00 $17.924,8
+            ALUMINA17188EMPAQUE CUNA MOVIL C041092 5MM EXTRUSI7,12.074,00 $14.752,3
+            32.677,1
+            Vidrios Codigo Cantidad Valor Total
+            """;
+
+        var result = FpProReportParser.CalculateRawAccessoriesBase(detailText);
+
+        Assert.Equal(59779.2m, result);
+    }
+
+    [Fact]
+    public void CalculateRawAccessoriesBase_IncludesAccessoryMlWithFpProRealHeaderForDoubleQuantity()
+    {
+        const string detailText = """
+            Accesorios MarcaArt-NrDescripcionTratt.Sup.Cant.Precio $Var.%Prezzototale $
+            S&G0001ACCESORIO BASE EXTRUSI1,025.057,90 $25.057,9
+            Acc. ml MarcaArt-NrDescripcionTratt.Sup.Cant.Precio $Var.%Prezzototale $
+            ALUMINA9448CALZA VIDRIO 24X10MM REF C210258 EXTRUSI0,48.021,00 $3.208,4
+            3.208,4
+            Guarniciones Fecha: 19/09/2026S&G1035 - Revision 2Pagina 46PedidoS&G1035
+            MarcaArt-NrDescripcionTratt.Sup.mPrecio $Var.%Prezzototale $
+            ALUMINA100639EMPAQUE CUNA FIJO PISAVIDRIO GRUESO CK76,62.520,00 $16.538,8
+            ALUMINA17188EMPAQUE CUNA MOVIL C041092 5MM EXTRUSI6,62.062,36 $13.611,6
+            30.150,4
+            Vidrios Codigo Cantidad Valor Total
+            """;
+
+        var result = FpProReportParser.CalculateRawAccessoriesBase(detailText);
+
+        Assert.Equal(58416.7m, result);
+    }
+    [Fact]
+    public void CalculateRawAccessoriesBase_AllowsMissingAccessoryMlSection()
+    {
+        const string detailText = """
+            Accesorios Marca Cantidad Valor Total
+            CIERRE 1,0 5.000,5 5.000,5
+            Guarniciones Marca Cantidad Valor Total
+            EMPAQUE 1,0 2.500,25 2.500,25
+            Vidrios Codigo Cantidad Valor Total
+            """;
+
+        var result = FpProReportParser.CalculateRawAccessoriesBase(detailText);
+
+        Assert.Equal(7500.75m, result);
+    }
+
+    [Fact]
     public void ParseDimension_ExtractsMillimeters()
     {
         var result = FpProReportParser.ParseDimension("4550x3200");
