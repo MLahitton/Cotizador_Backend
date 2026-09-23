@@ -599,6 +599,34 @@ public sealed class QuotationWorkbookGeneratorTests
         Assert.True(ReadDecimalCell(archive, worksheet, "CI11") > 0m);
         Assert.True(ReadDecimalCell(archive, worksheet, "AF15") > 0m);
     }
+    [Fact]
+    public async Task GenerateAsync_WithSyntheticArea10777_RecalculatesProjectDayFormulaCachedValues()
+    {
+        var fixtureRequest = await CreateSg648Item01RequestAsync();
+        var request = CreateRequestWithSyntheticItems(
+            fixtureRequest,
+            "ANTQ",
+            [BuildSyntheticItem(fixtureRequest.Items[0], "01", widthM: 107.77m, heightM: 1m, quantity: 1, selectedThicknessMm: 10m, structureWeightKg: 1m)]);
+        var generator = new QuotationWorkbookGenerator();
+
+        var workbook = await generator.GenerateAsync(request, TestContext.Current.CancellationToken);
+
+        using var archive = new ZipArchive(new MemoryStream(workbook.Content), ZipArchiveMode.Read);
+        var worksheet = ReadXml(archive, ResolveWorksheetEntryName(archive, QuotationSheetName(archive)));
+
+        Assert.Equal("SUM(L15:L335)", ReadFormula(worksheet, "F339"));
+        Assert.Equal("(ROUNDUP(+F339*0.05,0)+7)+1.5", ReadFormula(worksheet, "BR14"));
+        Assert.Equal("ROUNDUP(BR14,0)*0.4", ReadFormula(worksheet, "BS14"));
+        Assert.Equal("(ROUNDUP(BR14,0)*0.6)+(2)", ReadFormula(worksheet, "BT14"));
+
+        Assert.Equal(107.77m, ReadDecimalCell(archive, worksheet, "F339"));
+        Assert.Equal(14.5m, ReadDecimalCell(archive, worksheet, "BR14"));
+        Assert.Equal(6m, ReadDecimalCell(archive, worksheet, "BS14"));
+        Assert.Equal(11m, ReadDecimalCell(archive, worksheet, "BT14"));
+        Assert.NotEqual(8.5m, ReadDecimalCell(archive, worksheet, "BR14"));
+        Assert.NotEqual(3.6m, ReadDecimalCell(archive, worksheet, "BS14"));
+        Assert.NotEqual(7.4m, ReadDecimalCell(archive, worksheet, "BT14"));
+    }
     [Theory]
     [InlineData(100, 10.4, 10)]
     [InlineData(120, 11.0, 11)]

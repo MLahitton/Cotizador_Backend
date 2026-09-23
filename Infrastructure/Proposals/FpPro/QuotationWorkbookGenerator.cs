@@ -417,6 +417,7 @@ public sealed class QuotationWorkbookGenerator : IQuotationWorkbookGenerator
         var column = ReadCellColumn(cellReference);
         var row = ReadRowNumber(cellReference);
         return column == "F" && row == 339
+            || row == 14 && (column is "BR" or "BS" or "BT")
             || row <= 14 && (column is "CC" or "CD" or "CI" || row == 11 && column is "CH");
     }
 
