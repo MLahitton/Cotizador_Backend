@@ -100,6 +100,7 @@ public sealed record FpProPreviewItemResponse(
 
 public sealed record FpProGlassPaneResponse(
     string Code,
+    string? Treatment,
     decimal? ThicknessMm,
     int? WidthMm,
     int? HeightMm,

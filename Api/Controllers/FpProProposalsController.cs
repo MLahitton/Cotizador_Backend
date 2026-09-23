@@ -228,6 +228,7 @@ public sealed class FpProProposalsController(
                 item.Notes,
                 item.Glass.Select(glass => new FpProGlassPaneResponse(
                     glass.Code,
+                    glass.Treatment,
                     glass.ThicknessMm,
                     glass.WidthMm,
                     glass.HeightMm,
