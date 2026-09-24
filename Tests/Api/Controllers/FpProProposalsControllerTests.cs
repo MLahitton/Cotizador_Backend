@@ -20,7 +20,7 @@ public sealed class FpProProposalsControllerTests
         var moduleInference = Substitute.For<IFpProModuleInferenceService>();
         var catalogReader = Substitute.For<IQuotationTemplateCatalogReader>();
         var preview = new FpProReportPreviewData(
-            new FpProReportData("S&G1085", "CASA", 1, 1, 20m, null, null),
+            new FpProReportData("S&G1085", "CASA", 1, 1, 1, 20m, null, null),
             [new FpProPreviewItemData(
                 "01",
                 "V-1",
@@ -93,6 +93,7 @@ public sealed class FpProProposalsControllerTests
 
         var ok = Assert.IsType<OkObjectResult>(result);
         var response = Assert.IsType<FpProPreviewResponse>(ok.Value);
+        Assert.Equal(1, response.Report.StructureCount);
         var glass = Assert.Single(response.Items).Glass;
         Assert.Equal("TEMPLADO", glass[0].Treatment);
         Assert.Null(glass[1].Treatment);

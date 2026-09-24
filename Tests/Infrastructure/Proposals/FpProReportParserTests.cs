@@ -181,6 +181,7 @@ public sealed class FpProReportParserTests
         Assert.Equal(22m, preview.Report.AluminumWastePercent);
         Assert.Equal(238, preview.Report.ProfileBarCount);
         Assert.Equal(28, preview.Report.ItemsDetected);
+        Assert.Equal(30, preview.Report.StructureCount);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V-1", item01.Typology);
         Assert.Equal(["KONCEPT40", "ALFAJIA"], item01.FpProProfiles);
@@ -276,6 +277,7 @@ public sealed class FpProReportParserTests
         Assert.Equal(20m, preview.Report.AluminumWastePercent);
         Assert.Equal(147, preview.Report.ProfileBarCount);
         Assert.Equal(13, preview.Report.ItemsDetected);
+        Assert.Equal(17, preview.Report.StructureCount);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V1", item01.Typology);
         Assert.Equal(["SERIE35", "ALFAJIA"], item01.FpProProfiles);
@@ -325,6 +327,7 @@ public sealed class FpProReportParserTests
         Assert.Equal(15m, preview.Report.AluminumWastePercent);
         Assert.Equal(242, preview.Report.ProfileBarCount);
         Assert.Equal(40, preview.Report.ItemsDetected);
+        Assert.Equal(44, preview.Report.StructureCount);
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("V-1", item01.Typology);
         Assert.Equal(["SUPERIOR50", "ALFAJIA"], item01.FpProProfiles);
@@ -360,6 +363,15 @@ public sealed class FpProReportParserTests
         Assert.Equal(["KONCEPT50", "ALFAJIA"], item03.FpProProfiles);
         Assert.Equal("VENTANA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONZA", item03.System?.Trim());
         Assert.Equal("CIERRE EMBUTIDO DE IMPACTO AUTOMATICO", item03.Lock);
+    }
+
+    [Fact]
+    public async Task ParseAsync_Sg1085Fixture_DetectsStructureCount()
+    {
+        var preview = await ParseFixtureAsync("S&G1085.PDF");
+
+        Assert.Equal(15, preview.Report.ItemsDetected);
+        Assert.Equal(19, preview.Report.StructureCount);
     }
 
     [Fact]

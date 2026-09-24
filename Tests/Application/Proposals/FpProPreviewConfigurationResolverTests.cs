@@ -329,7 +329,7 @@ public async Task ResolveAsync_WithMixedKnownGlassBelowOneSquareMeterForAnyClass
     }
 
     private static FpProReportPreviewData Preview(FpProPreviewItemData item) =>
-        new(new FpProReportData("S&G", "Fixture", 1, 1, 20m, null, null), [item], item.PendingFields);
+        new(new FpProReportData("S&G", "Fixture", 1, 1, 1, 20m, null, null), [item], item.PendingFields);
 
     private static FpProPreviewItemData Item(
     IReadOnlyList<string> profiles,

@@ -55,10 +55,11 @@ public sealed partial class FpProReportParser : IFpProReportParser
         {
             items = ParseListItems(tokens).ToArray();
         }
+        var structureCount = ParseStructureCount(items);
         var doorCount = ParseDoorCount(items);
 
         return new FpProReportPreviewData(
-            new FpProReportData(orderId, description, revision, items.Length, aluminumWastePercent, profileBarCount, doorCount),
+            new FpProReportData(orderId, description, revision, items.Length, structureCount, aluminumWastePercent, profileBarCount, doorCount),
             items,
             items.SelectMany(item => item.PendingFields)
                 .Concat(aluminumWastePercent is null ? ["aluminumWastePercent"] : [])
@@ -66,6 +67,12 @@ public sealed partial class FpProReportParser : IFpProReportParser
                 .Order(StringComparer.Ordinal)
                 .ToArray());
     }   
+
+    internal static int? ParseStructureCount(IReadOnlyList<FpProPreviewItemData> items)
+    {
+        var total = items.Sum(item => item.Quantity ?? 0);
+        return total == 0 ? null : total;
+    }
 
     internal static int? ParseDoorCount(IReadOnlyList<FpProPreviewItemData> items)
 {

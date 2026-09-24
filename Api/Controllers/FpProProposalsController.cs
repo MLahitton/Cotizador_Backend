@@ -212,6 +212,7 @@ public sealed class FpProProposalsController(
                 preview.Report.Description,
                 preview.Report.Revision,
                 preview.Report.ItemsDetected,
+                preview.Report.StructureCount,
                 preview.Report.AluminumWastePercent,
                 preview.Report.ProfileBarCount,
                 preview.Report.DoorCount),

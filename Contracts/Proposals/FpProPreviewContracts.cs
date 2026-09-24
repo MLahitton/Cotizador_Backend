@@ -62,6 +62,7 @@ public sealed record FpProReportResponse(
     string? Description,
     int? Revision,
     int ItemsDetected,
+    int? StructureCount,
     decimal? AluminumWastePercent,
     int? ProfileBarCount,
     int? DoorCount);
