@@ -80,6 +80,10 @@ public sealed class ApplicationDbContext(
         Set<RequirementChatThread>();
     public DbSet<RequirementChatMessage> RequirementChatMessages =>
         Set<RequirementChatMessage>();
+    public DbSet<RequirementItemExperienceDraft>
+        RequirementItemExperienceDrafts => Set<RequirementItemExperienceDraft>();
+    public DbSet<RequirementItemExperienceAnswer>
+        RequirementItemExperienceAnswers => Set<RequirementItemExperienceAnswer>();
 
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();

@@ -396,6 +396,86 @@ public sealed class RequirementRepositoryTests(
     }
 
     [Fact]
+    public async Task RequirementExperienceDrafts_RoundTripThroughPersistenceAndKeepItemsIndependent()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedExperienceTechnicalProposalAsync();
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var repository = new RequirementRepository(context);
+            repository.AddExperienceDraft(RequirementItemExperienceDraft.Create(
+                seeded.TechnicalProposalId,
+                seeded.FirstProposalItemId,
+                "sng-experience-v2-draft-001",
+                "ESP_ALC_PPAL",
+                [new("B01", "VIS_2")],
+                seeded.UserId,
+                At.AddMinutes(10)));
+            repository.AddExperienceDraft(RequirementItemExperienceDraft.Create(
+                seeded.TechnicalProposalId,
+                seeded.SecondProposalItemId,
+                "sng-experience-v2-draft-001",
+                "ESP_SALA",
+                [new("B02", "ACU_3")],
+                seeded.UserId,
+                At.AddMinutes(11)));
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        await using var verification = fixture.CreateDbContext();
+        var persisted = await new RequirementRepository(verification)
+            .ListExperienceDraftsByTechnicalProposalIdAsync(
+                seeded.TechnicalProposalId,
+                cancellationToken);
+
+        Assert.Equal(2, persisted.Count);
+        var first = persisted.Single(
+            value => value.TechnicalProposalItemId == seeded.FirstProposalItemId);
+        var second = persisted.Single(
+            value => value.TechnicalProposalItemId == seeded.SecondProposalItemId);
+        Assert.Equal("ESP_ALC_PPAL", first.SpaceTypeCode);
+        Assert.Equal("VIS_2", Assert.Single(first.Answers).OptionCode);
+        Assert.Equal("ESP_SALA", second.SpaceTypeCode);
+        Assert.Equal("ACU_3", Assert.Single(second.Answers).OptionCode);
+    }
+
+    [Fact]
+    public async Task RequirementExperienceDrafts_WithDuplicateItemCreation_IsRejectedByPersistence()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedExperienceTechnicalProposalAsync();
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var repository = new RequirementRepository(context);
+            repository.AddExperienceDraft(RequirementItemExperienceDraft.Create(
+                seeded.TechnicalProposalId,
+                seeded.FirstProposalItemId,
+                "sng-experience-v2-draft-001",
+                "ESP_ALC_PPAL",
+                [new("B01", "VIS_2")],
+                seeded.UserId,
+                At.AddMinutes(10)));
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        await using var duplicateContext = fixture.CreateDbContext();
+        var duplicateRepository = new RequirementRepository(duplicateContext);
+        duplicateRepository.AddExperienceDraft(RequirementItemExperienceDraft.Create(
+            seeded.TechnicalProposalId,
+            seeded.FirstProposalItemId,
+            "sng-experience-v2-draft-001",
+            "ESP_SALA",
+            [new("B02", "ACU_3")],
+            seeded.UserId,
+            At.AddMinutes(11)));
+
+        await Assert.ThrowsAsync<RequirementPersistenceException>(() =>
+            duplicateRepository.SaveChangesAsync(cancellationToken));
+    }
+
+    [Fact]
     public async Task SaveChanges_WithDatabaseError_ThrowsTypedException()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -879,6 +959,63 @@ public sealed class RequirementRepositoryTests(
             expected,
             At.AddMinutes(7));
 
+    private async Task<SeededExperienceTechnicalProposal>
+        SeedExperienceTechnicalProposalAsync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedPreQuoteAsync();
+        var requirement = Requirement.Create(
+            seeded.PreQuoteId,
+            seeded.UserId,
+            RequirementCommercialLine.Essential,
+            At.AddMinutes(1));
+        var attempt = RequirementProcessingAttempt.Create(
+            requirement.Id,
+            seeded.UserId,
+            Guid.NewGuid(),
+            At.AddMinutes(2));
+        attempt.Start(At.AddMinutes(3));
+        attempt.Complete(DocumentProcessingOutcome.Completed, At.AddMinutes(4));
+        var extraction = RequirementExtractionResult.Create(
+            attempt.Id,
+            "3.0",
+            "AI2",
+            "{}",
+            2,
+            0,
+            0,
+            0,
+            "test",
+            100,
+            At.AddMinutes(5));
+        var firstExtracted = CreateExtractedItem(extraction.Id, 1, "V-01");
+        var secondExtracted = CreateExtractedItem(extraction.Id, 2, "V-02");
+        var proposal = RequirementTechnicalProposal.Create(
+            requirement.Id,
+            extraction.Id,
+            attempt.Id,
+            false,
+            At.AddMinutes(6));
+        var firstProposalItem = CreateProposalItem(proposal.Id, firstExtracted.Id);
+        var secondProposalItem = CreateProposalItem(proposal.Id, secondExtracted.Id);
+        proposal.AddItem(firstProposalItem);
+        proposal.AddItem(secondProposalItem);
+
+        await using var context = fixture.CreateDbContext();
+        context.Requirements.Add(requirement);
+        context.RequirementProcessingAttempts.Add(attempt);
+        context.RequirementExtractionResults.Add(extraction);
+        context.RequirementExtractedItems.AddRange(firstExtracted, secondExtracted);
+        context.RequirementTechnicalProposals.Add(proposal);
+        await context.SaveChangesAsync(cancellationToken);
+
+        return new SeededExperienceTechnicalProposal(
+            seeded.UserId,
+            proposal.Id,
+            firstProposalItem.Id,
+            secondProposalItem.Id);
+    }
+
     private async Task<SeededPreQuote> SeedPreQuoteAsync()
     {
         fixture.RequireAvailable();
@@ -922,6 +1059,12 @@ public sealed class RequirementRepositoryTests(
     private sealed record SeededPreQuote(Guid UserId, Guid PreQuoteId);
 
     private sealed record SeededTechnicalProposal(Guid TechnicalProposalId, Guid SystemId);
+
+    private sealed record SeededExperienceTechnicalProposal(
+        Guid UserId,
+        Guid TechnicalProposalId,
+        Guid FirstProposalItemId,
+        Guid SecondProposalItemId);
 
     private sealed record SeededPricedRequirement(
         Guid UserId,

@@ -72,6 +72,8 @@ public interface IRequirementRepository
 
     void AddTechnicalProposal(RequirementTechnicalProposal proposal);
 
+    void AddExperienceDraft(RequirementItemExperienceDraft draft);
+
     void AddPricingSnapshot(RequirementPricingSnapshot snapshot);
 
     void ReplacePricingSnapshot(
@@ -88,6 +90,15 @@ public interface IRequirementRepository
 
     Task<RequirementTechnicalProposal?> FindTechnicalProposalForUpdateAsync(
         Guid technicalProposalId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<RequirementItemExperienceDraft>>
+        ListExperienceDraftsByTechnicalProposalIdAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken);
+
+    Task<RequirementItemExperienceDraft?> FindExperienceDraftForUpdateAsync(
+        Guid technicalProposalItemId,
         CancellationToken cancellationToken);
 
     Task<RequirementTechnicalProposal?> FindCurrentTechnicalProposalForUpdateAsync(

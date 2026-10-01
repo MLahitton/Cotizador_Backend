@@ -418,6 +418,11 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementTechnicalProposals.Add(proposal);
     }
 
+    public void AddExperienceDraft(RequirementItemExperienceDraft draft)
+    {
+        dbContext.RequirementItemExperienceDrafts.Add(draft);
+    }
+
     public void AddPricingSnapshot(RequirementPricingSnapshot snapshot)
     {
         dbContext.RequirementPricingSnapshots.Add(snapshot);
@@ -572,11 +577,51 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         {
             return await dbContext.RequirementTechnicalProposals
                 .Include(proposal => proposal.Requirement)
+                    .ThenInclude(requirement => requirement.PreQuote)
+                        .ThenInclude(preQuote => preQuote.Project)
                 .Include(proposal => proposal.Items)
                     .ThenInclude(item => item.ExtractedItem)
                         .ThenInclude(item => item.Segments)
                 .SingleOrDefaultAsync(
                     proposal => proposal.Id == technicalProposalId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<RequirementItemExperienceDraft>>
+        ListExperienceDraftsByTechnicalProposalIdAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementItemExperienceDrafts
+                .AsNoTracking()
+                .Include(draft => draft.Answers)
+                .Where(draft => draft.TechnicalProposalId == technicalProposalId)
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementItemExperienceDraft?>
+        FindExperienceDraftForUpdateAsync(
+            Guid technicalProposalItemId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementItemExperienceDrafts
+                .Include(draft => draft.Answers)
+                .SingleOrDefaultAsync(
+                    draft => draft.TechnicalProposalItemId == technicalProposalItemId,
                     cancellationToken);
         }
         catch (DbException exception)
