@@ -230,6 +230,10 @@ public sealed class RequirementTechnicalProposalController(
             item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
+            new RequirementTechnicalProposalItemDataCompletenessResponse(
+                item.DataCompleteness.State,
+                item.DataCompleteness.IsComplete,
+                item.DataCompleteness.MissingFields),
             Map(item.Readiness),
             new RequirementTechnicalProposalHistoricalEvidenceResponse(
                 item.HistoricalEvidence.Status,
@@ -298,7 +302,11 @@ public sealed class RequirementTechnicalProposalController(
                     evidence.ContextLabel,
                     evidence.Confidence,
                     evidence.Status)).ToArray(),
-            item.OccurrenceContext);
+            item.OccurrenceContext,
+            item.OccurrenceContext,
+            item.ManualLocationOverride,
+            item.EffectiveLocation,
+            item.ManualObservation);
 
     private static RequirementTechnicalProposalReadinessResponse Map(
         RequirementTechnicalProposalReadinessReadModel readiness) =>

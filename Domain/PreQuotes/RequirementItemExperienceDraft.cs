@@ -168,11 +168,33 @@ public sealed class RequirementItemExperienceDraft
 
     private void ReplaceAnswers(IReadOnlyCollection<RequirementItemExperienceAnswerValue> answers)
     {
-        _answers.Clear();
-        foreach (var answer in answers.OrderBy(value => value.BenefitCode, StringComparer.Ordinal))
+        var normalizedAnswers = answers
+            .Select(answer => new RequirementItemExperienceAnswerValue(
+                answer.BenefitCode.Trim(),
+                answer.OptionCode.Trim()))
+            .OrderBy(answer => answer.BenefitCode, StringComparer.Ordinal)
+            .ToArray();
+        var nextBenefitCodes = normalizedAnswers
+            .Select(answer => answer.BenefitCode)
+            .ToHashSet(StringComparer.Ordinal);
+
+        _answers.RemoveAll(answer => !nextBenefitCodes.Contains(answer.BenefitCode));
+
+        foreach (var answer in normalizedAnswers)
         {
-            _answers.Add(RequirementItemExperienceAnswer.Create(answer.BenefitCode, answer.OptionCode));
+            var existing = _answers.FirstOrDefault(value =>
+                string.Equals(value.BenefitCode, answer.BenefitCode, StringComparison.Ordinal));
+            if (existing is null)
+            {
+                _answers.Add(RequirementItemExperienceAnswer.Create(answer.BenefitCode, answer.OptionCode));
+                continue;
+            }
+
+            existing.UpdateOption(answer.OptionCode);
         }
+
+        _answers.Sort((left, right) =>
+            StringComparer.Ordinal.Compare(left.BenefitCode, right.BenefitCode));
     }
 
     private static void EnsureUniqueBenefits(IReadOnlyCollection<RequirementItemExperienceAnswerValue> answers)
@@ -216,6 +238,16 @@ public sealed class RequirementItemExperienceAnswer
     public string BenefitCode { get; private set; }
 
     public string OptionCode { get; private set; }
+
+    public void UpdateOption(string optionCode)
+    {
+        if (string.IsNullOrWhiteSpace(optionCode))
+        {
+            throw new ArgumentException("Option code is required.", nameof(optionCode));
+        }
+
+        OptionCode = optionCode.Trim();
+    }
 
     public static RequirementItemExperienceAnswer Create(string benefitCode, string optionCode)
     {

@@ -9,12 +9,26 @@ public interface IRequirementExperienceCatalogProvider
 
 public sealed class RequirementExperienceCatalogProvider : IRequirementExperienceCatalogProvider
 {
-    public RequirementExperienceCatalog Current { get; } = RequirementExperienceCatalog.CreateCurrent();
+    private readonly RequirementExperienceCatalog _v2 = RequirementExperienceCatalog.CreateV2();
+    private readonly RequirementExperienceCatalog _v3 = RequirementExperienceCatalog.CreateV3();
+    private readonly RequirementExperienceCatalog _v4 = RequirementExperienceCatalog.CreateCurrent();
+
+    public RequirementExperienceCatalog Current => _v4;
 
     public RequirementExperienceCatalog? FindByVersion(string catalogVersion)
     {
-        return string.Equals(catalogVersion, Current.Version, StringComparison.Ordinal)
-            ? Current
+        if (string.Equals(catalogVersion, _v4.Version, StringComparison.Ordinal))
+        {
+            return _v4;
+        }
+
+        if (string.Equals(catalogVersion, _v3.Version, StringComparison.Ordinal))
+        {
+            return _v3;
+        }
+
+        return string.Equals(catalogVersion, _v2.Version, StringComparison.Ordinal)
+            ? _v2
             : null;
     }
 }
@@ -24,12 +38,95 @@ public sealed record RequirementExperienceCatalog(
     IReadOnlyList<RequirementExperienceQuestion> Questions,
     IReadOnlyList<RequirementExperienceSpace> Spaces)
 {
+    public const string V2Version = "sng-experience-v2-draft-001";
+
+    public const string V3Version = "sng-experience-v3-001";
+
+    public const string V4Version = "sng-experience-v4-001";
+
     public static RequirementExperienceCatalog CreateCurrent()
     {
+        return CreateV4();
+    }
+
+    public static RequirementExperienceCatalog CreateV4()
+    {
         return new RequirementExperienceCatalog(
-            
-"sng-experience-v2-draft-001"
-,
+            V4Version,
+            [
+                Question("THERMAL", "Confort termico", "Que nivel de confort termico necesita este espacio?", [
+                    Option("THERMAL_LOW", "Baja", "Baja", ["Baja"]),
+                    Option("THERMAL_MEDIUM", "Media", "Media", ["Media"]),
+                    Option("THERMAL_HIGH", "Alta", "Alta", ["Alta"])
+                ]),
+                Question("ACOUSTIC", "Confort acustico", "Que nivel de reduccion de ruido espera?", [
+                    Option("ACOUSTIC_LOW", "Baja", "Baja", ["Baja"]),
+                    Option("ACOUSTIC_MEDIUM", "Media", "Media", ["Media"]),
+                    Option("ACOUSTIC_HIGH", "Alta", "Alta", ["Alta"])
+                ]),
+                Question("SECURITY", "Seguridad", "Que nivel de seguridad necesita?", [
+                    Option("SECURITY_LOW", "Baja", "Baja", ["Baja"]),
+                    Option("SECURITY_MEDIUM", "Media", "Media", ["Media"]),
+                    Option("SECURITY_HIGH", "Alta", "Alta", ["Alta"])
+                ]),
+                Question("UV", "Proteccion UV", "Necesita proteccion UV para interiores o acabados?", [
+                    Option("UV_NO", "No", "No", ["Sin proteccion UV adicional"]),
+                    Option("UV_YES", "Sí", "Sí", ["Proteccion UV requerida"])
+                ]),
+                Question("AESTHETICS", "Estetica", "Que nivel de protagonismo visual busca?", [
+                    Option("AESTHETICS_LOW", "Baja", "Baja", ["Baja"]),
+                    Option("AESTHETICS_MEDIUM", "Media", "Media", ["Media"]),
+                    Option("AESTHETICS_HIGH", "Alta", "Alta", ["Alta"])
+                ])
+            ],
+            []);
+    }
+
+    public static RequirementExperienceCatalog CreateV3()
+    {
+        return new RequirementExperienceCatalog(
+            V3Version,
+            [
+                Question("THERMAL", "Confort termico", "Que nivel de confort termico necesita este espacio?", [
+                    Option("THERMAL_1", "Basico", "Basico", ["Nivel 1"]),
+                    Option("THERMAL_2", "Estandar", "Estandar", ["Nivel 2"]),
+                    Option("THERMAL_3", "Confortable", "Confortable", ["Nivel 3"]),
+                    Option("THERMAL_4", "Alto confort", "Alto confort", ["Nivel 4"]),
+                    Option("THERMAL_5", "Maximo confort", "Maximo confort", ["Nivel 5"])
+                ]),
+                Question("ACOUSTIC", "Confort acustico", "Que nivel de reduccion de ruido espera?", [
+                    Option("ACOUSTIC_1", "Basico", "Basico", ["Nivel 1"]),
+                    Option("ACOUSTIC_2", "Estandar", "Estandar", ["Nivel 2"]),
+                    Option("ACOUSTIC_3", "Confortable", "Confortable", ["Nivel 3"]),
+                    Option("ACOUSTIC_4", "Alta reduccion", "Alta reduccion", ["Nivel 4"]),
+                    Option("ACOUSTIC_5", "Maxima reduccion", "Maxima reduccion", ["Nivel 5"])
+                ]),
+                Question("SECURITY", "Seguridad", "Que nivel de seguridad necesita?", [
+                    Option("SECURITY_1", "Basico", "Basico", ["Nivel 1"]),
+                    Option("SECURITY_2", "Estandar", "Estandar", ["Nivel 2"]),
+                    Option("SECURITY_3", "Reforzado", "Reforzado", ["Nivel 3"]),
+                    Option("SECURITY_4", "Alta seguridad", "Alta seguridad", ["Nivel 4"]),
+                    Option("SECURITY_5", "Maxima seguridad", "Maxima seguridad", ["Nivel 5"])
+                ]),
+                Question("UV", "Proteccion UV", "Necesita proteccion UV para interiores o acabados?", [
+                    Option("UV_NO", "No", "No", ["Sin proteccion UV adicional"]),
+                    Option("UV_YES", "Si", "Si", ["Proteccion UV requerida"])
+                ]),
+                Question("AESTHETICS", "Estetica", "Que nivel de protagonismo visual busca?", [
+                    Option("AESTHETICS_1", "Funcional", "Funcional", ["Nivel 1"]),
+                    Option("AESTHETICS_2", "Sobrio", "Sobrio", ["Nivel 2"]),
+                    Option("AESTHETICS_3", "Equilibrado", "Equilibrado", ["Nivel 3"]),
+                    Option("AESTHETICS_4", "Premium", "Premium", ["Nivel 4"]),
+                    Option("AESTHETICS_5", "Maxima presencia", "Maxima presencia", ["Nivel 5"])
+                ])
+            ],
+            []);
+    }
+
+    public static RequirementExperienceCatalog CreateV2()
+    {
+        return new RequirementExperienceCatalog(
+            V2Version,
             [
                 Question("B01", "Vista / diseño", "¿Qué protagonismo quiere darle al vidrio en este espacio?", [
                     Option("VIS_1", "Funcional", "Equilibrada", ["Dimensiones del vano", "HardRuleFlag=Sí", "UiVisibility=Sí"]),

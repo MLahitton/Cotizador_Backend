@@ -18,40 +18,45 @@ public sealed class RequirementExperienceServicesTests
         new(2026, 09, 28, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Catalog_ContainsExpectedQuestionsOptionsSpacesAndPriorities()
+    public void Catalog_CurrentVersionIsV4WithSemanticOptionsAndNoSpaces()
     {
         var service = new GetRequirementExperienceCatalogService(
             new RequirementExperienceCatalogProvider());
 
         var catalog = service.Execute();
 
-        Assert.Equal("sng-experience-v2-draft-001", catalog.Version);
-        Assert.Equal(11, catalog.Questions.Count);
-        Assert.Equal(36, catalog.Questions.Sum(question => question.Options.Count));
-        Assert.Equal(36, catalog.Questions
-            .SelectMany(question => question.Options)
-            .Select(option => option.OptionCode)
-            .Distinct(StringComparer.Ordinal)
-            .Count());
-        Assert.Equal(12, catalog.Spaces.Count);
-        Assert.DoesNotContain(catalog.Questions, question =>
-            question.BenefitCode == "B10"
-            && question.Options.Any(option => option.OptionCode.StartsWith("INS_", StringComparison.Ordinal)));
-        Assert.Contains(catalog.Questions, question =>
-            question.BenefitCode == "B10"
-            && question.Options.Any(option => option.OptionCode == "MOS_0")
-            && question.Options.Any(option => option.OptionCode == "MOS_1"));
-        Assert.Contains(catalog.Questions, question =>
-            question.BenefitCode == "B11"
-            && question.Options.Any(option =>
-                option.OptionCode == "ACA_3"
-                && option.OptionLabel == "Acabado protagonista"
-                && option.ShortLabel == "Protagonista"));
-        Assert.All(catalog.Spaces, space =>
-        {
-            Assert.Equal(11, space.Priorities.Count);
-            Assert.All(space.Priorities.Values, priority => Assert.InRange(priority, 0, 3));
-        });
+        Assert.Equal("sng-experience-v4-001", catalog.Version);
+        Assert.Equal(5, catalog.Questions.Count);
+        Assert.Equal(14, catalog.Questions.Sum(question => question.Options.Count));
+        Assert.Empty(catalog.Spaces);
+        Assert.Equal(
+            ["THERMAL", "ACOUSTIC", "SECURITY", "UV", "AESTHETICS"],
+            catalog.Questions.Select(question => question.BenefitCode).ToArray());
+        AssertV4Options(catalog, "THERMAL", "THERMAL_LOW", "THERMAL_MEDIUM", "THERMAL_HIGH");
+        AssertV4Options(catalog, "ACOUSTIC", "ACOUSTIC_LOW", "ACOUSTIC_MEDIUM", "ACOUSTIC_HIGH");
+        AssertV4Options(catalog, "SECURITY", "SECURITY_LOW", "SECURITY_MEDIUM", "SECURITY_HIGH");
+        AssertV4Options(catalog, "UV", "UV_NO", "UV_YES");
+        AssertV4Options(catalog, "AESTHETICS", "AESTHETICS_LOW", "AESTHETICS_MEDIUM", "AESTHETICS_HIGH");
+    }
+
+    [Fact]
+    public void CatalogProvider_FindsCurrentV4V3AndLegacyV2ByVersion()
+    {
+        var provider = new RequirementExperienceCatalogProvider();
+
+        var v4 = provider.FindByVersion("sng-experience-v4-001");
+        var v3 = provider.FindByVersion("sng-experience-v3-001");
+        var v2 = provider.FindByVersion("sng-experience-v2-draft-001");
+
+        Assert.NotNull(v4);
+        Assert.NotNull(v3);
+        Assert.NotNull(v2);
+        Assert.Equal(5, v4!.Questions.Count);
+        Assert.Empty(v4.Spaces);
+        Assert.Equal(5, v3!.Questions.Count);
+        Assert.Empty(v3.Spaces);
+        Assert.Equal(11, v2!.Questions.Count);
+        Assert.Equal(12, v2.Spaces.Count);
     }
 
     [Fact]
@@ -79,7 +84,382 @@ public sealed class RequirementExperienceServicesTests
         Assert.Equal("ESP_ALC_PPAL", result.Value.SpaceTypeCode);
         Assert.Equal(["B01", "B11"], result.Value.Answers.Select(answer => answer.BenefitCode).ToArray());
         Assert.Equal(["VIS_2", "ACA_3"], result.Value.Answers.Select(answer => answer.OptionCode).ToArray());
+        Assert.Null(result.Value.Level1Resolution);
         Assert.Equal(1, context.SaveCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV4DraftAndNullSpace_SavesDraft()
+    {
+        var context = CreateContext();
+        var request = new UpdateRequirementExperienceDraftRequest(
+            "sng-experience-v4-001",
+            null,
+            0,
+            [
+                new("THERMAL", "THERMAL_LOW"),
+                new("ACOUSTIC", "ACOUSTIC_LOW"),
+                new("SECURITY", "SECURITY_LOW"),
+                new("UV", "UV_YES"),
+                new("AESTHETICS", "AESTHETICS_LOW")
+            ]);
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            request,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(context.StoredDraft);
+        Assert.Equal("sng-experience-v4-001", result.Value!.CatalogVersion);
+        Assert.Null(result.Value.SpaceTypeCode);
+        Assert.Equal(5, result.Value.Answers.Count);
+        AssertLevel1Resolution(result.Value.Level1Resolution, "CLASSIC", "LAMINADO", true, 5, 5);
+        Assert.Equal(1, context.SaveCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3DraftAndNullSpace_SavesDraft()
+    {
+        var context = CreateContext();
+        var request = new UpdateRequirementExperienceDraftRequest(
+            "sng-experience-v3-001",
+            null,
+            0,
+            [
+                new("THERMAL", "THERMAL_3"),
+                new("ACOUSTIC", "ACOUSTIC_3"),
+                new("SECURITY", "SECURITY_2"),
+                new("UV", "UV_NO"),
+                new("AESTHETICS", "AESTHETICS_3")
+            ]);
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            request,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(context.StoredDraft);
+        Assert.Equal("sng-experience-v3-001", result.Value!.CatalogVersion);
+        Assert.Null(result.Value.SpaceTypeCode);
+        Assert.Equal(5, result.Value.Answers.Count);
+        AssertLevel1Resolution(result.Value.Level1Resolution, "CLASSIC", "TEMPLADO", true, 5, 5);
+        Assert.Equal(1, context.SaveCount);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV4UnknownBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v4-001",
+                null,
+                0,
+                [new("B01", "VIS_1")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.UnknownBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV4OptionFromOtherBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v4-001",
+                null,
+                0,
+                [new("THERMAL", "ACOUSTIC_LOW")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.OptionDoesNotBelongToBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV4DuplicateBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v4-001",
+                null,
+                0,
+                [
+                    new("THERMAL", "THERMAL_LOW"),
+                    new("THERMAL", "THERMAL_MEDIUM")
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.DuplicateBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV4UnknownSpace_IsRejectedBecauseV4HasNoSpaces()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v4-001",
+                "ESP_ALC_PPAL",
+                0,
+                [new("THERMAL", "THERMAL_LOW")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.UnknownSpaceType, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3UnknownBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                0,
+                [new("B01", "VIS_1")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.UnknownBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3OptionFromOtherBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                0,
+                [new("THERMAL", "ACOUSTIC_1")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.OptionDoesNotBelongToBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3DuplicateBenefit_IsRejected()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                0,
+                [
+                    new("THERMAL", "THERMAL_1"),
+                    new("THERMAL", "THERMAL_2")
+                ]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.DuplicateBenefit, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3UnknownSpace_IsRejectedBecauseV3HasNoSpaces()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                "ESP_ALC_PPAL",
+                0,
+                [new("THERMAL", "THERMAL_1")]),
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.UnknownSpaceType, result.Error);
+        Assert.Null(context.StoredDraft);
+    }
+
+    [Fact]
+    public async Task GetAsync_WithCompleteV4Draft_ReturnsLevel1Resolution()
+    {
+        var context = CreateContext();
+        context.StoredDraft = RequirementItemExperienceDraft.Create(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            "sng-experience-v4-001",
+            null,
+            [
+                new("THERMAL", "THERMAL_MEDIUM"),
+                new("ACOUSTIC", "ACOUSTIC_LOW"),
+                new("SECURITY", "SECURITY_LOW"),
+                new("UV", "UV_NO"),
+                new("AESTHETICS", "AESTHETICS_LOW")
+            ],
+            context.User.Id,
+            At);
+
+        var result = await context.GetService.ExecuteAsync(
+            context.Proposal.Id,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value!.Items, value => value.TechnicalProposalItemId == context.FirstItem.Id);
+        AssertLevel1Resolution(item.Level1Resolution, "PREMIUM", "LAMINADO", true, 5, 5);
+    }
+
+    [Fact]
+    public async Task GetAsync_WithCompleteV3Draft_ReturnsLevel1Resolution()
+    {
+        var context = CreateContext();
+        context.StoredDraft = RequirementItemExperienceDraft.Create(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            "sng-experience-v3-001",
+            null,
+            [
+                new("THERMAL", "THERMAL_5"),
+                new("ACOUSTIC", "ACOUSTIC_3"),
+                new("SECURITY", "SECURITY_2"),
+                new("UV", "UV_YES"),
+                new("AESTHETICS", "AESTHETICS_3")
+            ],
+            context.User.Id,
+            At);
+
+        var result = await context.GetService.ExecuteAsync(
+            context.Proposal.Id,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value!.Items, value => value.TechnicalProposalItemId == context.FirstItem.Id);
+        AssertLevel1Resolution(item.Level1Resolution, "PREMIUM", "LAMINADO", true, 5, 5);
+    }
+
+    [Fact]
+    public async Task GetAsync_WithPartialV3Draft_ReturnsProvisionalLevel1Resolution()
+    {
+        var context = CreateContext();
+        context.StoredDraft = RequirementItemExperienceDraft.Create(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            "sng-experience-v3-001",
+            null,
+            [new("THERMAL", "THERMAL_2")],
+            context.User.Id,
+            At);
+
+        var result = await context.GetService.ExecuteAsync(
+            context.Proposal.Id,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Value!.Items, value => value.TechnicalProposalItemId == context.FirstItem.Id);
+        AssertLevel1Resolution(item.Level1Resolution, "CLASSIC", "TEMPLADO", false, 1, 5);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3ChangedAnswers_ReturnsRecalculatedLevel1Resolution()
+    {
+        var context = CreateContext();
+        context.StoredDraft = RequirementItemExperienceDraft.Create(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            "sng-experience-v3-001",
+            null,
+            [new("THERMAL", "THERMAL_2")],
+            context.User.Id,
+            At);
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                1,
+                [
+                    new("THERMAL", "THERMAL_2"),
+                    new("AESTHETICS", "AESTHETICS_5")
+                ]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        AssertLevel1Resolution(result.Value!.Level1Resolution, "PREMIUM", "TEMPLADO", false, 2, 5);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3UvYes_ReturnsLaminadoWithoutSystemTier()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                0,
+                [new("UV", "UV_YES")]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        AssertLevel1Resolution(result.Value!.Level1Resolution, null, "LAMINADO", false, 1, 5);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WithV3UvNoOnly_ReturnsIncompleteResolutionWithoutFamilies()
+    {
+        var context = CreateContext();
+
+        var result = await context.UpdateService.ExecuteAsync(
+            context.Proposal.Id,
+            context.FirstItem.Id,
+            new UpdateRequirementExperienceDraftRequest(
+                "sng-experience-v3-001",
+                null,
+                0,
+                [new("UV", "UV_NO")]),
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+        AssertLevel1Resolution(result.Value!.Level1Resolution, null, null, false, 1, 5);
     }
 
     [Fact]
@@ -98,6 +478,7 @@ public sealed class RequirementExperienceServicesTests
             Assert.Null(item.CatalogVersion);
             Assert.Null(item.SpaceTypeCode);
             Assert.Equal(0, item.Revision);
+            Assert.Null(item.Level1Resolution);
             Assert.Empty(item.Answers);
         });
     }
@@ -395,6 +776,34 @@ public sealed class RequirementExperienceServicesTests
         Assert.Equal(commercialRevision, context.Proposal.CommercialRevision);
         Assert.Equal(commercialConfirmation, context.Proposal.CommercialConfirmationState);
         Assert.Equal(commercialConfirmedAt, context.Proposal.CommercialConfirmedAtUtc);
+    }
+
+    private static void AssertLevel1Resolution(
+        RequirementExperienceLevel1ResolutionResponse? resolution,
+        string? expectedSystemTier,
+        string? expectedGlassFamily,
+        bool expectedIsComplete,
+        int expectedAnsweredBenefits,
+        int expectedRequiredBenefits)
+    {
+        Assert.NotNull(resolution);
+        Assert.Equal(expectedSystemTier, resolution!.SystemTier);
+        Assert.Equal(expectedGlassFamily, resolution.GlassFamily);
+        Assert.Equal(expectedIsComplete, resolution.IsComplete);
+        Assert.Equal(expectedAnsweredBenefits, resolution.AnsweredBenefits);
+        Assert.Equal(expectedRequiredBenefits, resolution.RequiredBenefits);
+    }
+
+    private static void AssertV4Options(
+        RequirementExperienceCatalogResponse catalog,
+        string benefitCode,
+        params string[] expectedOptionCodes)
+    {
+        var question = Assert.Single(catalog.Questions, value => value.BenefitCode == benefitCode);
+
+        Assert.Equal(
+            expectedOptionCodes,
+            question.Options.Select(option => option.OptionCode).ToArray());
     }
 
     private static TestContext CreateContext()

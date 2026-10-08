@@ -63,12 +63,22 @@ public sealed record RequirementTechnicalProposalItemResponse(
     IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
+    RequirementTechnicalProposalItemDataCompletenessResponse DataCompleteness,
     RequirementTechnicalProposalItemReadinessResponse Readiness,
     RequirementTechnicalProposalHistoricalEvidenceResponse HistoricalEvidence,
     RequirementTechnicalProposalVisualModelResponse VisualModel,
     RequirementTechnicalProposalTraceResponse Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceResponse> Evidence,
-    string? OccurrenceContext = null);
+    string? OccurrenceContext = null,
+    string? ExtractedLocation = null,
+    string? ManualLocationOverride = null,
+    string? EffectiveLocation = null,
+    string? ManualObservation = null);
+
+public sealed record RequirementTechnicalProposalItemDataCompletenessResponse(
+    string State,
+    bool IsComplete,
+    IReadOnlyList<string> MissingFields);
 
 public sealed record RequirementTechnicalProposalReadinessResponse(
     string State,
@@ -267,3 +277,21 @@ public sealed record RequirementTechnicalProposalEvidenceResponse(
     string? ContextLabel,
     decimal? Confidence,
     string Status);
+
+public sealed record UpdateRequirementTechnicalProposalItemLocationRequest(
+    string? Location);
+
+public sealed record UpdateRequirementTechnicalProposalItemLocationResponse(
+    Guid TechnicalProposalId,
+    Guid ItemId,
+    string? ExtractedLocation,
+    string? ManualLocationOverride,
+    string? EffectiveLocation);
+
+public sealed record UpdateRequirementTechnicalProposalItemObservationRequest(
+    string? Observation);
+
+public sealed record UpdateRequirementTechnicalProposalItemObservationResponse(
+    Guid TechnicalProposalId,
+    Guid ItemId,
+    string? ManualObservation);

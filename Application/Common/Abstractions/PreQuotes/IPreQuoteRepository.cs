@@ -18,6 +18,12 @@ public interface IPreQuoteRepository
         int pageSize,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<ProjectWorkspacePreQuoteCandidate>>
+        ListWorkspaceCandidatesByProjectIdAsync(
+            Guid projectId,
+            int limit,
+            CancellationToken cancellationToken);
+
     Task<string> ReserveNextSerialAsync(
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken);
@@ -126,6 +132,8 @@ public sealed record PreQuoteSearchItem(
 public sealed record PreQuoteSearchPage(
     IReadOnlyList<PreQuoteSearchItem> Items,
     int TotalCount);
+
+public sealed record ProjectWorkspacePreQuoteCandidate(Guid Id);
 
 public sealed class PreQuoteQueryException : Exception
 {

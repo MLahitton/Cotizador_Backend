@@ -204,6 +204,29 @@ public sealed class PreQuoteRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<IReadOnlyList<ProjectWorkspacePreQuoteCandidate>>
+        ListWorkspaceCandidatesByProjectIdAsync(
+            Guid projectId,
+            int limit,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.PreQuotes
+                .AsNoTracking()
+                .Where(preQuote => preQuote.ProjectId == projectId)
+                .OrderBy(preQuote => preQuote.Id)
+                .Take(limit)
+                .Select(preQuote => new ProjectWorkspacePreQuoteCandidate(
+                    preQuote.Id))
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new PreQuoteQueryException(exception);
+        }
+    }
+
     public async Task<string> ReserveNextSerialAsync(
         DateTimeOffset createdAtUtc,
         CancellationToken cancellationToken)

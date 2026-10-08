@@ -42,9 +42,12 @@ using Application.PreQuotes.RequirementChatActions;
 using Application.PreQuotes.RequirementExperience;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemLocation;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemObservation;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
 using Application.Projects.GetProjectById;
+using Application.Projects.GetProjectWorkspace;
 using Application.Projects.GetProjects;
 using Application.Projects.SetProjectActivation;
 using Application.Projects.UpdateProject;
@@ -124,6 +127,10 @@ public static class DependencyInjection
             CreateManualRequirementTechnicalProposalItemService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemInclusionService>();
+        services.AddScoped<
+            UpdateRequirementTechnicalProposalItemLocationService>();
+        services.AddScoped<
+            UpdateRequirementTechnicalProposalItemObservationService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();
         services.AddSingleton<ITechnicalProposalItemToHistoricalPricingMapper,
             TechnicalProposalItemToHistoricalPricingMapper>();
@@ -138,6 +145,7 @@ public static class DependencyInjection
         services.AddScoped<CreateProjectService>();
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
+        services.AddScoped<GetProjectWorkspaceService>();
         services.AddScoped<GetProjectsService>();
         services.AddScoped<SetProjectActivationService>();
         services.AddScoped<UpdateProjectService>();

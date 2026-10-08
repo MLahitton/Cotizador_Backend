@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -55,6 +55,13 @@ public sealed partial class FpProReportParser : IFpProReportParser
         {
             items = ParseListItems(tokens).ToArray();
         }
+
+        var valuedGlassRows = ParseTotalGlassRows(pages);
+        if (valuedGlassRows.Count > 0)
+        {
+            items = EnrichItemsGlassPanesWithFSq(items, valuedGlassRows).ToArray();
+        }
+
         var structureCount = ParseStructureCount(items);
         var doorCount = ParseDoorCount(items);
 
@@ -106,21 +113,175 @@ public sealed partial class FpProReportParser : IFpProReportParser
         }
 
         return GlassRegex().Matches(value)
-            .Select(match => new FpProGlassPaneData(
-                match.Groups[1].Value.Trim(),
-                treatment,
-                TryThickness(match.Groups[1].Value),
-                int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture),
-                int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture),
-                int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture)))
+            .Select(match => CreateGlassPane(match, value, treatment))
             .ToArray();
+    }
+
+    private static FpProGlassPaneData CreateGlassPane(Match match, string rawGlassText, string? treatment)
+    {
+        var code = match.Groups[1].Value.Trim();
+        var thickness = TryThickness(code);
+        var composition = ResolveGlassComposition(rawGlassText, match.Value, thickness);
+
+        return new FpProGlassPaneData(
+            code,
+            NormalizeGlassTreatment(treatment),
+            thickness,
+            int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture),
+            int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture),
+            int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture),
+            FSq: null,
+            RawDescription: composition.RawDescription,
+            CompositionType: composition.CompositionType,
+            LayerThicknessesMm: composition.LayerThicknessesMm,
+            InterlayerType: composition.InterlayerType,
+            InterlayerThicknessMm: composition.InterlayerThicknessMm);
+    }
+
+    private static GlassComposition ResolveGlassComposition(
+        string rawGlassText,
+        string rawPaneText,
+        decimal? thickness)
+    {
+        var normalizedRaw = NormalizeSpaces(rawGlassText);
+        var laminated = LaminatedCompositionRegex().Match(normalizedRaw);
+        if (laminated.Success)
+        {
+            return new GlassComposition(
+                normalizedRaw,
+                "Laminated",
+                [
+                    ParseLatinDecimal(laminated.Groups["first"].Value),
+                    ParseLatinDecimal(laminated.Groups["second"].Value)
+                ],
+                "PVB",
+                ParseLatinDecimal(laminated.Groups["interlayer"].Value));
+        }
+
+        return new GlassComposition(
+            NormalizeSpaces(rawPaneText),
+            thickness is null ? "Unknown" : "Monolithic",
+            thickness is null ? null : [thickness.Value],
+            null,
+            null);
     }
 
     private static string? ResolveGlassTreatment(string totalText)
     {
-        return totalText.Contains("TEMPLADO", StringComparison.OrdinalIgnoreCase)
-            ? "TEMPLADO"
+        if (totalText.Contains("TEMPLADO", StringComparison.OrdinalIgnoreCase))
+        {
+            return "TEMPLADO";
+        }
+
+        return totalText.Contains("CRUDO", StringComparison.OrdinalIgnoreCase)
+            ? "CRUDO"
             : null;
+    }
+
+    private static string? NormalizeGlassTreatment(string? treatment)
+    {
+        if (string.IsNullOrWhiteSpace(treatment))
+        {
+            return null;
+        }
+
+        var normalized = NormalizeSpaces(treatment).ToUpperInvariant();
+        return normalized is "TEMPLADO" or "CRUDO" ? normalized : normalized;
+    }
+
+
+    private static IReadOnlyList<FpProValuedGlassPaneRow> ParseTotalGlassRows(IReadOnlyList<PdfPageData> pages) =>
+        ParseTotalGlassRows(pages.SelectMany(page => page.TextLines));
+
+    internal static IReadOnlyList<FpProValuedGlassPaneRow> ParseTotalGlassRows(IEnumerable<string> lines)
+    {
+        var result = new List<FpProValuedGlassPaneRow>();
+        var insideTotalGlassList = false;
+        foreach (var rawLine in lines)
+        {
+            var line = NormalizeSpaces(rawLine);
+            if (line.Contains("Lista total de vidrios", StringComparison.OrdinalIgnoreCase))
+            {
+                insideTotalGlassList = true;
+                continue;
+            }
+
+            if (!insideTotalGlassList)
+            {
+                continue;
+            }
+
+            var match = TotalGlassRowRegex().Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            result.Add(new FpProValuedGlassPaneRow(
+                match.Groups["item"].Value.PadLeft(2, '0'),
+                NormalizeGlassCode(match.Groups["code"].Value),
+                int.Parse(match.Groups["quantity"].Value, CultureInfo.InvariantCulture),
+                int.Parse(match.Groups["width"].Value, CultureInfo.InvariantCulture),
+                int.Parse(match.Groups["height"].Value, CultureInfo.InvariantCulture),
+                NormalizeFSq(match.Groups["fsq"].Success ? match.Groups["fsq"].Value : null)));
+        }
+
+        return result;
+    }
+
+    private static IReadOnlyList<FpProPreviewItemData> EnrichItemsGlassPanesWithFSq(
+        IReadOnlyList<FpProPreviewItemData> items,
+        IReadOnlyList<FpProValuedGlassPaneRow> valuedGlassRows) =>
+        items
+            .Select(item => item with
+            {
+                Glass = EnrichGlassPanesWithFSq(item.ItemNumber, item.Glass, valuedGlassRows)
+            })
+            .ToArray();
+
+    internal static IReadOnlyList<FpProGlassPaneData> EnrichGlassPanesWithFSq(
+        string itemNumber,
+        IReadOnlyList<FpProGlassPaneData> glassPanes,
+        IReadOnlyList<FpProValuedGlassPaneRow> valuedGlassRows)
+    {
+        var normalizedItemNumber = itemNumber.PadLeft(2, '0');
+        return glassPanes
+            .Select(glass => EnrichGlassPaneWithFSq(normalizedItemNumber, glass, valuedGlassRows))
+            .ToArray();
+    }
+
+    private static FpProGlassPaneData EnrichGlassPaneWithFSq(
+        string itemNumber,
+        FpProGlassPaneData glass,
+        IReadOnlyList<FpProValuedGlassPaneRow> valuedGlassRows)
+    {
+        if (glass.WidthMm is null || glass.HeightMm is null || glass.Quantity is null)
+        {
+            return glass with { FSq = null };
+        }
+
+        var normalizedCode = NormalizeGlassCode(glass.Code);
+        var matches = valuedGlassRows
+            .Where(row => string.Equals(row.ItemNumber, itemNumber, StringComparison.Ordinal)
+                && string.Equals(row.Code, normalizedCode, StringComparison.Ordinal)
+                && row.WidthMm == glass.WidthMm.Value
+                && row.HeightMm == glass.HeightMm.Value
+                && row.Quantity == glass.Quantity.Value)
+            .ToArray();
+
+        return glass with
+        {
+            FSq = matches.Length == 1 ? matches[0].FSq : null
+        };
+    }
+
+    private static string NormalizeGlassCode(string value) =>
+        Regex.Replace(value.Trim(), @"\s+", string.Empty, RegexOptions.CultureInvariant).ToUpperInvariant();
+
+    private static string? NormalizeFSq(string? value)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? null : normalized.ToUpperInvariant();
     }
 
     private static IReadOnlyList<FpProPreviewItemData> ParseDetailedItems(
@@ -350,7 +511,37 @@ public sealed partial class FpProReportParser : IFpProReportParser
             .Select(page => new PdfPageData(
                 page.Number,
                 page.Text,
-                ExtractItemImage(page)))
+                ExtractItemImage(page),
+                ExtractTextLines(page)))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> ExtractTextLines(Page page)
+    {
+        var words = page.GetWords()
+            .Select(word => new PdfTextWord(word.Text, word.BoundingBox.Left, word.BoundingBox.Bottom))
+            .OrderByDescending(word => word.Bottom)
+            .ThenBy(word => word.Left)
+            .ToArray();
+        var groups = new List<List<PdfTextWord>>();
+        foreach (var word in words)
+        {
+            var group = groups.FirstOrDefault(value => Math.Abs(value[0].Bottom - word.Bottom) < 2.2);
+            if (group is null)
+            {
+                group = [];
+                groups.Add(group);
+            }
+
+            group.Add(word);
+        }
+
+        return groups
+            .OrderByDescending(group => group[0].Bottom)
+            .Select(group => NormalizeSpaces(string.Join(' ', group
+                .OrderBy(word => word.Left)
+                .Select(word => word.Text))))
+            .Where(line => line.Length > 0)
             .ToArray();
     }
 
@@ -990,10 +1181,23 @@ private static int? ResolveProfileBarCount(
             .Replace("\\)", ")", StringComparison.Ordinal)
             .Replace("\\\\", "\\", StringComparison.Ordinal);
 
+    private sealed record GlassComposition(
+        string RawDescription,
+        string CompositionType,
+        IReadOnlyList<decimal>? LayerThicknessesMm,
+        string? InterlayerType,
+        decimal? InterlayerThicknessMm);
+
     private sealed record PdfPageData(
         int Number,
         string Text,
-        FpProPreviewImageData? ItemImage);
+        FpProPreviewImageData? ItemImage,
+        IReadOnlyList<string> TextLines);
+
+    private sealed record PdfTextWord(
+        string Text,
+        double Left,
+        double Bottom);
 
     private sealed record PngChunk(
         string Type,
@@ -1052,8 +1256,16 @@ private static int? ResolveProfileBarCount(
     [GeneratedRegex("(\\d+(?:[.,]\\d+)?)\\s*MM", RegexOptions.IgnoreCase)]
     private static partial Regex ThicknessRegex();
 
+    [GeneratedRegex(@"(?<first>\d+(?:[.,]\d+)?)\s*(?:MM)?\s*(?:INC)?\s*\+\s*PVB\s*(?<interlayer>\d+(?:[.,]\d+)?)\s*(?:MM)?\s*(?:INC)?\s*\+\s*(?<second>\d+(?:[.,]\d+)?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex LaminatedCompositionRegex();
+
     [GeneratedRegex("[0-9.]+,[0-9]+")]
     private static partial Regex LatinDecimalRegex();
+
+    [GeneratedRegex(
+        @"^(?<code>[A-Z0-9]+MM)\s+Vidrio\s+Espesor\s+\d+\s*mm(?:\s+(?<treatment>[A-ZÁÉÍÓÚÑ]+))?\s+(?<quantity>\d+)\s+(?<width>\d{2,5})\s+x\s+(?<height>\d{2,5})\s+(?:(?<fsq>[A-Z])\s+)?(?<item>\d{1,2})$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex TotalGlassRowRegex();
 
     [GeneratedRegex(
         @"(?<code>[A-Z0-9._-]{2,})\s+(?<description>.*?)(?<quantity>\d+(?:[.,]\d+)?)\s+(?<length>\d+(?:[.,]\d+)?)\s+(?:[0-9.]+,[0-9]+)",
@@ -1061,3 +1273,10 @@ private static int? ResolveProfileBarCount(
     private static partial Regex TechnicalProfileRegex();
 }
 
+internal sealed record FpProValuedGlassPaneRow(
+    string ItemNumber,
+    string Code,
+    int Quantity,
+    int WidthMm,
+    int HeightMm,
+    string? FSq);

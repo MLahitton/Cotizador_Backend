@@ -5,6 +5,7 @@ using Application.PreQuotes.ConfirmRequirementTechnicalProposalSelection;
 using Application.PreQuotes.GetRequirementTechnicalProposal;
 using Application.PreQuotes.PriceRequirementTechnicalProposal;
 using Application.PreQuotes.RequirementChatActions;
+using Application.PreQuotes.TechnicalProposalDataCompleteness;
 using Application.PreQuotes.TechnicalProposalReadiness;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
@@ -915,6 +916,7 @@ public sealed class RequirementChatActionServicesTests
             [],
             true,
             true,
+            new RequirementTechnicalProposalItemDataCompletenessReadModel("COMPLETE", true, []),
             new RequirementTechnicalProposalItemReadinessReadModel("READY", 0, 0, []),
             new RequirementTechnicalProposalHistoricalEvidenceReadModel("AVAILABLE", 1, 0.9m, 0.9m, []),
             new RequirementTechnicalProposalVisualModelReadModel(

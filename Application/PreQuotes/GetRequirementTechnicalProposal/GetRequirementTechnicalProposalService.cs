@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
+using Application.PreQuotes.TechnicalProposalDataCompleteness;
 using Application.PreQuotes.TechnicalProposalReadiness;
 using Application.PreQuotes.VisualSystemModel;
 using Domain.PreQuotes;
@@ -373,6 +374,7 @@ public sealed class GetRequirementTechnicalProposalService(
             item.FinishResolutionReasons,
             item.IsTechnicallyComplete,
             item.IsPriceable,
+            TechnicalProposalItemDataCompletenessEvaluator.Evaluate(item),
             readiness,
             new RequirementTechnicalProposalHistoricalEvidenceReadModel(
                 item.HistoricalSimilarityStatus,
@@ -410,7 +412,11 @@ public sealed class GetRequirementTechnicalProposalService(
                 .ThenBy(evidence => evidence.Id)
                 .Select(evidence => MapEvidence(evidence, sourcesById))
                 .ToArray(),
-            extracted?.OccurrenceContext);
+            extracted?.OccurrenceContext,
+            extracted?.OccurrenceContext,
+            item.ManualLocationOverride,
+            item.EffectiveLocation,
+            item.ManualObservation);
     }
 
     private static RequirementTechnicalProposalSystemAlternativeReadModel?
@@ -710,12 +716,17 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     IReadOnlyList<string> FinishResolutionReasons,
     bool IsTechnicallyComplete,
     bool IsPriceable,
+    RequirementTechnicalProposalItemDataCompletenessReadModel DataCompleteness,
     RequirementTechnicalProposalItemReadinessReadModel Readiness,
     RequirementTechnicalProposalHistoricalEvidenceReadModel HistoricalEvidence,
     RequirementTechnicalProposalVisualModelReadModel VisualModel,
     RequirementTechnicalProposalTraceReadModel Trace,
     IReadOnlyList<RequirementTechnicalProposalEvidenceReadModel> Evidence,
-    string? OccurrenceContext = null);
+    string? OccurrenceContext = null,
+    string? ExtractedLocation = null,
+    string? ManualLocationOverride = null,
+    string? EffectiveLocation = null,
+    string? ManualObservation = null);
 
 public sealed record RequirementTechnicalProposalSuggestedReadModel(
     RequirementTechnicalProposalSystemOptionReadModel? System,

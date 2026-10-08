@@ -441,6 +441,61 @@ public sealed class RequirementRepositoryTests(
     }
 
     [Fact]
+    public async Task RequirementExperienceDrafts_ReplacingAnswerForSameBenefit_UpdatesExistingRowWithoutUniqueViolation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var seeded = await SeedExperienceTechnicalProposalAsync();
+        Guid originalAnswerId;
+
+        await using (var context = fixture.CreateDbContext())
+        {
+            var repository = new RequirementRepository(context);
+            var draft = RequirementItemExperienceDraft.Create(
+                seeded.TechnicalProposalId,
+                seeded.FirstProposalItemId,
+                "sng-experience-v4-001",
+                null,
+                [new("THERMAL", "THERMAL_LOW")],
+                seeded.UserId,
+                At.AddMinutes(10));
+            originalAnswerId = Assert.Single(draft.Answers).Id;
+            repository.AddExperienceDraft(draft);
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        await using (var updateContext = fixture.CreateDbContext())
+        {
+            var repository = new RequirementRepository(updateContext);
+            var draft = await repository.FindExperienceDraftForUpdateAsync(
+                seeded.FirstProposalItemId,
+                cancellationToken);
+
+            Assert.NotNull(draft);
+            Assert.Equal(1, draft!.Revision);
+            var changed = draft.ReplaceDraft(
+                "sng-experience-v4-001",
+                null,
+                [new("THERMAL", "THERMAL_HIGH")],
+                seeded.UserId,
+                At.AddMinutes(11));
+
+            Assert.True(changed);
+            await repository.SaveChangesAsync(cancellationToken);
+        }
+
+        await using var verification = fixture.CreateDbContext();
+        var persisted = Assert.Single(await new RequirementRepository(verification)
+            .ListExperienceDraftsByTechnicalProposalIdAsync(
+                seeded.TechnicalProposalId,
+                cancellationToken));
+        var answer = Assert.Single(persisted.Answers);
+        Assert.Equal(originalAnswerId, answer.Id);
+        Assert.Equal("THERMAL", answer.BenefitCode);
+        Assert.Equal("THERMAL_HIGH", answer.OptionCode);
+        Assert.Equal(2, persisted.Revision);
+    }
+
+    [Fact]
     public async Task RequirementExperienceDrafts_WithDuplicateItemCreation_IsRejectedByPersistence()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

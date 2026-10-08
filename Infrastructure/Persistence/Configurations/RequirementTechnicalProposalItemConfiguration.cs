@@ -108,6 +108,18 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             .HasMaxLength(1000)
             .IsRequired(false);
 
+        builder.Property(item => item.ManualLocationOverride)
+            .HasColumnName("manual_location_override")
+            .HasColumnType("varchar(500)")
+            .HasMaxLength(500)
+            .IsRequired(false);
+
+        builder.Property(item => item.ManualObservation)
+            .HasColumnName("manual_observation")
+            .HasColumnType("varchar(500)")
+            .HasMaxLength(500)
+            .IsRequired(false);
+
         builder.Property(item => item.SuggestedSystemId)
             .HasColumnName("suggested_system_id")
             .HasColumnType("uuid")

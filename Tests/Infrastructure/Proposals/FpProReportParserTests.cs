@@ -151,6 +151,82 @@ public sealed class FpProReportParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_CasaPsFixture_AssignsFSqMetadataToMatchingGlassPane()
+    {
+        var preview = await ParseFixtureAsync("S&G648_t2.PDF");
+
+        var item01 = preview.Items.Single(item => item.ItemNumber == "01");
+        var paneWithFSq = Assert.Single(item01.Glass);
+        Assert.Equal("10MM", paneWithFSq.Code);
+        Assert.Equal(4449, paneWithFSq.WidthMm);
+        Assert.Equal(3094, paneWithFSq.HeightMm);
+        Assert.Equal(1, paneWithFSq.Quantity);
+        Assert.Equal("F", paneWithFSq.FSq);
+
+        var item02 = preview.Items.Single(item => item.ItemNumber == "02");
+        Assert.All(item02.Glass, glass => Assert.Null(glass.FSq));
+    }
+
+    [Fact]
+    public void ParseTotalGlassRows_ParsesTemperedRowsWithNullableFSq()
+    {
+        var rows = FpProReportParser.ParseTotalGlassRows(
+        [
+            "Lista total de vidrios",
+            "GLASSES -",
+            "06MM Vidrio Espesor 6 mm TEMPLADO 3 1653 x 844 28"
+        ]);
+
+        var row = Assert.Single(rows);
+        Assert.Equal("28", row.ItemNumber);
+        Assert.Equal("06MM", row.Code);
+        Assert.Equal(3, row.Quantity);
+        Assert.Equal(1653, row.WidthMm);
+        Assert.Equal(844, row.HeightMm);
+        Assert.Null(row.FSq);
+    }
+
+    [Fact]
+    public void EnrichGlassPanesWithFSq_LeavesFSqNullWhenNoExactMatchExists()
+    {
+        var result = FpProReportParser.EnrichGlassPanesWithFSq(
+            "01",
+            [new FpProGlassPaneData("10MM", null, 10m, 4449, 3094, 1)],
+            [new FpProValuedGlassPaneRow("01", "10MM", 1, 4449, 3000, "F")]);
+
+        Assert.Null(Assert.Single(result).FSq);
+    }
+
+    [Fact]
+    public void EnrichGlassPanesWithFSq_LeavesFSqNullWhenExactMatchIsAmbiguous()
+    {
+        var result = FpProReportParser.EnrichGlassPanesWithFSq(
+            "01",
+            [new FpProGlassPaneData("10MM", null, 10m, 4449, 3094, 1)],
+            [
+                new FpProValuedGlassPaneRow("01", "10MM", 1, 4449, 3094, "F"),
+                new FpProValuedGlassPaneRow("01", "10MM", 1, 4449, 3094, "C")
+            ]);
+
+        Assert.Null(Assert.Single(result).FSq);
+    }
+
+    [Fact]
+    public void EnrichGlassPanesWithFSq_UsesQuantityAsPartOfTheMatchKey()
+    {
+        var result = FpProReportParser.EnrichGlassPanesWithFSq(
+            "06",
+            [
+                new FpProGlassPaneData("05MM", null, 5m, 662, 1644, 1),
+                new FpProGlassPaneData("05MM", null, 5m, 662, 1644, 4)
+            ],
+            [new FpProValuedGlassPaneRow("06", "05MM", 4, 662, 1644, "C")]);
+
+        Assert.Null(result.Single(glass => glass.Quantity == 1).FSq);
+        Assert.Equal("C", result.Single(glass => glass.Quantity == 4).FSq);
+    }
+
+    [Fact]
     public async Task ParseAsync_WithInvalidPdf_ThrowsInvalidDataException()
     {
         var parser = new FpProReportParser();
@@ -251,10 +327,10 @@ public sealed class FpProReportParserTests
         var fixedFermo = preview.Items.First(item =>
             item.FpProProfiles.SequenceEqual(["KONCEPT40", "ALFAJIA"]));
         Assert.Equal("CUERPO FIJO LINEA PREMIUM TIPO EUROPEO VENECIA FERMO", fixedFermo.System?.Trim());
-        Assert.Equal("COMPOSICION MONOLITICO TEMPLADO 10 MM INC", fixedFermo.GlassDescription?.Trim());
+        Assert.Null(fixedFermo.GlassDescription);
         Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", fixedFermo.Finish?.Trim());
         Assert.Equal("N.A", fixedFermo.Lock);
-        Assert.Equal(["module"], fixedFermo.PendingFields);
+        Assert.Equal(["glassDescription", "module"], fixedFermo.PendingFields);
 
         var napoles = preview.Items.First(item =>
             item.FpProProfiles.SequenceEqual(["KONCEPT70", "ANGULOS"])
@@ -299,26 +375,18 @@ public sealed class FpProReportParserTests
     }
 
     [Fact]
-    public async Task ResolveAsync_Sg1043Fixture_ResolvesSerie35WithTechnicalDescriptions()
+    public async Task ResolveAsync_Sg1043Fixture_ResolvesEvidenceBackedSystems()
     {
         var preview = await ResolveFixtureAsync("S&G1043.PDF");
 
-        var projecting = preview.Items.FirstOrDefault(item =>
-            item.System == "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA");
-        var casement = preview.Items.FirstOrDefault(item =>
-            item.System == "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA");
-
-        Assert.NotNull(projecting);
-        Assert.Contains(projecting!.TechnicalProfileDescriptions, value =>
-            value.Contains("PROYECTANTE", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("NAVE HORIZ/VERT", StringComparison.OrdinalIgnoreCase));
-        Assert.NotNull(casement);
-        Assert.Contains(casement!.TechnicalProfileDescriptions, value =>
-            value.Contains("BATIENTE", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("NAVE2295", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("NAVE CAMARA EUROPEA", StringComparison.OrdinalIgnoreCase));
+        AssertResolvedSystem(preview, "03", "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA");
+        AssertResolvedSystem(preview, "04", "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA");
+        AssertResolvedSystem(preview, "06", "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA");
+        AssertResolvedSystem(preview, "08", "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA");
+        AssertResolvedSystem(preview, "10", "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA");
+        AssertResolvedSystem(preview, "11", "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES");
+        AssertResolvedSystem(preview, "13", "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES");
     }
-
     [Fact]
     public async Task ParseAsync_Sg1049Fixture_ExtractsAllItemsAndItem01()
     {
@@ -355,7 +423,7 @@ public sealed class FpProReportParserTests
 
         var item01 = preview.Items.Single(item => item.ItemNumber == "01");
         Assert.Equal("VENTANA CORREDIZA LINEA CLASSIC PRIMAVERA LAGO", item01.System?.Trim());
-        Assert.Equal("COMPOSICION MONOLITICO TEMPLADO 5 MM INC", item01.GlassDescription?.Trim());
+        Assert.Equal("COMPOSICION MONOLITICO CRUDO 5 MM INC", item01.GlassDescription?.Trim());
         Assert.Equal("ALUCOLOR POLIESTER NEGRO MATE PP13", item01.Finish?.Trim());
         Assert.Equal("CIERRE EMBUTIDO DE IMPACTO AUTOMATICO", item01.Lock);
         Assert.Equal(["module"], item01.PendingFields);
@@ -374,6 +442,19 @@ public sealed class FpProReportParserTests
         Assert.Equal(19, preview.Report.StructureCount);
     }
 
+    [Fact]
+    public async Task ResolveAsync_Sg1085Fixture_LeavesAmbiguousSerie35Item15Pending()
+    {
+        var preview = await ResolveFixtureAsync("S&G1085.PDF");
+
+        var item15 = preview.Items.Single(item => item.ItemNumber == "15");
+        Assert.Null(item15.System);
+        Assert.Contains("system", item15.PendingFields);
+        Assert.Contains(item15.TechnicalProfileDescriptions, value =>
+            value.Contains("NAVE HORIZ/VERT", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(item15.TechnicalProfileDescriptions, value =>
+            value.Contains("PISAVIDRIO PUERTA BATIENTE", StringComparison.OrdinalIgnoreCase));
+    }
     [Fact]
 public async Task ParseAsync_Sg1085Fixture_DetectsTemperedGlassTreatment()
 {
@@ -403,6 +484,15 @@ public async Task ParseAsync_Sg1085Fixture_DetectsTemperedGlassTreatment()
     });
     }
 
+    private static void AssertResolvedSystem(
+        FpProReportPreviewData preview,
+        string itemNumber,
+        string expectedSystem)
+    {
+        var item = preview.Items.Single(item => item.ItemNumber == itemNumber);
+        Assert.Equal(expectedSystem, item.System?.Trim());
+        Assert.DoesNotContain("system", item.PendingFields);
+    }
     private static async Task<FpProReportPreviewData> ParseFixtureAsync(string fileName)
     {
         var path = Path.Combine(

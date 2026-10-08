@@ -1252,6 +1252,8 @@ public sealed class RequirementTechnicalProposalItem
     public int? BaseWidthMillimeters { get; private set; }
     public int? BaseHeightMillimeters { get; private set; }
     public string? ManualNote { get; private set; }
+    public string? ManualLocationOverride { get; private set; }
+    public string? ManualObservation { get; private set; }
     public Guid? SuggestedSystemId { get; private set; }
     public Guid? SuggestedGlassTypeId { get; private set; }
     public Guid? SuggestedFinishTypeId { get; private set; }
@@ -1301,6 +1303,8 @@ public sealed class RequirementTechnicalProposalItem
         ManualWidthMillimetersOverride ?? BaseWidthMillimeters;
     public int? EffectiveHeightMillimeters =>
         ManualHeightMillimetersOverride ?? BaseHeightMillimeters;
+    public string? EffectiveLocation =>
+        ManualLocationOverride ?? ExtractedItem?.OccurrenceContext;
 
     public static RequirementTechnicalProposalItem Create(
         Guid technicalProposalId,
@@ -1556,6 +1560,16 @@ public sealed class RequirementTechnicalProposalItem
         }
 
         ExtractedItem = extractedItem;
+    }
+
+    public void UpdateManualLocation(string? location)
+    {
+        ManualLocationOverride = RequirementExtractedItem.NormalizeOptional(location, 500);
+    }
+
+    public void UpdateManualObservation(string? observation)
+    {
+        ManualObservation = RequirementExtractedItem.NormalizeOptional(observation, 500);
     }
 
     public void ApplyManualDataOverride(

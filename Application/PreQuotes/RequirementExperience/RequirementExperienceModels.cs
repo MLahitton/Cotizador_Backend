@@ -34,7 +34,15 @@ public sealed record RequirementExperienceItemDraftResponse(
     long Revision,
     DateTimeOffset? UpdatedAtUtc,
     Guid? UpdatedByUserId,
+    RequirementExperienceLevel1ResolutionResponse? Level1Resolution,
     IReadOnlyList<RequirementExperienceAnswerResponse> Answers);
+
+public sealed record RequirementExperienceLevel1ResolutionResponse(
+    string? SystemTier,
+    string? GlassFamily,
+    bool IsComplete,
+    int AnsweredBenefits,
+    int RequiredBenefits);
 
 public sealed record RequirementExperienceAnswerResponse(
     string BenefitCode,

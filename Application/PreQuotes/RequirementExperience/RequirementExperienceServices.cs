@@ -110,6 +110,7 @@ public sealed class GetRequirementExperienceDraftsService(
             Revision: 0,
             UpdatedAtUtc: null,
             UpdatedByUserId: null,
+            Level1Resolution: null,
             Answers: []);
     }
 
@@ -117,6 +118,11 @@ public sealed class GetRequirementExperienceDraftsService(
         Guid itemId,
         RequirementItemExperienceDraft draft)
     {
+        var answers = draft.Answers
+            .OrderBy(answer => answer.BenefitCode, StringComparer.Ordinal)
+            .Select(answer => new RequirementExperienceAnswerResponse(answer.BenefitCode, answer.OptionCode))
+            .ToArray();
+
         return new RequirementExperienceItemDraftResponse(
             itemId,
             draft.CatalogVersion,
@@ -125,10 +131,30 @@ public sealed class GetRequirementExperienceDraftsService(
             draft.Revision,
             draft.UpdatedAtUtc,
             draft.UpdatedByUserId,
-            draft.Answers
-                .OrderBy(answer => answer.BenefitCode, StringComparer.Ordinal)
-                .Select(answer => new RequirementExperienceAnswerResponse(answer.BenefitCode, answer.OptionCode))
-                .ToArray());
+            MapLevel1Resolution(draft.CatalogVersion, answers),
+            answers);
+    }
+
+    private static RequirementExperienceLevel1ResolutionResponse? MapLevel1Resolution(
+        string catalogVersion,
+        IReadOnlyList<RequirementExperienceAnswerResponse> answers)
+    {
+        if (!string.Equals(catalogVersion, RequirementExperienceCatalog.V3Version, StringComparison.Ordinal)
+            && !string.Equals(catalogVersion, RequirementExperienceCatalog.V4Version, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var resolution = RequirementExperienceLevel1Resolver.Resolve(
+            catalogVersion,
+            answers.Select(answer => new RequirementExperienceLevel1Answer(answer.BenefitCode, answer.OptionCode)));
+
+        return new RequirementExperienceLevel1ResolutionResponse(
+            resolution.SystemTier,
+            resolution.GlassFamily,
+            resolution.IsComplete,
+            resolution.AnsweredBenefits,
+            resolution.RequiredBenefits);
     }
 
     private static bool CanAccess(Guid projectOwnerUserId, User user)

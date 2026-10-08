@@ -61,6 +61,10 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.True(item.IsTechnicallyComplete);
         Assert.True(item.IsPriceable);
         Assert.Equal(0.83m, item.Confidence.Overall);
+        Assert.Equal("Planta de ubicacion", item.OccurrenceContext);
+        Assert.Equal("Planta de ubicacion", item.ExtractedLocation);
+        Assert.Null(item.ManualLocationOverride);
+        Assert.Equal("Planta de ubicacion", item.EffectiveLocation);
 
         Assert.NotNull(item.Suggested.System);
         Assert.Equal("K70", item.Suggested.System!.Code);
@@ -122,6 +126,56 @@ public sealed class GetRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
+    public async Task Execute_WithManualLocationOverride_ReturnsExtractedManualAndEffectiveLocations()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+                proposal.Items.Single().UpdateManualLocation("  Sala principal  "));
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.Equal("Planta de ubicacion", item.ExtractedLocation);
+        Assert.Equal("Sala principal", item.ManualLocationOverride);
+        Assert.Equal("Sala principal", item.EffectiveLocation);
+        Assert.Equal("Planta de ubicacion", item.OccurrenceContext);
+    }
+
+
+    [Fact]
+    public async Task Execute_WithManualObservation_ReturnsObservationMetadata()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+                proposal.Items.Single().UpdateManualObservation("  Revisar encuentro con obra  "));
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.Equal("Revisar encuentro con obra", item.ManualObservation);
+    }
+    [Fact]
+    public void UpdateManualLocation_WithWhitespace_ClearsOverrideAndRestoresEffectiveLocation()
+    {
+        var context = CreateContext(withProposal: true);
+        var item = context.Proposal!.Items.Single();
+
+        item.UpdateManualLocation("Sala principal");
+        item.UpdateManualLocation("   ");
+
+        Assert.Null(item.ManualLocationOverride);
+        Assert.Equal("Planta de ubicacion", item.EffectiveLocation);
+    }
+
+    [Fact]
     public async Task Execute_WithReadyReadinessAndLegacyStaleFlags_UsesCurrentReadinessForSummaryCounts()
     {
         var context = CreateContext(
@@ -172,6 +226,34 @@ public sealed class GetRequirementTechnicalProposalServiceTests
         Assert.Equal("BLOCKED", Assert.Single(result.Proposal.Items).Readiness.State);
     }
 
+    [Fact]
+    public async Task Execute_WithCompleteDataAndMissingTechnicalSelection_ReturnsCompleteDataAndBlockedReadiness()
+    {
+        var context = CreateContext(
+            withProposal: true,
+            configureProposal: proposal =>
+            {
+                var item = proposal.Items.Single();
+                SetPrivateProperty<Guid?>(item, "SuggestedSystemId", null);
+                SetPrivateProperty<Guid?>(item, "SuggestedGlassTypeId", null);
+                SetPrivateProperty<Guid?>(item, "SuggestedFinishTypeId", null);
+                SetPrivateProperty(item, "RequiresReview", false);
+                SetPrivateProperty(item, "IsTechnicallyComplete", true);
+                SetPrivateProperty(item, "IsPriceable", true);
+                SetPrivateProperty(item, "ReviewReasons", Array.Empty<string>());
+            });
+
+        var result = await context.Service.ExecuteAsync(
+            new GetRequirementTechnicalProposalCommand(context.Requirement.Id),
+            TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        var item = Assert.Single(result.Proposal!.Items);
+        Assert.Equal("COMPLETE", item.DataCompleteness.State);
+        Assert.True(item.DataCompleteness.IsComplete);
+        Assert.Empty(item.DataCompleteness.MissingFields);
+        Assert.Equal("BLOCKED", item.Readiness.State);
+    }
     [Fact]
     public async Task Execute_WithWarningReadiness_CountsReviewWithoutBlockingTechnicalCompletenessOrPricing()
     {
@@ -860,7 +942,7 @@ public async Task Execute_AdminReadingAnotherUsersTechnicalProposal_ReturnsSucce
                 ? UserId
                 : Guid.Parse(
                     "99999999-9999-9999-9999-999999999999");
-            
+
         var client = Client.Create(
             ClientType.Company,
             "Client",
@@ -1066,7 +1148,8 @@ public async Task Execute_AdminReadingAnotherUsersTechnicalProposal_ReturnsSucce
             "MATTE",
             null,
             false,
-            At);
+            At,
+            occurrenceContext: "Planta de ubicacion");
         var evidence = RequirementExtractedItemEvidence.Create(
             item.Id,
             null,

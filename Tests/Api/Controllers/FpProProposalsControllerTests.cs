@@ -35,7 +35,7 @@ public sealed class FpProProposalsControllerTests
                 3.6m,
                 null,
                 [
-                    new FpProGlassPaneData("06MM", "TEMPLADO", 6m, 1500, 2400, 1),
+                    new FpProGlassPaneData("06MM", "TEMPLADO", 6m, 1500, 2400, 1, "F", "06MM (1500 x 2400) x 1", "Monolithic", [6m]),
                     new FpProGlassPaneData("05MM", null, 5m, 1500, 2400, 1)
                 ],
                 6m,
@@ -96,7 +96,12 @@ public sealed class FpProProposalsControllerTests
         Assert.Equal(1, response.Report.StructureCount);
         var glass = Assert.Single(response.Items).Glass;
         Assert.Equal("TEMPLADO", glass[0].Treatment);
+        Assert.Equal("F", glass[0].FSq);
+        Assert.Equal("06MM (1500 x 2400) x 1", glass[0].RawDescription);
+        Assert.Equal("Monolithic", glass[0].CompositionType);
+        Assert.Equal([6m], glass[0].LayerThicknessesMm);
         Assert.Null(glass[1].Treatment);
+        Assert.Null(glass[1].FSq);
     }
 
     [Fact]

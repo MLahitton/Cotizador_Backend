@@ -105,7 +105,13 @@ public sealed record FpProGlassPaneResponse(
     decimal? ThicknessMm,
     int? WidthMm,
     int? HeightMm,
-    int? Quantity);
+    int? Quantity,
+    string? FSq = null,
+    string? RawDescription = null,
+    string? CompositionType = null,
+    IReadOnlyList<decimal>? LayerThicknessesMm = null,
+    string? InterlayerType = null,
+    decimal? InterlayerThicknessMm = null);
 
 public sealed record FpProTechnicalProfileResponse(
     string Code,

@@ -37,7 +37,7 @@ public sealed class FpProPreviewConfigurationResolver(
         QuotationTemplateCatalog catalog)
     {
         var system = ResolveSystem(item, catalog);
-        var glassDescription = ResolveGlassDescription(item.SelectedThicknessMm, catalog);
+        var glassDescription = ResolveGlassDescription(item, catalog);
         var finish = catalog.Finishes.FirstOrDefault(value =>
             string.Equals(value.Label, DefaultFinish, StringComparison.Ordinal))?.Value;
         var lockValue = system is null
@@ -112,6 +112,11 @@ public sealed class FpProPreviewConfigurationResolver(
                 : "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES";
         }
 
+        if (SetEquals(profiles, "KONCEPT70", "ANGULOS", "VITRINA"))
+        {
+            return "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES";
+        }
+
         if (SetEquals(profiles, "KONCEPT100", "ANGULOS"))
         {
             return "PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA MONACO";
@@ -134,10 +139,44 @@ public sealed class FpProPreviewConfigurationResolver(
             return ResolveSerie35(item.TechnicalProfileDescriptions);
         }
 
+        if (SetEquals(profiles, "SERIE35", "ALFAJIA", "VITRINA"))
+        {
+            return ResolveSerie35(item.TechnicalProfileDescriptions);
+        }
+
+        if (SetEquals(profiles, "SERIE35", "ALFAJIA", "TUBULARES"))
+        {
+            return ResolveSerie35BatienteOnly(item.TechnicalProfileDescriptions);
+        }
+
+        if (SetEquals(profiles, "SERIE35", "ALFAJIA", "TUBULARES", "VITRINA"))
+        {
+            return "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA";
+        }
+
         return null;
     }
 
     private static string? ResolveSerie35(IReadOnlyList<string> descriptions)
+    {
+        var signals = ResolveSerie35Signals(descriptions);
+        return (signals.HasProjecting, signals.HasCasement) switch
+        {
+            (true, false) => "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA",
+            (false, true) => "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
+            _ => null
+        };
+    }
+
+    private static string? ResolveSerie35BatienteOnly(IReadOnlyList<string> descriptions)
+    {
+        var signals = ResolveSerie35Signals(descriptions);
+        return signals is { HasProjecting: false, HasCasement: true }
+            ? "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA"
+            : null;
+    }
+
+    private static Serie35Signals ResolveSerie35Signals(IReadOnlyList<string> descriptions)
     {
         var hasProjecting = descriptions.Any(value =>
             ContainsToken(value, "MARCO VENTANA PROYECTANTE")
@@ -148,27 +187,76 @@ public sealed class FpProPreviewConfigurationResolver(
             || ContainsToken(value, "NAVE2295")
             || ContainsToken(value, "NAVE CAMARA EUROPEA"));
 
-        return (hasProjecting, hasCasement) switch
-        {
-            (true, false) => "CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA",
-            (false, true) => "CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA",
-            _ => null
-        };
+        return new Serie35Signals(hasProjecting, hasCasement);
     }
 
+    private sealed record Serie35Signals(bool HasProjecting, bool HasCasement);
+
     private static string? ResolveGlassDescription(
-        decimal? selectedThicknessMm,
+        FpProPreviewItemData item,
         QuotationTemplateCatalog catalog)
     {
-        if (selectedThicknessMm is null)
+        if (item.Glass.Count == 0)
         {
             return null;
         }
 
-        var expected = $"COMPOSICION MONOLITICO TEMPLADO {selectedThicknessMm.Value:0.##} MM INC";
-        return catalog.GlassDescriptions.FirstOrDefault(value =>
-            string.Equals(value.Label, expected, StringComparison.Ordinal))?.Value;
+        var expectedDescriptions = item.Glass
+            .Select(BuildExpectedGlassDescription)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (expectedDescriptions.Length != 1 || expectedDescriptions[0] is null)
+        {
+            return null;
+        }
+
+        var expected = expectedDescriptions[0]!;
+        var matches = catalog.GlassDescriptions
+            .Where(value => string.Equals(NormalizeCatalogValue(value.Label), NormalizeCatalogValue(expected), StringComparison.Ordinal))
+            .ToArray();
+
+        return matches.Length == 1 ? matches[0].Value : null;
     }
+
+    private static string? BuildExpectedGlassDescription(FpProGlassPaneData pane)
+    {
+        var compositionType = NormalizeToken(pane.CompositionType ?? (pane.ThicknessMm is null ? "Unknown" : "Monolithic"));
+        var treatment = NormalizeToken(pane.Treatment ?? string.Empty);
+
+        if (compositionType == "MONOLITHIC" && pane.ThicknessMm is { } thickness)
+        {
+            return treatment switch
+            {
+                "TEMPLADO" => $"COMPOSICION MONOLITICO TEMPLADO {FormatMillimeters(thickness)} MM INC",
+                "CRUDO" => $"COMPOSICION MONOLITICO CRUDO {FormatMillimeters(thickness)} MM INC",
+                _ => null
+            };
+        }
+
+        if (compositionType == "LAMINATED"
+            && pane.LayerThicknessesMm is { Count: 2 } layers
+            && string.Equals(pane.InterlayerType, "PVB", StringComparison.OrdinalIgnoreCase)
+            && pane.InterlayerThicknessMm is { } interlayerThickness)
+        {
+            return treatment switch
+            {
+                "TEMPLADO" => $"COMPOSICION LAMINADO TEMPLADO {FormatMillimeters(layers[0])} MM INC + PVB {FormatInterlayer(interlayerThickness)} MM INC + {FormatMillimeters(layers[1])} MM INC",
+                "CRUDO" => $"COMPOSICION LAMINADO CRUDO {FormatMillimeters(layers[0])} MM INC + PVB {FormatInterlayer(interlayerThickness)} MM INC + {FormatMillimeters(layers[1])} MM INC",
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static string FormatMillimeters(decimal value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string FormatInterlayer(decimal value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture).Replace('.', ',');
+
+    private static string NormalizeCatalogValue(string value) =>
+        NormalizeText(value).Replace(" ", string.Empty, StringComparison.Ordinal);
 
     private static decimal? ResolveGlassPrice(FpProPreviewItemData item)
 {
@@ -244,6 +332,11 @@ private static decimal? ResolvePaneAreaM2(FpProGlassPaneData pane)
 
 private static decimal? ResolveGlassRate(FpProGlassPaneData pane)
 {
+    if (string.Equals(pane.CompositionType, "Laminated", StringComparison.OrdinalIgnoreCase))
+    {
+        return null;
+    }
+
     var code = NormalizeToken(pane.Code);
     var treatment = NormalizeToken(pane.Treatment ?? string.Empty);
 

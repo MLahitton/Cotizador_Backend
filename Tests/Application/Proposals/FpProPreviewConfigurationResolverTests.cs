@@ -79,23 +79,124 @@ public sealed class FpProPreviewConfigurationResolverTests
     }
 
     [Theory]
-    [InlineData("5", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC")]
-    [InlineData("6", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC")]
-    [InlineData("8", "COMPOSICION MONOLITICO TEMPLADO 8 MM INC")]
-    [InlineData("10", "COMPOSICION MONOLITICO TEMPLADO 10 MM INC")]
-    public async Task ResolveAsync_WithKnownThickness_ResolvesGlassDescription(
-        string thickness,
+    [InlineData("PUERTA CORREDIZA LINEA PREMIUM TIPO EUROPEO VENECIA NAPOLES", "", "KONCEPT70", "ANGULOS", "VITRINA")]
+    [InlineData("CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA", "", "SERIE35", "ALFAJIA", "TUBULARES", "VITRINA")]
+    [InlineData("CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA", "NAVE2295", "SERIE35", "ALFAJIA", "TUBULARES")]
+    [InlineData("CUERPO PROYECTANTE LINEA CLASSIC PRIMAVERA SIENA", "NAVE HORIZ/VERT", "SERIE35", "ALFAJIA", "VITRINA")]
+    [InlineData("CUERPO BATIENTE LINEA CLASSIC PRIMAVERA SIENA", "NAVE2295", "SERIE35", "ALFAJIA", "VITRINA")]
+    public async Task ResolveAsync_WithEvidenceBackedExtendedProfiles_ResolvesSystem(
+        string expectedSystem,
+        string technicalDescription,
+        params string[] profiles)
+    {
+        var resolver = CreateResolver();
+        var technicalDescriptions = string.IsNullOrWhiteSpace(technicalDescription)
+            ? []
+            : new[] { technicalDescription };
+
+        var result = await resolver.ResolveAsync(
+            Preview(Item(profiles, technicalDescriptions: technicalDescriptions)),
+            TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal(expectedSystem, item.System);
+        Assert.DoesNotContain("system", item.PendingFields);
+    }
+
+    [Theory]
+    [InlineData("NAVE HORIZ/VERT|NAVE2295", "SERIE35", "ALFAJIA", "VITRINA")]
+    [InlineData("", "SERIE35", "ALFAJIA", "VITRINA")]
+    [InlineData("NAVE2295", "SERIE35", "ALFAJIA", "VITRINA", "EXTRA")]
+    public async Task ResolveAsync_WithUnsafeExtendedSerie35Profiles_LeavesSystemPending(
+        string technicalDescriptionsInput,
+        params string[] profiles)
+    {
+        var resolver = CreateResolver();
+        var technicalDescriptions = string.IsNullOrWhiteSpace(technicalDescriptionsInput)
+            ? []
+            : technicalDescriptionsInput.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var result = await resolver.ResolveAsync(
+            Preview(Item(profiles, technicalDescriptions: technicalDescriptions)),
+            TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(result.Items);
+        Assert.Null(item.System);
+        Assert.Contains("system", item.PendingFields);
+    }
+    [Theory]
+    [InlineData("05MM", 5, "TEMPLADO", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC")]
+    [InlineData("06MM", 6, "TEMPLADO", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC")]
+    [InlineData("08MM", 8, "TEMPLADO", "COMPOSICION MONOLITICO TEMPLADO 8 MM INC")]
+    [InlineData("10MM", 10, "TEMPLADO", "COMPOSICION MONOLITICO TEMPLADO 10 MM INC")]
+    [InlineData("05MM", 5, "CRUDO", "COMPOSICION MONOLITICO CRUDO 5 MM INC")]
+    public async Task ResolveAsync_WithKnownGlassIdentity_ResolvesGlassDescription(
+        string code,
+        decimal thickness,
+        string treatment,
         string expectedGlassDescription)
     {
         var resolver = CreateResolver();
 
         var result = await resolver.ResolveAsync(
-            Preview(Item(["KONCEPT50", "ALFAJIA"], selectedThicknessMm: decimal.Parse(thickness))),
+            Preview(Item(
+                ["KONCEPT50", "ALFAJIA"],
+                selectedThicknessMm: thickness,
+                glass: [new FpProGlassPaneData(code, treatment, thickness, 1000, 1000, 1)])),
             TestContext.Current.CancellationToken);
 
         var item = Assert.Single(result.Items);
         Assert.Equal(expectedGlassDescription, item.GlassDescription);
         Assert.DoesNotContain("glassDescription", item.PendingFields);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithUnknownGlassTreatment_DoesNotFallbackToTempered()
+    {
+        var resolver = CreateResolver();
+
+        var result = await resolver.ResolveAsync(
+            Preview(Item(
+                ["KONCEPT50", "ALFAJIA"],
+                selectedThicknessMm: 5m,
+                glass: [new FpProGlassPaneData("05MM", null, 5m, 1000, 1000, 1)])),
+            TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(result.Items);
+        Assert.Null(item.GlassDescription);
+        Assert.Contains("glassDescription", item.PendingFields);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithLaminatedRawPvbIdentity_ResolvesOnlyExactCatalogMatch()
+    {
+        var resolver = CreateResolver();
+
+        var result = await resolver.ResolveAsync(
+            Preview(Item(
+                ["KONCEPT50", "ALFAJIA"],
+                selectedThicknessMm: 5m,
+                glass:
+                [
+                    new FpProGlassPaneData(
+                        "05MM",
+                        "CRUDO",
+                        5m,
+                        1000,
+                        1000,
+                        1,
+                        CompositionType: "Laminated",
+                        LayerThicknessesMm: [5m, 5m],
+                        InterlayerType: "PVB",
+                        InterlayerThicknessMm: 0.38m)
+                ])),
+            TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(result.Items);
+        Assert.Equal("COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC", item.GlassDescription);
+        Assert.Null(item.GlassPrice);
+        Assert.DoesNotContain("glassDescription", item.PendingFields);
+        Assert.Contains("glassPrice", item.PendingFields);
     }
 
     [Fact]
@@ -109,7 +210,7 @@ public sealed class FpProPreviewConfigurationResolverTests
                 selectedThicknessMm: 5m,
                 glass:
                 [
-                    new FpProGlassPaneData("05MM", null, 5m, 1000, 1000, 1)
+                    new FpProGlassPaneData("05MM", "TEMPLADO", 5m, 1000, 1000, 1)
                 ])),
             TestContext.Current.CancellationToken);
 
@@ -320,7 +421,9 @@ public async Task ResolveAsync_WithMixedKnownGlassBelowOneSquareMeterForAnyClass
                     new("COMPOSICION MONOLITICO TEMPLADO 5 MM INC", "COMPOSICION MONOLITICO TEMPLADO 5 MM INC"),
                     new("COMPOSICION MONOLITICO TEMPLADO 6 MM INC", "COMPOSICION MONOLITICO TEMPLADO 6 MM INC"),
                     new("COMPOSICION MONOLITICO TEMPLADO 8 MM INC", "COMPOSICION MONOLITICO TEMPLADO 8 MM INC"),
-                    new("COMPOSICION MONOLITICO TEMPLADO 10 MM INC", "COMPOSICION MONOLITICO TEMPLADO 10 MM INC")
+                    new("COMPOSICION MONOLITICO TEMPLADO 10 MM INC", "COMPOSICION MONOLITICO TEMPLADO 10 MM INC"),
+                    new("COMPOSICION MONOLITICO CRUDO 5 MM INC", "COMPOSICION MONOLITICO CRUDO 5 MM INC"),
+                    new("COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC", "COMPOSICION LAMINADO CRUDO 5 MM INC + PVB 0,38 MM INC + 5 MM INC")
                 ],
                 [new("ALUCOLOR POLIESTER NEGRO MATE PP13", "ALUCOLOR POLIESTER NEGRO MATE PP13")],
                 [new("BGA", "BGA")]));
