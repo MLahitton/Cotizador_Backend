@@ -112,6 +112,8 @@ public static class DependencyInjection
         services.AddScoped<GetRequirementExperienceCatalogService>();
         services.AddScoped<GetRequirementExperienceDraftsService>();
         services.AddScoped<UpdateRequirementExperienceDraftService>();
+        services.AddScoped<RequirementExperienceLevel2Resolver>();
+        services.AddScoped<GetRequirementExperienceLevel2Service>();
         services.AddSingleton<IRequirementChatActionPlanStore, InMemoryRequirementChatActionPlanStore>();
         services.AddScoped<IRequirementChatTechnicalProposalReader, RequirementChatTechnicalProposalReader>();
         services.AddScoped<IRequirementChatSelectionExecutor, RequirementChatSelectionExecutor>();

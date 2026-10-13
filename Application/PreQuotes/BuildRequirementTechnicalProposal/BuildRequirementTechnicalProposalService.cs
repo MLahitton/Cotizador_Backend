@@ -304,32 +304,23 @@ public sealed class BuildRequirementTechnicalProposalService(
             return null;
         }
 
-        if (IsShowerDivision(item))
+        if (IsShowerDivision(item) || IsRailingOrGuardrail(item))
         {
-            return RuleGlass(
-                glasses,
-                "TEMP_8",
-                [GlassResolutionReasonCodes.SpecialGlassShower8Mm]);
-        }
-
-        if (IsRailingOrGuardrail(item))
-        {
-            return RuleGlass(
-                glasses,
-                "TEMP_10",
-                [GlassResolutionReasonCodes.SpecialGlassRailing10Mm]);
+            return RequirementGlassTechnicalResolver.ResolveTemperedWithSpecialRules(
+                item,
+                glasses);
         }
 
         var line = ToSelectorLine(commercialLine)
             ?? CommercialLine(suggestedSystem);
         if (line is "CLASSIC" or "ESSENTIAL" or "PREMIUM")
         {
-            return TemperedRuleGlass(item, glasses);
+            return RequirementGlassTechnicalResolver.ResolveTemperedWithSpecialRules(item, glasses);
         }
 
         if (line is "BIOCONFORT" or "SIGNATURE")
         {
-            return LaminatedRuleGlass(item, glasses);
+            return RequirementGlassTechnicalResolver.ResolveLaminated(item, glasses);
         }
 
         return null;
@@ -657,7 +648,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             var match = System.Text.RegularExpressions.Regex.Match(
                 text,
-                @"\b(?<count>\d{1,2})\s*(?:hojas|leafs|leaves|naves|panel(?:es)?\s+m[oÃƒÆ’Ã‚Â³]vil(?:es)?)\s*(?:de|=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                @"\b(?<count>\d{1,2})\s*(?:hojas|leafs|leaves|naves|panel(?:es)?\s+m[oÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³]vil(?:es)?)\s*(?:de|=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!match.Success)
             {
@@ -686,7 +677,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         {
             var match = System.Text.RegularExpressions.Regex.Match(
                 text,
-                @"\b(?:(?:ancho|width)\s+(?:de\s+)?(?:hoja|leaf|nave|panel\s+m[oÃƒÆ’Ã‚Â³]vil|abertura|opening|vano\s+[uÃƒÆ’Ã‚Âº]til|luz)|(?:hoja|leaf|nave|panel\s+m[oÃƒÆ’Ã‚Â³]vil|abertura|opening|vano\s+[uÃƒÆ’Ã‚Âº]til|luz)\s+(?:width|ancho))\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
+                @"\b(?:(?:ancho|width)\s+(?:de\s+)?(?:hoja|leaf|nave|panel\s+m[oÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³]vil|abertura|opening|vano\s+[uÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº]til|luz)|(?:hoja|leaf|nave|panel\s+m[oÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³]vil|abertura|opening|vano\s+[uÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Âº]til|luz)\s+(?:width|ancho))\b\s*(?:=|:|-)?\s*(?<value>\d+(?:[\.,]\d+)?)\s*(?<unit>mm|cm|m)\b",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             return match.Success
                 ? ToMillimeters(
@@ -972,7 +963,7 @@ public sealed class BuildRequirementTechnicalProposalService(
             var count = System.Text.RegularExpressions.Regex
                 .Match(
                     text,
-                    @"(?<count>\d{1,2})\s*(tramos|panos|paÃƒÆ’Ã‚Â±os|paÃƒÂ±os|cuerpos|segmentos)",
+                    @"(?<count>\d{1,2})\s*(tramos|panos|paÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â±os|paÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â±os|cuerpos|segmentos)",
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
             if (!count.Success)
             {
@@ -1164,7 +1155,7 @@ public sealed class BuildRequirementTechnicalProposalService(
         || Contains(item.FunctionalType, "SHOWER_DIVISION")
         || Contains(item.FunctionalType, "BATHROOM_DIVISION")
         || Contains(item.Description, "DIVISION DE BANO")
-        || Contains(item.Description, "DIVISION DE BAÃƒâ€˜O");
+        || Contains(item.Description, "DIVISION DE BAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‹Å“O");
 
     private static bool IsRailingOrGuardrail(RequirementExtractedItem item) =>
         item.ElementType == StructuredElementType.Railing

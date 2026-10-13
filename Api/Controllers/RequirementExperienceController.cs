@@ -1,4 +1,4 @@
-using Application.PreQuotes.RequirementExperience;
+﻿using Application.PreQuotes.RequirementExperience;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +10,8 @@ namespace Api.Controllers;
 public sealed class RequirementExperienceController(
     GetRequirementExperienceCatalogService getCatalog,
     GetRequirementExperienceDraftsService getDrafts,
-    UpdateRequirementExperienceDraftService updateDraft)
+    UpdateRequirementExperienceDraftService updateDraft,
+    GetRequirementExperienceLevel2Service getLevel2)
     : ControllerBase
 {
     [HttpGet("experience-catalog")]
@@ -50,6 +51,22 @@ public sealed class RequirementExperienceController(
             : MapFailure(result.Error);
     }
 
+
+    [HttpGet("technical-proposals/{technicalProposalId:guid}/items/{technicalProposalItemId:guid}/experience-level2")]
+    [ProducesResponseType(typeof(RequirementExperienceLevel2Response), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetLevel2(
+        Guid technicalProposalId,
+        Guid technicalProposalItemId,
+        CancellationToken cancellationToken)
+    {
+        var result = await getLevel2.ExecuteAsync(
+            technicalProposalId,
+            technicalProposalItemId,
+            cancellationToken);
+        return result.IsSuccess
+            ? Ok(result.Value!)
+            : MapFailure(result.Error);
+    }
     private IActionResult MapFailure(RequirementExperienceFailure failure)
     {
         return failure switch
