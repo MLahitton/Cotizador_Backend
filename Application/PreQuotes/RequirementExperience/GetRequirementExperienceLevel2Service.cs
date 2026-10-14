@@ -69,6 +69,10 @@ public sealed class GetRequirementExperienceLevel2Service(
         var level1 = draft is null
             ? null
             : GetRequirementExperienceDraftsService.MapDraft(technicalProposalItemId, draft).Level1Resolution;
+        var technicalSelection =
+            await requirementRepository.FindExperienceTechnicalSelectionForUpdateAsync(
+                technicalProposalItemId,
+                cancellationToken);
 
         var systems = await productSystemCatalogRepository.ListActiveSelectableAsync(cancellationToken);
         var glasses = await glassTypeCatalogRepository.GetActiveWithCurrentPriceRangesAsync(cancellationToken);
@@ -78,6 +82,7 @@ public sealed class GetRequirementExperienceLevel2Service(
                 proposal,
                 item,
                 level1,
+                technicalSelection,
                 systems,
                 glasses,
                 cancellationToken));

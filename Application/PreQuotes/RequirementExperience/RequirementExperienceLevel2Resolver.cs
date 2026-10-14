@@ -14,6 +14,7 @@ public sealed class RequirementExperienceLevel2Resolver(
         RequirementTechnicalProposal technicalProposal,
         RequirementTechnicalProposalItem item,
         RequirementExperienceLevel1ResolutionResponse? level1Resolution,
+        RequirementItemExperienceTechnicalSelection? technicalSelection,
         IReadOnlyList<ProductSystemCatalogReadModel> systems,
         IReadOnlyList<GlassTypeCatalogReadModel> glasses,
         CancellationToken cancellationToken)
@@ -26,7 +27,13 @@ public sealed class RequirementExperienceLevel2Resolver(
         };
         var effectiveFunctionalType = SgFunctionalCompatibilityEvaluator.EffectiveFunctionalType(systemInput);
         var system = await ResolveSystemAsync(systemInput, systems, cancellationToken);
-        var glass = ResolveGlass(item.ExtractedItem, level1Resolution?.GlassFamily, glasses);
+        var glass = ResolveGlass(
+            item.ExtractedItem,
+            level1Resolution?.GlassFamily,
+            glasses,
+            new RequirementGlassDimensions(
+                item.EffectiveWidthMillimeters,
+                item.EffectiveHeightMillimeters));
         var finish = new RequirementExperienceLevel2FinishResponse(
             RequirementExperienceLevel2States.PendingExternalSource,
             ReviewReasons: [],
@@ -35,9 +42,10 @@ public sealed class RequirementExperienceLevel2Resolver(
         return new RequirementExperienceLevel2Response(
             technicalProposal.Id,
             item.Id,
+            technicalSelection?.Revision,
             effectiveFunctionalType,
-            system,
-            glass,
+            ApplySystemOverride(system, technicalSelection?.SystemId, systems),
+            ApplyGlassOverride(glass, technicalSelection?.GlassTypeId, glasses),
             finish,
             OverallState(system.State, glass.State));
     }
@@ -54,6 +62,9 @@ public sealed class RequirementExperienceLevel2Resolver(
             return new RequirementExperienceLevel2SystemResponse(
                 RequirementExperienceLevel2States.RequiresReview,
                 Suggested: null,
+                Override: null,
+                Effective: null,
+                RequirementExperienceLevel2OverrideStates.None,
                 Candidates: [],
                 ReviewReasons: [SgFunctionalCompatibilityEvaluator.TechnicalProposalFunctionalTypeUnknown],
                 BlockingReasons: []);
@@ -95,6 +106,9 @@ public sealed class RequirementExperienceLevel2Resolver(
             return new RequirementExperienceLevel2SystemResponse(
                 RequirementExperienceLevel2States.Resolved,
                 suggested,
+                Override: null,
+                Effective: suggested,
+                RequirementExperienceLevel2OverrideStates.None,
                 ordered,
                 ReviewReasons: [],
                 BlockingReasons: []);
@@ -105,6 +119,9 @@ public sealed class RequirementExperienceLevel2Resolver(
             return new RequirementExperienceLevel2SystemResponse(
                 RequirementExperienceLevel2States.RequiresReview,
                 Suggested: null,
+                Override: null,
+                Effective: null,
+                RequirementExperienceLevel2OverrideStates.None,
                 Candidates: ordered,
                 ReviewReasons: review
                     .SelectMany(candidate => candidate.ReviewReasons)
@@ -116,6 +133,9 @@ public sealed class RequirementExperienceLevel2Resolver(
         return new RequirementExperienceLevel2SystemResponse(
             RequirementExperienceLevel2States.Blocked,
             Suggested: null,
+            Override: null,
+            Effective: null,
+            RequirementExperienceLevel2OverrideStates.None,
             Candidates: ordered,
             ReviewReasons: [],
             BlockingReasons: ordered
@@ -128,7 +148,8 @@ public sealed class RequirementExperienceLevel2Resolver(
     public RequirementExperienceLevel2GlassResponse ResolveGlass(
         RequirementExtractedItem? item,
         string? glassFamily,
-        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        RequirementGlassDimensions? dimensions = null)
     {
         var normalizedFamily = Normalize(glassFamily);
         if (normalizedFamily is null)
@@ -137,6 +158,9 @@ public sealed class RequirementExperienceLevel2Resolver(
                 RequirementExperienceLevel2States.Pending,
                 glassFamily,
                 Suggested: null,
+                Override: null,
+                Effective: null,
+                RequirementExperienceLevel2OverrideStates.None,
                 Candidates: [],
                 ReviewReasons: ["GLASS_FAMILY_NOT_RESOLVED"],
                 BlockingReasons: []);
@@ -152,6 +176,9 @@ public sealed class RequirementExperienceLevel2Resolver(
                 RequirementExperienceLevel2States.Blocked,
                 glassFamily,
                 Suggested: null,
+                Override: null,
+                Effective: null,
+                RequirementExperienceLevel2OverrideStates.None,
                 Candidates: [],
                 ReviewReasons: [],
                 BlockingReasons: ["GLASS_NO_COMPATIBLE_CANDIDATE"]);
@@ -162,7 +189,8 @@ public sealed class RequirementExperienceLevel2Resolver(
             : RequirementGlassTechnicalResolver.ResolveByFamily(
                 item,
                 normalizedFamily,
-                filteredGlasses);
+                filteredGlasses,
+                dimensions);
         var signalResolution = technicalResolution is null && item is not null
             ? glassCandidateResolver.Resolve(item, filteredGlasses)
             : null;
@@ -195,6 +223,9 @@ public sealed class RequirementExperienceLevel2Resolver(
                 RequirementExperienceLevel2States.Resolved,
                 glassFamily,
                 suggested,
+                Override: null,
+                Effective: suggested,
+                RequirementExperienceLevel2OverrideStates.None,
                 ordered,
                 ReviewReasons: [],
                 BlockingReasons: []);
@@ -206,6 +237,9 @@ public sealed class RequirementExperienceLevel2Resolver(
                 RequirementExperienceLevel2States.RequiresReview,
                 glassFamily,
                 Suggested: null,
+                Override: null,
+                Effective: null,
+                RequirementExperienceLevel2OverrideStates.None,
                 Candidates: ordered,
                 ReviewReasons: review
                     .SelectMany(candidate => candidate.ReviewReasons)
@@ -219,9 +253,94 @@ public sealed class RequirementExperienceLevel2Resolver(
             RequirementExperienceLevel2States.Blocked,
             glassFamily,
             Suggested: null,
+            Override: null,
+            Effective: null,
+            RequirementExperienceLevel2OverrideStates.None,
             Candidates: ordered,
             ReviewReasons: [],
             BlockingReasons: ["GLASS_NO_COMPATIBLE_CANDIDATE"]);
+    }
+
+    public static RequirementExperienceLevel2SystemResponse ApplySystemOverride(
+        RequirementExperienceLevel2SystemResponse system,
+        Guid? systemId,
+        IReadOnlyList<ProductSystemCatalogReadModel> systems)
+    {
+        if (systemId is null)
+        {
+            return system with
+            {
+                Override = null,
+                Effective = system.Suggested,
+                OverrideState = RequirementExperienceLevel2OverrideStates.None
+            };
+        }
+
+        var candidate = system.Candidates.FirstOrDefault(value => value.Id == systemId);
+        if (candidate is null
+            || candidate.CompatibilityState
+                == RequirementExperienceLevel2CandidateStates.Incompatible)
+        {
+            return system with
+            {
+                Override = MapStaleSystemOverride(systemId.Value, systems),
+                Effective = system.Suggested,
+                OverrideState = RequirementExperienceLevel2OverrideStates.Stale
+            };
+        }
+
+        var state = candidate.CompatibilityState
+            == RequirementExperienceLevel2CandidateStates.RequiresReview
+                ? RequirementExperienceLevel2OverrideStates.RequiresReview
+                : RequirementExperienceLevel2OverrideStates.Valid;
+
+        return system with
+        {
+            Override = candidate,
+            Effective = candidate,
+            OverrideState = state
+        };
+    }
+
+    public static RequirementExperienceLevel2GlassResponse ApplyGlassOverride(
+        RequirementExperienceLevel2GlassResponse glass,
+        Guid? glassTypeId,
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+    {
+        if (glassTypeId is null)
+        {
+            return glass with
+            {
+                Override = null,
+                Effective = glass.Suggested,
+                OverrideState = RequirementExperienceLevel2OverrideStates.None
+            };
+        }
+
+        var candidate = glass.Candidates.FirstOrDefault(value => value.Id == glassTypeId);
+        if (candidate is null
+            || candidate.CompatibilityState
+                == RequirementExperienceLevel2CandidateStates.Incompatible)
+        {
+            return glass with
+            {
+                Override = MapStaleGlassOverride(glassTypeId.Value, glasses),
+                Effective = glass.Suggested,
+                OverrideState = RequirementExperienceLevel2OverrideStates.Stale
+            };
+        }
+
+        var state = candidate.CompatibilityState
+            == RequirementExperienceLevel2CandidateStates.RequiresReview
+                ? RequirementExperienceLevel2OverrideStates.RequiresReview
+                : RequirementExperienceLevel2OverrideStates.Valid;
+
+        return glass with
+        {
+            Override = candidate,
+            Effective = candidate,
+            OverrideState = state
+        };
     }
 
     private RequirementExperienceLevel2SystemCandidateResponse? MapSystemCandidate(
@@ -318,6 +437,50 @@ public sealed class RequirementExperienceLevel2Resolver(
             Rank: 0,
             reviewReasons.Distinct(StringComparer.Ordinal).ToArray(),
             BlockingReasons: []);
+    }
+
+    private static RequirementExperienceLevel2SystemCandidateResponse? MapStaleSystemOverride(
+        Guid systemId,
+        IReadOnlyList<ProductSystemCatalogReadModel> systems)
+    {
+        var system = systems.FirstOrDefault(value => value.Id == systemId);
+        return system is null
+            ? null
+            : new RequirementExperienceLevel2SystemCandidateResponse(
+                system.Id,
+                system.Code,
+                system.Name,
+                system.TechnicalName,
+                system.CommercialName,
+                system.FunctionalType,
+                system.Family,
+                system.Series,
+                RequirementExperienceLevel2CandidateStates.Incompatible,
+                Rank: 0,
+                ReviewReasons: [],
+                BlockingReasons: ["LEVEL2_OVERRIDE_STALE"]);
+    }
+
+    private static RequirementExperienceLevel2GlassCandidateResponse? MapStaleGlassOverride(
+        Guid glassTypeId,
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+    {
+        var glass = glasses.FirstOrDefault(value => value.GlassTypeId == glassTypeId);
+        return glass is null
+            ? null
+            : new RequirementExperienceLevel2GlassCandidateResponse(
+                glass.GlassTypeId,
+                glass.Code,
+                glass.Name,
+                glass.Family,
+                glass.Composition,
+                glass.Treatment,
+                glass.OuterThicknessMm,
+                glass.InnerThicknessMm,
+                RequirementExperienceLevel2CandidateStates.Incompatible,
+                Rank: 0,
+                ReviewReasons: [],
+                BlockingReasons: ["LEVEL2_OVERRIDE_STALE"]);
     }
 
     private static IReadOnlyList<RequirementExperienceLevel2SystemCandidateResponse> OrderSystemCandidates(

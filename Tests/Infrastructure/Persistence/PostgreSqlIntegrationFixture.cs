@@ -14,6 +14,7 @@ public sealed class PostgreSqlIntegrationCollection
 
 public sealed class PostgreSqlIntegrationFixture : IAsyncLifetime
 {
+    public bool UseMigrations { get; init; } = true;
     private const string EnvironmentVariable =
         "COTIZADOR_TEST_POSTGRES_ADMIN_CONNECTION_STRING";
     private const string DatabasePrefix = "cotizador_backend_test_";
@@ -72,7 +73,10 @@ public sealed class PostgreSqlIntegrationFixture : IAsyncLifetime
         admin.Database = DatabaseName;
         ConnectionString = admin.ConnectionString;
         await using var context = CreateDbContext();
-        await context.Database.MigrateAsync();
+        if (UseMigrations)
+            await context.Database.MigrateAsync();
+        else
+            await context.Database.EnsureCreatedAsync();
     }
 
     public ApplicationDbContext CreateDbContext()

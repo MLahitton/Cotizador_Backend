@@ -58,6 +58,14 @@ public sealed record UpdateRequirementExperienceAnswerRequest(
     string BenefitCode,
     string OptionCode);
 
+public sealed record UpdateRequirementExperienceLevel2SystemRequest(
+    Guid? SystemId,
+    long? ExpectedRevision);
+
+public sealed record UpdateRequirementExperienceLevel2GlassRequest(
+    Guid? GlassId,
+    long? ExpectedRevision);
+
 public sealed record RequirementExperienceResult<T>(
     bool IsSuccess,
     T? Value,
@@ -79,7 +87,57 @@ public sealed record RequirementExperienceResult<T>(
             default,
             failure);
     }
+
+    public static RequirementExperienceResult<T> Failed(
+        RequirementExperienceFailure failure,
+        T? value)
+    {
+        return new RequirementExperienceResult<T>(
+            false,
+            value,
+            failure);
+    }
 }
+
+public static class RequirementExperienceConfigurationStatuses
+{
+    public const string Draft = "DRAFT";
+    public const string Confirmed = "CONFIRMED";
+    public const string Stale = "STALE";
+}
+
+public sealed record RequirementExperienceConfigurationStatusResponse(
+    Guid TechnicalProposalId,
+    string Status,
+    bool CanConfirm,
+    long? LatestConfirmationRevision,
+    DateTimeOffset? ConfirmedAtUtc,
+    Guid? ConfirmedByUserId,
+    IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<string> BlockingReasons,
+    IReadOnlyList<RequirementExperienceConfigurationItemStatusResponse> Items);
+
+public sealed record RequirementExperienceConfigurationItemStatusResponse(
+    Guid TechnicalProposalItemId,
+    string? Reference,
+    int? Sequence,
+    bool IsIncluded,
+    int? Quantity,
+    int? WidthMm,
+    int? HeightMm,
+    decimal? AreaM2,
+    string? Location,
+    Guid? SystemId,
+    Guid? GlassTypeId,
+    Guid? FinishTypeId,
+    string? SystemState,
+    string? GlassState,
+    string? FinishState,
+    string? SystemOverrideState,
+    string? GlassOverrideState,
+    string ReadinessState,
+    IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<string> BlockingReasons);
 
 public static class RequirementExperienceLevel2States
 {
@@ -97,9 +155,18 @@ public static class RequirementExperienceLevel2CandidateStates
     public const string Incompatible = "INCOMPATIBLE";
 }
 
+public static class RequirementExperienceLevel2OverrideStates
+{
+    public const string None = "NONE";
+    public const string Valid = "VALID";
+    public const string RequiresReview = "REQUIRES_REVIEW";
+    public const string Stale = "STALE";
+}
+
 public sealed record RequirementExperienceLevel2Response(
     Guid TechnicalProposalId,
     Guid TechnicalProposalItemId,
+    long? TechnicalSelectionRevision,
     string? EffectiveFunctionalType,
     RequirementExperienceLevel2SystemResponse System,
     RequirementExperienceLevel2GlassResponse Glass,
@@ -109,6 +176,9 @@ public sealed record RequirementExperienceLevel2Response(
 public sealed record RequirementExperienceLevel2SystemResponse(
     string State,
     RequirementExperienceLevel2SystemCandidateResponse? Suggested,
+    RequirementExperienceLevel2SystemCandidateResponse? Override,
+    RequirementExperienceLevel2SystemCandidateResponse? Effective,
+    string OverrideState,
     IReadOnlyList<RequirementExperienceLevel2SystemCandidateResponse> Candidates,
     IReadOnlyList<string> ReviewReasons,
     IReadOnlyList<string> BlockingReasons);
@@ -125,12 +195,15 @@ public sealed record RequirementExperienceLevel2SystemCandidateResponse(
     string CompatibilityState,
     int Rank,
     IReadOnlyList<string> ReviewReasons,
-    IReadOnlyList<string> BlockingReasons);
+    IReadOnlyList<string> BlockingReasons) : IRequirementExperienceLevel2Candidate;
 
 public sealed record RequirementExperienceLevel2GlassResponse(
     string State,
     string? GlassFamily,
     RequirementExperienceLevel2GlassCandidateResponse? Suggested,
+    RequirementExperienceLevel2GlassCandidateResponse? Override,
+    RequirementExperienceLevel2GlassCandidateResponse? Effective,
+    string OverrideState,
     IReadOnlyList<RequirementExperienceLevel2GlassCandidateResponse> Candidates,
     IReadOnlyList<string> ReviewReasons,
     IReadOnlyList<string> BlockingReasons);
@@ -147,9 +220,16 @@ public sealed record RequirementExperienceLevel2GlassCandidateResponse(
     string CompatibilityState,
     int Rank,
     IReadOnlyList<string> ReviewReasons,
-    IReadOnlyList<string> BlockingReasons);
+    IReadOnlyList<string> BlockingReasons) : IRequirementExperienceLevel2Candidate;
 
 public sealed record RequirementExperienceLevel2FinishResponse(
     string State,
     IReadOnlyList<string> ReviewReasons,
     IReadOnlyList<string> BlockingReasons);
+
+public interface IRequirementExperienceLevel2Candidate
+{
+    Guid Id { get; }
+
+    string CompatibilityState { get; }
+}

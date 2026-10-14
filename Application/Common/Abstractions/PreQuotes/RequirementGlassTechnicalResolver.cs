@@ -3,6 +3,8 @@ using Domain.PreQuotes;
 
 namespace Application.Common.Abstractions.PreQuotes;
 
+public sealed record RequirementGlassDimensions(int? WidthMm, int? HeightMm);
+
 public static class RequirementGlassTechnicalResolver
 {
     private const int GlassPaneSegmentationToleranceMillimeters = 10;
@@ -10,7 +12,8 @@ public static class RequirementGlassTechnicalResolver
     public static GlassCandidateResolutionResult? ResolveByFamily(
         RequirementExtractedItem item,
         string? requiredGlassFamily,
-        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        RequirementGlassDimensions? dimensions = null)
     {
         if (IsExplicitSpecialGlassVariant(item))
         {
@@ -19,15 +22,16 @@ public static class RequirementGlassTechnicalResolver
 
         return Normalize(requiredGlassFamily) switch
         {
-            "TEMPLADO" => ResolveTemperedWithSpecialRules(item, glasses),
-            "LAMINADO" => ResolveLaminated(item, glasses),
+            "TEMPLADO" => ResolveTemperedWithSpecialRules(item, glasses, dimensions),
+            "LAMINADO" => ResolveLaminated(item, glasses, dimensions),
             _ => null
         };
     }
 
     public static GlassCandidateResolutionResult? ResolveTemperedWithSpecialRules(
         RequirementExtractedItem item,
-        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        RequirementGlassDimensions? dimensions = null)
     {
         if (IsShowerDivision(item))
         {
@@ -45,14 +49,15 @@ public static class RequirementGlassTechnicalResolver
                 [GlassResolutionReasonCodes.SpecialGlassRailing10Mm]);
         }
 
-        return ResolveTempered(item, glasses);
+        return ResolveTempered(item, glasses, dimensions);
     }
 
     public static GlassCandidateResolutionResult? ResolveTempered(
         RequirementExtractedItem item,
-        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        RequirementGlassDimensions? dimensions = null)
     {
-        var geometry = GlassPaneGeometry.Resolve(item);
+        var geometry = GlassPaneGeometry.Resolve(item, dimensions);
         if (geometry is null)
         {
             return null;
@@ -121,9 +126,10 @@ public static class RequirementGlassTechnicalResolver
 
     public static GlassCandidateResolutionResult? ResolveLaminated(
         RequirementExtractedItem item,
-        IReadOnlyList<GlassTypeCatalogReadModel> glasses)
+        IReadOnlyList<GlassTypeCatalogReadModel> glasses,
+        RequirementGlassDimensions? dimensions = null)
     {
-        var geometry = GlassPaneGeometry.Resolve(item);
+        var geometry = GlassPaneGeometry.Resolve(item, dimensions);
         if (geometry is null)
         {
             return null;
@@ -200,17 +206,21 @@ public static class RequirementGlassTechnicalResolver
         bool RequiresReview,
         bool CanEvaluateJoint)
     {
-        public static GlassPaneGeometry? Resolve(RequirementExtractedItem item)
+        public static GlassPaneGeometry? Resolve(
+            RequirementExtractedItem item,
+            RequirementGlassDimensions? dimensions)
         {
             var isRoofGlass = IsRoofGlassDomain(item);
             var isPocket = IsPocketDomain(item);
-            if (item.WidthMillimeters is not { } width
-                || item.HeightMillimeters is not { } height)
+            var effectiveWidth = dimensions is null ? item.WidthMillimeters : dimensions.WidthMm;
+            var effectiveHeight = dimensions is null ? item.HeightMillimeters : dimensions.HeightMm;
+            if (effectiveWidth is not { } width
+                || effectiveHeight is not { } height)
             {
                 return TryResolveExplicitSegments(item)
                     ?? TryResolvePocketLeafGeometry(
                         item,
-                        item.HeightMillimeters)
+                        effectiveHeight)
                     ?? TryResolveRoofGeometry(item);
             }
 

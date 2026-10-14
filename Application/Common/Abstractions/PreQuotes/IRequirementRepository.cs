@@ -4,6 +4,10 @@ namespace Application.Common.Abstractions.PreQuotes;
 
 public interface IRequirementRepository
 {
+    Task LockExperienceConfigurationAsync(
+        Guid technicalProposalId,
+        CancellationToken cancellationToken);
+
     Task<Requirement?> FindByIdAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
@@ -74,6 +78,12 @@ public interface IRequirementRepository
 
     void AddExperienceDraft(RequirementItemExperienceDraft draft);
 
+    void AddExperienceTechnicalSelection(
+        RequirementItemExperienceTechnicalSelection selection);
+
+    void AddExperienceConfigurationConfirmation(
+        RequirementExperienceConfigurationConfirmation confirmation);
+
     void AddPricingSnapshot(RequirementPricingSnapshot snapshot);
 
     void ReplacePricingSnapshot(
@@ -101,6 +111,21 @@ public interface IRequirementRepository
         Guid technicalProposalItemId,
         CancellationToken cancellationToken);
 
+    Task<RequirementItemExperienceTechnicalSelection?>
+        FindExperienceTechnicalSelectionForUpdateAsync(
+            Guid technicalProposalItemId,
+            CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<RequirementItemExperienceTechnicalSelection>>
+        ListExperienceTechnicalSelectionsByTechnicalProposalIdAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken);
+
+    Task<RequirementExperienceConfigurationConfirmation?>
+        GetLatestExperienceConfigurationConfirmationAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken);
+
     Task<RequirementTechnicalProposal?> FindCurrentTechnicalProposalForUpdateAsync(
         Guid requirementId,
         CancellationToken cancellationToken);
@@ -119,6 +144,10 @@ public interface IRequirementRepository
 
     Task<IRequirementPersistenceTransaction> BeginPricingUpdateTransactionAsync(
         CancellationToken cancellationToken);
+
+    Task<IRequirementPersistenceTransaction>
+        BeginExperienceConfigurationTransactionAsync(
+            CancellationToken cancellationToken);
 
     Task<IReadOnlyList<RequirementExtractedItem>> GetExtractedItemsAsync(
         Guid extractionResultId,
@@ -212,3 +241,6 @@ public sealed class RequirementPersistenceException : Exception
     {
     }
 }
+
+public sealed class RequirementExperienceConflictException(Exception innerException)
+    : Exception("La configuracion de experiencia cambio durante la operacion.", innerException);

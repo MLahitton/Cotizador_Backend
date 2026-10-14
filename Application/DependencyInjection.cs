@@ -43,6 +43,7 @@ using Application.PreQuotes.RequirementExperience;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemSelection;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemInclusion;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemLocation;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemPhysicalData;
 using Application.PreQuotes.UpdateRequirementTechnicalProposalItemObservation;
 using Application.Projects.CreateProject;
 using Application.Projects.GetClientProjects;
@@ -113,7 +114,12 @@ public static class DependencyInjection
         services.AddScoped<GetRequirementExperienceDraftsService>();
         services.AddScoped<UpdateRequirementExperienceDraftService>();
         services.AddScoped<RequirementExperienceLevel2Resolver>();
+        services.AddScoped<
+            IRequirementExperienceConfigurationResolver,
+            RequirementExperienceConfigurationResolver>();
+        services.AddScoped<RequirementExperienceConfigurationService>();
         services.AddScoped<GetRequirementExperienceLevel2Service>();
+        services.AddScoped<UpdateRequirementExperienceLevel2SelectionService>();
         services.AddSingleton<IRequirementChatActionPlanStore, InMemoryRequirementChatActionPlanStore>();
         services.AddScoped<IRequirementChatTechnicalProposalReader, RequirementChatTechnicalProposalReader>();
         services.AddScoped<IRequirementChatSelectionExecutor, RequirementChatSelectionExecutor>();
@@ -131,6 +137,7 @@ public static class DependencyInjection
             UpdateRequirementTechnicalProposalItemInclusionService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemLocationService>();
+        services.AddScoped<UpdateRequirementTechnicalProposalItemPhysicalDataService>();
         services.AddScoped<
             UpdateRequirementTechnicalProposalItemObservationService>();
         services.AddScoped<EstimateStoredPreQuoteDocumentsService>();

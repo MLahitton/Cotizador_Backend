@@ -652,8 +652,10 @@ public sealed class RequirementExperienceServicesTests
         Assert.Equal(RequirementExperienceFailure.ItemNotFound, result.Error);
     }
 
-    [Fact]
-    public async Task UpdateAsync_WithProposalFromAnotherUser_IsRejected()
+    [Theory]
+    [InlineData(UserRole.User)]
+    [InlineData(UserRole.Admin)]
+    public async Task UpdateAsync_WithProposalFromAnotherUser_IsRejected(UserRole role)
     {
         var context = CreateContext();
         var otherUser = User.CreateFromGoogle(
@@ -663,6 +665,7 @@ public sealed class RequirementExperienceServicesTests
             null,
             At);
         context.CurrentUser.UserId.Returns(otherUser.Id);
+        SetPrivateProperty(otherUser, "Role", role);
         context.Identity.FindUserByIdAsync(otherUser.Id, Arg.Any<CancellationToken>())
             .Returns(otherUser);
 
@@ -677,7 +680,7 @@ public sealed class RequirementExperienceServicesTests
             CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RequirementExperienceFailure.NotFound, result.Error);
+        Assert.Equal(RequirementExperienceFailure.Forbidden, result.Error);
     }
 
     [Fact]

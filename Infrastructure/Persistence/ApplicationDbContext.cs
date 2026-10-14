@@ -84,6 +84,15 @@ public sealed class ApplicationDbContext(
         RequirementItemExperienceDrafts => Set<RequirementItemExperienceDraft>();
     public DbSet<RequirementItemExperienceAnswer>
         RequirementItemExperienceAnswers => Set<RequirementItemExperienceAnswer>();
+    public DbSet<RequirementItemExperienceTechnicalSelection>
+        RequirementItemExperienceTechnicalSelections =>
+            Set<RequirementItemExperienceTechnicalSelection>();
+    public DbSet<RequirementExperienceConfigurationConfirmation>
+        RequirementExperienceConfigurationConfirmations =>
+            Set<RequirementExperienceConfigurationConfirmation>();
+    public DbSet<RequirementExperienceConfigurationConfirmationItem>
+        RequirementExperienceConfigurationConfirmationItems =>
+            Set<RequirementExperienceConfigurationConfirmationItem>();
 
     public DbSet<StructuredDocumentExtraction> StructuredDocumentExtractions =>
         Set<StructuredDocumentExtraction>();

@@ -207,10 +207,10 @@ public sealed class UpdateRequirementExperienceDraftService(
                 RequirementExperienceFailure.NotFound);
         }
 
-        if (!CanAccess(proposal.Requirement.PreQuote.Project.CreatedByUserId, user))
+        if (proposal.Requirement.PreQuote.Project.CreatedByUserId != user.Id)
         {
             return RequirementExperienceResult<RequirementExperienceItemDraftResponse>.Failed(
-                RequirementExperienceFailure.NotFound);
+                RequirementExperienceFailure.Forbidden);
         }
 
         var item = proposal.Items.FirstOrDefault(value => value.Id == technicalProposalItemId);
@@ -310,11 +310,6 @@ public sealed class UpdateRequirementExperienceDraftService(
 
         return null;
     }
-
-    private static bool CanAccess(Guid projectOwnerUserId, User user)
-    {
-        return user.Role == UserRole.Admin || user.Id == projectOwnerUserId;
-    }
 }
 
 public enum RequirementExperienceFailure
@@ -329,5 +324,9 @@ public enum RequirementExperienceFailure
     DuplicateBenefit,
     UnknownBenefit,
     OptionDoesNotBelongToBenefit,
-    Conflict
+    CandidateNotAllowed,
+    Conflict,
+    ConfigurationBlocked,
+    PersistenceError,
+    Forbidden
 }

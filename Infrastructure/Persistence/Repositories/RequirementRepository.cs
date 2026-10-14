@@ -3,6 +3,7 @@ using Application.Common.Abstractions.PreQuotes;
 using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+using Npgsql;
 
 namespace Infrastructure.Persistence.Repositories;
 
@@ -423,6 +424,19 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         dbContext.RequirementItemExperienceDrafts.Add(draft);
     }
 
+    public void AddExperienceTechnicalSelection(
+        RequirementItemExperienceTechnicalSelection selection)
+    {
+        dbContext.RequirementItemExperienceTechnicalSelections.Add(selection);
+    }
+
+    public void AddExperienceConfigurationConfirmation(
+        RequirementExperienceConfigurationConfirmation confirmation)
+    {
+        dbContext.RequirementExperienceConfigurationConfirmations.Add(
+            confirmation);
+    }
+
     public void AddPricingSnapshot(RequirementPricingSnapshot snapshot)
     {
         dbContext.RequirementPricingSnapshots.Add(snapshot);
@@ -630,6 +644,67 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<RequirementItemExperienceTechnicalSelection?>
+        FindExperienceTechnicalSelectionForUpdateAsync(
+            Guid technicalProposalItemId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementItemExperienceTechnicalSelections
+                .SingleOrDefaultAsync(
+                    selection => selection.TechnicalProposalItemId
+                        == technicalProposalItemId,
+                    cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<RequirementItemExperienceTechnicalSelection>>
+        ListExperienceTechnicalSelectionsByTechnicalProposalIdAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementItemExperienceTechnicalSelections
+                .AsNoTracking()
+                .Where(selection => selection.TechnicalProposalId
+                    == technicalProposalId)
+                .ToListAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
+    public async Task<RequirementExperienceConfigurationConfirmation?>
+        GetLatestExperienceConfigurationConfirmationAsync(
+            Guid technicalProposalId,
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await dbContext.RequirementExperienceConfigurationConfirmations
+                .AsNoTracking()
+                .Include(confirmation => confirmation.Items)
+                .Where(confirmation => confirmation.TechnicalProposalId
+                    == technicalProposalId)
+                .OrderByDescending(confirmation => confirmation.Revision)
+                .ThenByDescending(confirmation => confirmation.ConfirmedAtUtc)
+                .ThenByDescending(confirmation => confirmation.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementQueryException(exception);
+        }
+    }
+
     public async Task<RequirementTechnicalProposal?>
         FindCurrentTechnicalProposalForUpdateAsync(
             Guid requirementId,
@@ -732,13 +807,83 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
         }
     }
 
+    public async Task<IRequirementPersistenceTransaction>
+        BeginExperienceConfigurationTransactionAsync(
+            CancellationToken cancellationToken)
+    {
+        try
+        {
+            var transaction = await dbContext.Database.BeginTransactionAsync(
+                cancellationToken);
+            return new EfRequirementPersistenceTransaction(transaction);
+        }
+        catch (DbException exception)
+        {
+            throw new RequirementPersistenceException(exception);
+        }
+    }
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         try
         {
             await dbContext.SaveChangesAsync(cancellationToken);
         }
+        catch (DbUpdateConcurrencyException exception)
+            when (exception.Entries.Any(entry =>
+                entry.Entity is RequirementItemExperienceTechnicalSelection))
+        {
+            throw new RequirementExperienceConflictException(exception);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "ux_requirement_item_exp_technical_sel_item_id"
+                    or "ux_requirement_exp_config_confirmations_proposal_revision"
+            })
+        {
+            throw new RequirementExperienceConflictException(exception);
+        }
         catch (DbUpdateException exception)
+        {
+            throw new RequirementPersistenceException(exception);
+        }
+    }
+
+    public async Task LockExperienceConfigurationAsync(
+        Guid technicalProposalId,
+        CancellationToken cancellationToken)
+    {
+        if (dbContext.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Experience confirmation requires a transaction.");
+
+        try
+        {
+            // Parent locks also block new children through their foreign keys.
+            // Acquire before loading the read model; retain through commit.
+            await dbContext.Database.ExecuteSqlInterpolatedAsync($"""
+                SELECT id FROM core.requirement_technical_proposals
+                WHERE id = {technicalProposalId} FOR UPDATE;
+                SELECT id FROM core.requirement_technical_proposal_items
+                WHERE technical_proposal_id = {technicalProposalId} ORDER BY id FOR UPDATE;
+                SELECT "Id" FROM core.requirement_item_experience_drafts
+                WHERE "TechnicalProposalId" = {technicalProposalId} ORDER BY "Id" FOR UPDATE;
+                SELECT a."Id" FROM core.requirement_item_experience_answers a
+                JOIN core.requirement_item_experience_drafts d ON d."Id" = a."DraftId"
+                WHERE d."TechnicalProposalId" = {technicalProposalId}
+                ORDER BY a."Id" FOR UPDATE OF a;
+                SELECT id FROM core.requirement_item_experience_technical_selections
+                WHERE technical_proposal_id = {technicalProposalId} ORDER BY id FOR UPDATE;
+                """, cancellationToken);
+        }
+        catch (PostgresException exception) when (
+            exception.SqlState is PostgresErrorCodes.DeadlockDetected
+                or PostgresErrorCodes.SerializationFailure)
+        {
+            throw new RequirementExperienceConflictException(exception);
+        }
+        catch (DbException exception)
         {
             throw new RequirementPersistenceException(exception);
         }
