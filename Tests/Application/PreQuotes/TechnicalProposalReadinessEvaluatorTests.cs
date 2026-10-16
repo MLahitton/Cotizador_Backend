@@ -260,7 +260,7 @@ public sealed class TechnicalProposalReadinessEvaluatorTests
     }
 
     [Fact]
-    public void EvaluateItem_WithInvalidQuantity_BlocksPricing()
+    public void EvaluateItem_WithAssumedQuantity_DoesNotBlockPricingForQuantity()
     {
         var item = ProposalItem(
             requiresReview: true,
@@ -269,12 +269,9 @@ public sealed class TechnicalProposalReadinessEvaluatorTests
             quantity: null);
 
         var readiness = TechnicalProposalReadinessEvaluator.EvaluateItem(item);
-        var definition = Assert.Single(readiness.PendingDefinitions);
-
-        Assert.Equal("BLOCKED", readiness.State);
-        Assert.Equal("REVIEW_QUANTITY", definition.Code);
-        Assert.True(definition.BlocksConfirmation);
-        Assert.True(definition.BlocksPricing);
+        Assert.Equal(1, item.EffectiveQuantity);
+        Assert.Equal(RequirementQuantitySource.ASSUMED_DEFAULT, item.QuantityResolution.Source);
+        Assert.DoesNotContain(readiness.PendingDefinitions, definition => definition.Code == "REVIEW_QUANTITY");
     }
 
     [Fact]

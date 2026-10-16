@@ -5437,6 +5437,15 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("quantity");
 
+                    b.Property<decimal?>("QuantityExtractionConfidence")
+                        .HasColumnType("numeric(5,4)")
+                        .HasColumnName("quantity_extraction_confidence");
+
+                    b.Property<string>("QuantityExtractionStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("quantity_extraction_status");
+
                     b.Property<string>("Reference")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")

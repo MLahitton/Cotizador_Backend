@@ -247,7 +247,9 @@ public sealed record StructuredItemData(
     bool? FinishRequiresReview = null,
     string? AssemblyType = null,
     IReadOnlyList<StructuredItemSegmentData>? Segments = null,
-    string? OccurrenceContext = null);
+    string? OccurrenceContext = null,
+    CanonicalExtractionValueStatus? QuantityStatus = null,
+    decimal? QuantityConfidence = null);
 
 public sealed record StructuredItemGlassData(
     string? RawSpecification,

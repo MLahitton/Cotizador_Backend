@@ -339,6 +339,8 @@ public sealed class Ai2RequirementExtractionAdapter
                     widthMillimeters = item.WidthMillimeters,
                     heightMillimeters = item.HeightMillimeters,
                     quantity = item.Quantity,
+                    quantityStatus = item.QuantityStatus?.ToString(),
+                    quantityConfidence = item.QuantityConfidence,
                     areaSquareMeters = item.AreaSquareMeters,
                     configuration = item.Configuration,
                     functionalType = item.FunctionalType,
@@ -452,7 +454,7 @@ public sealed class Ai2RequirementExtractionAdapter
         var width = MeasurementMillimeters(measurements, "width");
         var height = MeasurementMillimeters(measurements, "height");
         var area = MeasurementArea(measurements);
-        var quantity = TraceableInt(element, "quantity");
+        var quantity = ReadQuantity(element);
         var category = NormalizedOrRawString(element, "category");
         var itemEvidence = MapEvidence(EvidenceIds(element), evidenceById);
         var glass = MapGlass(element, evidenceById);
@@ -489,7 +491,7 @@ public sealed class Ai2RequirementExtractionAdapter
             reviewReasons.Add(
                 StructuredIssueCode.MissingOrInvalidMeasurements);
         }
-        if (quantity is null)
+        if (quantity.Value is null)
         {
             reviewReasons.Add(
                 StructuredIssueCode.MissingOrInvalidQuantity);
@@ -543,7 +545,7 @@ public sealed class Ai2RequirementExtractionAdapter
             BuildRawMeasurements(width, height, area),
             width,
             height,
-            quantity,
+            quantity.Value,
             requiresReview,
             reviewReasons.Distinct().ToArray(),
             sourcePages,
@@ -643,7 +645,9 @@ public sealed class Ai2RequirementExtractionAdapter
                 : null,
             FlexibleString(element, "assembly_type"),
             segments,
-            occurrenceContext);
+            occurrenceContext,
+            quantity.Status,
+            quantity.Confidence);
     }
 
 
@@ -1260,6 +1264,24 @@ public sealed class Ai2RequirementExtractionAdapter
             && scalar.TryGetInt32(out var integer)
                 ? integer
                 : null;
+    }
+
+    private readonly record struct TraceableQuantity(
+        int? Value,
+        CanonicalExtractionValueStatus? Status,
+        decimal? Confidence);
+
+    private static TraceableQuantity ReadQuantity(JsonElement element)
+    {
+        if (Object(element, "quantity") is not { } quantity)
+        {
+            return default;
+        }
+
+        return new TraceableQuantity(
+            Int(quantity, "value"),
+            String(quantity, "status") is null ? null : Status(quantity),
+            Decimal(quantity, "confidence"));
     }
 
     private static string? NormalizedString(JsonElement parent, string name) =>

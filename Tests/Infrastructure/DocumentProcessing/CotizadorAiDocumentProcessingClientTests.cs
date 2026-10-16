@@ -125,6 +125,8 @@ public sealed class CotizadorAiDocumentProcessingClientTests
         Assert.Equal("A12:H12", projectEvidence.CellRange);
 
         var item = Assert.Single(execution.Result.Response.StructuredExtraction.Items);
+        Assert.Null(item.QuantityStatus);
+        Assert.Null(item.QuantityConfidence);
         var itemEvidence = Assert.Single(item.Evidence);
         Assert.Equal(EvidenceSourceType.Xlsx, itemEvidence.SourceType);
         Assert.Equal("Cotizacion", itemEvidence.SheetName);

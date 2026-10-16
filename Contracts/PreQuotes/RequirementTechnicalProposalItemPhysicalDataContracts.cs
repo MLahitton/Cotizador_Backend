@@ -13,4 +13,7 @@ public sealed record UpdateRequirementTechnicalProposalItemPhysicalDataResponse(
     int? WidthMm,
     int? HeightMm,
     long CommercialRevision,
-    RequirementTechnicalProposalItemDataCompletenessResponse DataCompleteness);
+    RequirementTechnicalProposalItemDataCompletenessResponse DataCompleteness,
+    string? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null);

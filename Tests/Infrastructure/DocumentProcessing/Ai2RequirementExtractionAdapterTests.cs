@@ -10,6 +10,34 @@ namespace CotizadorBackend.Tests.Infrastructure.DocumentProcessing;
 
 public sealed class Ai2RequirementExtractionAdapterTests
 {
+    [Theory]
+    [InlineData(3, "explicit", CanonicalExtractionValueStatus.Explicit, 0.99)]
+    [InlineData(1, "inferred", CanonicalExtractionValueStatus.Inferred, 0.68)]
+    [InlineData(1, "ambiguous", CanonicalExtractionValueStatus.Ambiguous, 0.5)]
+    [InlineData(null, "unknown", CanonicalExtractionValueStatus.Unknown, 0.5)]
+    [InlineData(1, null, null, null)]
+    public void Adapt_PreservesQuantitySpecificProvenance(
+        int? value, string? status, CanonicalExtractionValueStatus? expected, double? confidence)
+    {
+        var root = JsonNode.Parse(Ai2RequirementExtractionPayloads.RealisticPdf)!;
+        root["elements"]![0]!["quantity"] = new JsonObject
+        {
+            ["value"] = value,
+            ["status"] = status,
+            ["confidence"] = confidence
+        };
+        var result = new Ai2RequirementExtractionAdapter().Adapt(root.ToJsonString(), CreatePdfRequest());
+        var item = result.StructuredExtraction!.Items[0];
+        Assert.Equal(value, item.Quantity);
+        Assert.Equal(expected, item.QuantityStatus);
+        Assert.Equal((decimal?)confidence, item.QuantityConfidence);
+        using var canonical = JsonDocument.Parse(result.PayloadJson);
+        var saved = canonical.RootElement.GetProperty("structuredExtraction").GetProperty("items")[0];
+        Assert.Equal(expected?.ToString(), saved.GetProperty("quantityStatus").GetString());
+        Assert.Equal((decimal?)confidence, saved.GetProperty("quantityConfidence").ValueKind == JsonValueKind.Null
+            ? null : saved.GetProperty("quantityConfidence").GetDecimal());
+    }
+
     [Fact]
     public void Adapt_MapsCanonicalRequirementSubsetAndTraceability()
     {

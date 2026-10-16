@@ -1,5 +1,6 @@
 using System.Reflection;
 using Application.Common.Abstractions.Authentication;
+using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.RequirementExperience;
 using Domain.Clients;
@@ -14,6 +15,116 @@ namespace Tests.Application.PreQuotes;
 
 public sealed class RequirementExperienceConfigurationServiceTests
 {
+    [Theory]
+    [InlineData(RequirementExtractionValueStatus.Explicit, null)]
+    [InlineData(RequirementExtractionValueStatus.Inferred, null)]
+    [InlineData(RequirementExtractionValueStatus.Ambiguous, "QUANTITY_AMBIGUOUS")]
+    [InlineData(RequirementExtractionValueStatus.Unknown, "QUANTITY_UNKNOWN")]
+    [InlineData(null, null)]
+    public async Task Resolver_QuantityProvenance_OnlyUncertainExtractionNeedsReview(
+        RequirementExtractionValueStatus? status, string? expectedReason)
+    {
+        var context = CreateContext();
+        var extracted = (RequirementExtractedItem)Activator.CreateInstance(typeof(RequirementExtractedItem), nonPublic: true)!;
+        SetPrivateProperty(extracted, "Quantity", (int?)1);
+        SetPrivateProperty(extracted, "QuantityExtractionStatus", status);
+        SetPrivateProperty(extracted, "QuantityExtractionConfidence", (decimal?)0.5m);
+        SetPrivateProperty(context.Item, "ExtractedItem", extracted);
+        var resolver = new RequirementExperienceConfigurationResolver(
+            context.Requirements,
+            Substitute.For<IProductSystemCatalogRepository>(),
+            Substitute.For<IGlassTypeCatalogRepository>(),
+            new RequirementExperienceLevel2Resolver(
+                Substitute.For<ISgProductSystemConstraintEvaluator>(),
+                Substitute.For<IGlassCandidateResolver>(),
+                Substitute.For<ISgTechnicalSelector>()));
+        var resolved = await resolver.ResolveAsync(context.Proposal, Xunit.TestContext.Current.CancellationToken);
+        var item = Assert.Single(resolved.Items);
+        Assert.Equal(1, item.Quantity);
+        Assert.Equal(RequirementQuantitySource.EXTRACTED, item.QuantitySource);
+        Assert.Equal(status?.ToString().ToUpperInvariant(), item.QuantityExtractionStatus);
+        Assert.Equal(0.5m, item.QuantityExtractionConfidence);
+        Assert.Equal(expectedReason is null ? [] : new[] { expectedReason },
+            item.ReviewReasons.Where(reason => reason.StartsWith("QUANTITY_")));
+        Assert.DoesNotContain("QUANTITY_REQUIRED",
+            RequirementExperienceConfigurationReadinessEvaluator.Evaluate(resolved).BlockingReasons);
+    }
+
+    [Fact]
+    public async Task Resolver_AssumedQuantity_EmitsItemWarningAndDeduplicatesGlobalReview()
+    {
+        var context = CreateContext();
+        SetPrivateProperty(context.Item, "BaseQuantity", (int?)null);
+        var second = CreateProposalItem(context.Proposal.Id);
+        SetPrivateProperty(second, "Sequence", 2);
+        SetPrivateProperty(second, "BaseQuantity", (int?)null);
+        context.Proposal.AddItem(second);
+        var resolver = new RequirementExperienceConfigurationResolver(
+            context.Requirements,
+            Substitute.For<IProductSystemCatalogRepository>(),
+            Substitute.For<IGlassTypeCatalogRepository>(),
+            new RequirementExperienceLevel2Resolver(
+                Substitute.For<ISgProductSystemConstraintEvaluator>(),
+                Substitute.For<IGlassCandidateResolver>(),
+                Substitute.For<ISgTechnicalSelector>()));
+
+        var result = await resolver.ResolveAsync(context.Proposal, CancellationToken.None);
+        Assert.All(result.Items, item =>
+        {
+            Assert.Equal(1, item.Quantity);
+            Assert.Equal(RequirementQuantitySource.ASSUMED_DEFAULT, item.QuantitySource);
+            Assert.Contains("QUANTITY_ASSUMED", item.ReviewReasons);
+        });
+        var readiness = RequirementExperienceConfigurationReadinessEvaluator.Evaluate(result);
+        Assert.Equal(1, readiness.ReviewReasons.Count(reason => reason == "QUANTITY_ASSUMED"));
+        Assert.DoesNotContain("QUANTITY_REQUIRED", readiness.BlockingReasons);
+        Assert.Contains("FINISH_REQUIRED", readiness.BlockingReasons);
+        Assert.False(readiness.CanConfirm);
+        Assert.Null(context.Item.BaseQuantity);
+    }
+
+    [Theory]
+    [InlineData(1, "CONFIRMED", "QUANTITY_ASSUMED")]
+    [InlineData(2, "STALE", "QUANTITY_ASSUMED")]
+    [InlineData(1, "CONFIRMED", "QUANTITY_AMBIGUOUS")]
+    [InlineData(2, "STALE", "QUANTITY_AMBIGUOUS")]
+    [InlineData(1, "CONFIRMED", "QUANTITY_UNKNOWN")]
+    public async Task QuantityReview_IsWarningAndSnapshotOnlyStalesWhenValueChanges(int manual, string status, string reason)
+    {
+        var context = CreateContext();
+        context.CurrentItem = context.CurrentItem with
+        {
+            Quantity = 1,
+            QuantitySource = reason == "QUANTITY_ASSUMED" ? RequirementQuantitySource.ASSUMED_DEFAULT : RequirementQuantitySource.EXTRACTED,
+            QuantityExtractionStatus = reason == "QUANTITY_AMBIGUOUS" ? "AMBIGUOUS" : "UNKNOWN",
+            QuantityExtractionConfidence = 0.5m,
+            ReviewReasons = [reason]
+        };
+        var before = await context.Service.GetStatusAsync(context.Proposal.Id, CancellationToken.None);
+        Assert.True(before.Value!.CanConfirm);
+        Assert.Equal(context.CurrentItem.QuantitySource.ToString(), Assert.Single(before.Value.Items).QuantitySource);
+        Assert.Equal(context.CurrentItem.QuantityExtractionStatus, Assert.Single(before.Value.Items).QuantityExtractionStatus);
+        Assert.Equal(0.5m, Assert.Single(before.Value.Items).QuantityExtractionConfidence);
+        Assert.Equal("WARNING", Assert.Single(before.Value.Items).ReadinessState);
+        Assert.Equal(new[] { reason }, before.Value.ReviewReasons);
+        Assert.DoesNotContain("QUANTITY_REQUIRED", before.Value.BlockingReasons);
+
+        var confirmed = await context.Service.ConfirmAsync(context.Proposal.Id, CancellationToken.None);
+        Assert.True(confirmed.IsSuccess);
+        Assert.Contains(reason, Assert.Single(context.LatestConfirmation!.Items).ReviewReasons);
+        context.CurrentItem = context.CurrentItem with
+        {
+            Quantity = manual,
+            QuantitySource = RequirementQuantitySource.MANUAL,
+            ReviewReasons = []
+        };
+        var after = await context.Service.GetStatusAsync(context.Proposal.Id, CancellationToken.None);
+        Assert.Equal(status, after.Value!.Status);
+        Assert.Equal("MANUAL", Assert.Single(after.Value.Items).QuantitySource);
+        Assert.DoesNotContain(reason, after.Value.ReviewReasons);
+        Assert.Contains(reason, Assert.Single(context.LatestConfirmation.Items).ReviewReasons);
+    }
+
     [Fact]
     public async Task Confirm_ResolvesOnceAndSnapshotsExactlyThatConfiguration()
     {

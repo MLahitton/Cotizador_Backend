@@ -631,6 +631,8 @@ public sealed class RequirementExtractedItem
     public decimal? AreaSquareMeters { get; private set; }
     public decimal? Confidence { get; private set; }
     public RequirementExtractionValueStatus ExtractionStatus { get; private set; }
+    public RequirementExtractionValueStatus? QuantityExtractionStatus { get; private set; }
+    public decimal? QuantityExtractionConfidence { get; private set; }
     public bool RequiresReview { get; private set; }
     public string[] ReviewReasons { get; private set; } = [];
     public string? FunctionalType { get; private set; }
@@ -720,7 +722,9 @@ public sealed class RequirementExtractedItem
         bool? finishRequiresReview,
         DateTimeOffset createdAtUtc,
         string? assemblyType = null,
-        string? occurrenceContext = null)
+        string? occurrenceContext = null,
+        RequirementExtractionValueStatus? quantityExtractionStatus = null,
+        decimal? quantityExtractionConfidence = null)
     {
         if (requirementExtractionResultId == Guid.Empty)
         {
@@ -741,6 +745,7 @@ public sealed class RequirementExtractedItem
         EnsurePositive(heightMillimeters, nameof(heightMillimeters));
         EnsurePositive(areaSquareMeters, nameof(areaSquareMeters));
         EnsureConfidence(confidence, nameof(confidence));
+        EnsureConfidence(quantityExtractionConfidence, nameof(quantityExtractionConfidence));
         Requirement.EnsureUtc(createdAtUtc, nameof(createdAtUtc));
 
         return new RequirementExtractedItem
@@ -757,6 +762,8 @@ public sealed class RequirementExtractedItem
                 500),
             ElementType = elementType,
             Quantity = quantity,
+            QuantityExtractionStatus = quantityExtractionStatus,
+            QuantityExtractionConfidence = quantityExtractionConfidence,
             WidthMillimeters = widthMillimeters,
             HeightMillimeters = heightMillimeters,
             AreaSquareMeters = areaSquareMeters,
@@ -1297,8 +1304,13 @@ public sealed class RequirementTechnicalProposalItem
         HistoricalExamples => _historicalExamples;
     public bool IsIncluded =>
         InclusionState == TechnicalProposalItemInclusionState.Included;
-    public int? EffectiveQuantity =>
-        ManualQuantityOverride ?? BaseQuantity;
+    public RequirementQuantityResolution QuantityResolution =>
+        RequirementQuantityResolution.Resolve(
+            BaseQuantity,
+            ManualQuantityOverride,
+            ExtractedItem?.QuantityExtractionStatus,
+            ExtractedItem?.QuantityExtractionConfidence);
+    public int? EffectiveQuantity => QuantityResolution.Value;
     public int? EffectiveWidthMillimeters =>
         ManualWidthMillimetersOverride ?? BaseWidthMillimeters;
     public int? EffectiveHeightMillimeters =>

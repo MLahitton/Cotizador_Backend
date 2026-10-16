@@ -151,6 +151,8 @@ public sealed class ProcessRequirementServiceTests
         Assert.True(result.IsSuccess);
         Assert.NotNull(extractedItem);
         Assert.Equal(25, extractedItem!.Quantity);
+        Assert.Equal(RequirementExtractionValueStatus.Ambiguous, extractedItem.QuantityExtractionStatus);
+        Assert.Equal(0.5m, extractedItem.QuantityExtractionConfidence);
         var proposalItem = Assert.Single(proposal!.Items);
         Assert.Null(proposalItem.ManualQuantityOverride);
         Assert.Equal(25, proposalItem.EffectiveQuantity);
@@ -2141,7 +2143,9 @@ public sealed class ProcessRequirementServiceTests
             null,
             false,
             segments is null ? null : "MULTI_MODULE",
-            segments);
+            segments,
+            QuantityStatus: scenario == "quantity_25" ? CanonicalExtractionValueStatus.Ambiguous : null,
+            QuantityConfidence: scenario == "quantity_25" ? 0.5m : null);
         var structuredExtraction = new StructuredExtractionData(
             status,
             "Proyecto",

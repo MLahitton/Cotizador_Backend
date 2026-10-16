@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.RequirementExperience;
+using Application.PreQuotes.UpdateRequirementTechnicalProposalItemPhysicalData;
 using Domain.Catalogs;
 using Domain.Clients;
 using Domain.Identity;
@@ -32,6 +33,65 @@ public sealed class ExperienceConcurrencyFixture : IAsyncLifetime
 public sealed class RequirementExperienceConcurrencyTests(ExperienceConcurrencyFixture fixture)
 {
     private static readonly DateTimeOffset At = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData(1, false, false)]
+    [InlineData(2, true, false)]
+    [InlineData(1, false, true)]
+    [InlineData(2, true, true)]
+    public async Task Quantity_PhysicalSave_PersistsSourceAndPreservesRaw(int quantity, bool valueChanged, bool ambiguous)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var reason = ambiguous ? "QUANTITY_AMBIGUOUS" : "QUANTITY_ASSUMED";
+        var data = await SeedAsync();
+        await using (var setup = fixture.Database.CreateDbContext())
+        {
+            var item = await setup.RequirementTechnicalProposalItems.Include(x => x.ExtractedItem)
+                .SingleAsync(x => x.Id == data.Seed.FirstProposalItemId, ct);
+            setup.Entry(item).Property(x => x.BaseQuantity).CurrentValue = ambiguous ? 1 : null;
+            setup.Entry(item.ExtractedItem!).Property(x => x.Quantity).CurrentValue = ambiguous ? 1 : null;
+            setup.Entry(item.ExtractedItem!).Property(x => x.QuantityExtractionStatus).CurrentValue =
+                ambiguous ? RequirementExtractionValueStatus.Ambiguous : RequirementExtractionValueStatus.Unknown;
+            setup.Entry(item.ExtractedItem!).Property(x => x.QuantityExtractionConfidence).CurrentValue = 0.5m;
+            await setup.SaveChangesAsync(ct);
+        }
+        await using (var confirm = fixture.Database.CreateDbContext())
+        {
+            var result = await ConfirmationService(confirm, data, new CurrentResolver(data))
+                .ConfirmAsync(data.Seed.TechnicalProposalId, ct);
+            Assert.True(result.IsSuccess);
+            Assert.Contains(reason, result.Value!.ReviewReasons);
+        }
+        await using (var write = fixture.Database.CreateDbContext())
+        {
+            var auth = Auth(data.User);
+            var service = new UpdateRequirementTechnicalProposalItemPhysicalDataService(
+                new UpdateRequirementTechnicalProposalItemPhysicalDataCommandValidator(),
+                auth.Current, auth.Identity, new RequirementRepository(write),
+                new PreQuoteRepository(write), new ProjectRepository(write), new ClientRepository(write));
+            var response = await service.ExecuteAsync(new(data.Seed.TechnicalProposalId,
+                data.Seed.FirstProposalItemId, quantity, null, null), ct);
+            Assert.True(response.IsSuccess);
+            Assert.Equal("MANUAL", response.PhysicalData!.QuantitySource);
+            Assert.Equal(valueChanged ? 2 : 1, response.PhysicalData.CommercialRevision);
+        }
+        await using var verify = fixture.Database.CreateDbContext();
+        var stored = await verify.RequirementTechnicalProposalItems.Include(x => x.ExtractedItem)
+            .SingleAsync(x => x.Id == data.Seed.FirstProposalItemId, ct);
+        Assert.Equal(ambiguous ? 1 : (int?)null, stored.BaseQuantity);
+        Assert.Equal(ambiguous ? 1 : (int?)null, stored.ExtractedItem!.Quantity);
+        Assert.Equal(ambiguous ? RequirementExtractionValueStatus.Ambiguous : RequirementExtractionValueStatus.Unknown,
+            stored.ExtractedItem.QuantityExtractionStatus);
+        Assert.Equal(0.5m, stored.ExtractedItem.QuantityExtractionConfidence);
+        Assert.Equal(quantity, stored.ManualQuantityOverride);
+        Assert.Equal(RequirementQuantitySource.MANUAL, stored.QuantityResolution.Source);
+        var current = await ConfirmationService(verify, data, new CurrentResolver(data))
+            .GetStatusAsync(data.Seed.TechnicalProposalId, ct);
+        Assert.Equal(valueChanged ? "STALE" : "CONFIRMED", current.Value!.Status);
+        Assert.DoesNotContain(reason, current.Value.ReviewReasons);
+        var snapshot = await verify.RequirementExperienceConfigurationConfirmations.Include(x => x.Items).SingleAsync(ct);
+        Assert.Contains(reason, Assert.Single(snapshot.Items).ReviewReasons);
+    }
 
     [Theory]
     [InlineData(false)]
@@ -111,7 +171,7 @@ public sealed class RequirementExperienceConcurrencyTests(ExperienceConcurrencyF
             .ConfirmAsync(data.Seed.TechnicalProposalId, CancellationToken.None);
         await paused.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var change = b.RequirementTechnicalProposalItems.Where(x => x.Id == data.Seed.FirstProposalItemId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.BaseQuantity, (int?)null));
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.BaseWidthMillimeters, (int?)null));
         try { await WaitForLockAsync("physical-writer"); }
         finally { paused.Release.TrySetResult(); }
         Assert.True((await confirm.WaitAsync(TimeSpan.FromSeconds(20))).IsSuccess);
@@ -136,7 +196,7 @@ public sealed class RequirementExperienceConcurrencyTests(ExperienceConcurrencyF
         await using var writer = CreateContext("before-writer");
         await using var transaction = await writer.Database.BeginTransactionAsync();
         await writer.RequirementTechnicalProposalItems.Where(x => x.Id == data.Seed.FirstProposalItemId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.BaseQuantity, (int?)null));
+            .ExecuteUpdateAsync(setters => setters.SetProperty(x => x.BaseWidthMillimeters, (int?)null));
         await using var reader = CreateContext("before-confirm");
         var confirm = ConfirmationService(reader, data, new CurrentResolver(data))
             .ConfirmAsync(data.Seed.TechnicalProposalId, CancellationToken.None);
@@ -249,7 +309,9 @@ public sealed class RequirementExperienceConcurrencyTests(ExperienceConcurrencyF
             var value = RequirementExperienceCurrentConfigurationItem.Included(item.Id, item.Reference, item.Sequence,
                 item.EffectiveQuantity, item.EffectiveWidthMillimeters, item.EffectiveHeightMillimeters,
                 1m, item.EffectiveLocation, data.SystemId, data.GlassId, data.FinishId,
-                "RESOLVED", "RESOLVED", "RESOLVED", "NONE", "NONE", [], []);
+                "RESOLVED", "RESOLVED", "RESOLVED", "NONE", "NONE",
+                item.QuantityResolution.ReviewReason is { } reason ? [reason] : [],
+                [], item.QuantityResolution.Source);
             var current = new RequirementExperienceCurrentConfiguration(proposal.RequirementId, proposal.Id, [value]);
             Entered.TrySetResult();
             if (pause) await Release.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);

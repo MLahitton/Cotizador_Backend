@@ -54,7 +54,10 @@ public sealed record RequirementTechnicalProposalItemPhysicalDataReadModel(
     int? WidthMm,
     int? HeightMm,
     long CommercialRevision,
-    RequirementTechnicalProposalItemDataCompletenessReadModel DataCompleteness);
+    RequirementTechnicalProposalItemDataCompletenessReadModel DataCompleteness,
+    string? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null);
 
 public sealed record UpdateRequirementTechnicalProposalItemPhysicalDataResult(
     bool IsSuccess,
@@ -138,10 +141,12 @@ public sealed class UpdateRequirementTechnicalProposalItemPhysicalDataService(
             var after = (command.Quantity ?? before.EffectiveQuantity,
                 command.WidthMm ?? before.EffectiveWidthMillimeters,
                 command.HeightMm ?? before.EffectiveHeightMillimeters);
-            if (before != after)
+            var confirmsQuantity = command.Quantity is > 0
+                && item.QuantityResolution.ReviewReason is not null;
+            if (before != after || confirmsQuantity)
             {
                 item.ApplyManualDataOverride(command.Quantity, command.WidthMm, command.HeightMm);
-                if (item.IsIncluded)
+                if (item.IsIncluded && before != after)
                 {
                     proposal.MarkCommerciallyChanged();
                     proposal.InvalidateCommercialConfirmation();
@@ -158,7 +163,10 @@ public sealed class UpdateRequirementTechnicalProposalItemPhysicalDataService(
                     item.EffectiveWidthMillimeters,
                     item.EffectiveHeightMillimeters,
                     proposal.CommercialRevision,
-                    TechnicalProposalItemDataCompletenessEvaluator.Evaluate(item)));
+                    TechnicalProposalItemDataCompletenessEvaluator.Evaluate(item),
+                    item.QuantityResolution.Source.ToString(),
+                    item.QuantityResolution.ExtractionStatusCode,
+                    item.QuantityResolution.ExtractionConfidence));
         }
         catch (RequirementPersistenceException)
         {

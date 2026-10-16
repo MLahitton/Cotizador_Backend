@@ -137,7 +137,10 @@ public sealed record RequirementExperienceConfigurationItemStatusResponse(
     string? GlassOverrideState,
     string ReadinessState,
     IReadOnlyList<string> ReviewReasons,
-    IReadOnlyList<string> BlockingReasons);
+    IReadOnlyList<string> BlockingReasons,
+    string? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null);
 
 public static class RequirementExperienceLevel2States
 {

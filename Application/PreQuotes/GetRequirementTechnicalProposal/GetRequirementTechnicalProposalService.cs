@@ -416,7 +416,10 @@ public sealed class GetRequirementTechnicalProposalService(
             extracted?.OccurrenceContext,
             item.ManualLocationOverride,
             item.EffectiveLocation,
-            item.ManualObservation);
+            item.ManualObservation,
+            item.QuantityResolution.Source.ToString(),
+            item.QuantityResolution.ExtractionStatusCode,
+            item.QuantityResolution.ExtractionConfidence);
     }
 
     private static RequirementTechnicalProposalSystemAlternativeReadModel?
@@ -726,7 +729,10 @@ public sealed record RequirementTechnicalProposalItemReadModel(
     string? ExtractedLocation = null,
     string? ManualLocationOverride = null,
     string? EffectiveLocation = null,
-    string? ManualObservation = null);
+    string? ManualObservation = null,
+    string? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null);
 
 public sealed record RequirementTechnicalProposalSuggestedReadModel(
     RequirementTechnicalProposalSystemOptionReadModel? System,

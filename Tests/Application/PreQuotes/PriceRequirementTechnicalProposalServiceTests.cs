@@ -371,11 +371,14 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
     }
 
     [Fact]
-    public async Task Execute_WithQuantityMissing_DoesNotAssumeOneAndDoesNotCallEstimator()
+    public async Task Execute_WithQuantityMissing_UsesAssumedOneWithoutChangingRaw()
     {
+        var proposalItem = ProposalItem(Item(quantity: null));
+        HistoricalCandidateQuery? captured = null;
         var context = CreateContext(
-            [ProposalItem(Item(quantity: null))],
-            TechnicalEstimate(100m, 200m, 300m));
+            [proposalItem],
+            TechnicalEstimate(100m, 200m, 300m),
+            query => captured = query);
 
         var result = await context.Service.ExecuteAsync(
             new PriceRequirementTechnicalProposalCommand(context.Requirement.Id),
@@ -383,14 +386,14 @@ public sealed class PriceRequirementTechnicalProposalServiceTests
 
         Assert.True(result.IsSuccess);
         var item = Assert.Single(result.Pricing!.Items);
-        Assert.Equal("NOT_PRICEABLE", item.Status);
-        Assert.Null(item.Unit.Expected);
-        Assert.Null(item.Line.Expected);
-        Assert.Contains("QUANTITY_MISSING", item.MissingData);
-        Assert.False(result.Pricing.IsCompleteTotal);
-        await context.TechnicalEstimator.DidNotReceive().EstimateAsync(
-            Arg.Any<HistoricalCandidateQuery>(),
-            Arg.Any<CancellationToken>());
+        Assert.Equal("PRICEABLE", item.Status);
+        Assert.Equal(200m, item.Unit.Expected);
+        Assert.Equal(200m, item.Line.Expected);
+        Assert.DoesNotContain("QUANTITY_MISSING", item.MissingData);
+        Assert.Equal(1m, captured!.Quantity);
+        Assert.Null(proposalItem.BaseQuantity);
+        Assert.Null(proposalItem.ExtractedItem!.Quantity);
+        Assert.Null(proposalItem.ManualQuantityOverride);
     }
 
     [Fact]
@@ -1423,7 +1426,7 @@ public async Task GetCurrent_AdminReadingAnotherUsersRequirement_ReturnsSuccess(
         var context = CreateContext(
             [
                 ProposalItem(Item(reference: "PV-06")),
-                ProposalItem(Item(reference: "V-01", quantity: null))
+                ProposalItem(Item(reference: "V-01", width: null, area: null))
             ],
             TechnicalEstimate(100m, 200m, 300m));
 
@@ -1658,9 +1661,9 @@ public async Task GetCurrent_AdminReadingAnotherUsersRequirement_ReturnsSuccess(
     private static RequirementExtractedItem Item(
         string reference = "PV-06",
         int? quantity = 1,
-        int width = 3740,
+        int? width = 3740,
         int height = 2500,
-        decimal area = 9.35m,
+        decimal? area = 9.35m,
         string requestedSystemRaw = "3831",
         string functionalType = "SLIDING_DOOR",
         string operation = "CORREDIZA") =>

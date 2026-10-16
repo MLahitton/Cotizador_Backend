@@ -43,6 +43,7 @@ public sealed class RequirementTechnicalProposalItemConfiguration
             });
 
         builder.HasKey(item => item.Id);
+        builder.Ignore(item => item.QuantityResolution);
 
         builder.Property(item => item.Id)
             .HasColumnName("id")

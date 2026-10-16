@@ -66,6 +66,13 @@ public sealed class RequirementExtractedItemConfiguration
             .IsRequired();
 
         builder.Property(item => item.Quantity).HasColumnName("quantity");
+        builder.Property(item => item.QuantityExtractionStatus)
+            .HasColumnName("quantity_extraction_status")
+            .HasConversion<string>()
+            .HasMaxLength(30);
+        builder.Property(item => item.QuantityExtractionConfidence)
+            .HasColumnName("quantity_extraction_confidence")
+            .HasColumnType("numeric(5,4)");
         builder.Property(item => item.WidthMillimeters).HasColumnName("width_millimeters");
         builder.Property(item => item.HeightMillimeters).HasColumnName("height_millimeters");
         builder.Property(item => item.AreaSquareMeters)

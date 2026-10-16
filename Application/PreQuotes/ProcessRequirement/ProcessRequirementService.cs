@@ -623,7 +623,9 @@ public sealed class ProcessRequirementService(
                 item.FinishRequiresReview,
                 createdAtUtc,
                 item.AssemblyType,
-                item.OccurrenceContext);
+                item.OccurrenceContext,
+                item.QuantityStatus is { } quantityStatus ? MapExtractionStatus(quantityStatus) : null,
+                item.QuantityConfidence);
             foreach (var invalidEvidence in invalidEvidenceSources)
             {
                 LogInvalidEvidence(

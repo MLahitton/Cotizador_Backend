@@ -306,7 +306,10 @@ public sealed class RequirementTechnicalProposalController(
             item.OccurrenceContext,
             item.ManualLocationOverride,
             item.EffectiveLocation,
-            item.ManualObservation);
+            item.ManualObservation,
+            item.QuantitySource,
+            item.QuantityExtractionStatus,
+            item.QuantityExtractionConfidence);
 
     private static RequirementTechnicalProposalReadinessResponse Map(
         RequirementTechnicalProposalReadinessReadModel readiness) =>

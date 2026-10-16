@@ -12,11 +12,11 @@ public sealed class TechnicalProposalItemDataCompletenessEvaluatorTests
 
     [Theory]
     [InlineData(1, 1000, 1200, "COMPLETE")]
-    [InlineData(null, 1000, 1200, "INCOMPLETE", "QUANTITY")]
+    [InlineData(null, 1000, 1200, "COMPLETE")]
     [InlineData(1, null, 1200, "INCOMPLETE", "WIDTH")]
     [InlineData(1, 1000, null, "INCOMPLETE", "HEIGHT")]
     [InlineData(1, null, null, "INCOMPLETE", "WIDTH", "HEIGHT")]
-    [InlineData(null, null, null, "INCOMPLETE", "QUANTITY", "WIDTH", "HEIGHT")]
+    [InlineData(null, null, null, "INCOMPLETE", "WIDTH", "HEIGHT")]
     public void Evaluate_WithEffectiveData_ReturnsExpectedCompleteness(
         int? quantity,
         int? widthMillimeters,
@@ -70,6 +70,31 @@ public sealed class TechnicalProposalItemDataCompletenessEvaluatorTests
         Assert.Equal("COMPLETE", completeness.State);
         Assert.True(completeness.IsComplete);
         Assert.DoesNotContain("HEIGHT", completeness.MissingFields);
+    }
+
+    [Theory]
+    [InlineData(null, null, 1, RequirementQuantitySource.ASSUMED_DEFAULT)]
+    [InlineData(0, null, 1, RequirementQuantitySource.ASSUMED_DEFAULT)]
+    [InlineData(-2, null, 1, RequirementQuantitySource.ASSUMED_DEFAULT)]
+    [InlineData(3, null, 3, RequirementQuantitySource.EXTRACTED)]
+    [InlineData(null, 2, 2, RequirementQuantitySource.MANUAL)]
+    [InlineData(3, 2, 2, RequirementQuantitySource.MANUAL)]
+    [InlineData(3, 0, 3, RequirementQuantitySource.EXTRACTED)]
+    public void QuantityResolution_UsesValidPrecedenceWithoutChangingRaw(
+        int? extracted, int? manual, int expected, RequirementQuantitySource source)
+    {
+        var item = ProposalItem(null, 1000, 1200);
+        // Invalid legacy values cannot be created through the current domain factory.
+        SetPrivateProperty(item, "BaseQuantity", extracted);
+        SetPrivateProperty(item.ExtractedItem!, "Quantity", extracted);
+        SetPrivateProperty(item, "ManualQuantityOverride", manual);
+
+        Assert.Equal(expected, item.EffectiveQuantity);
+        Assert.Equal(source, item.QuantityResolution.Source);
+        Assert.True(TechnicalProposalItemDataCompletenessEvaluator.Evaluate(item).IsComplete);
+        Assert.Equal(extracted, item.BaseQuantity);
+        Assert.Equal(extracted, item.ExtractedItem!.Quantity);
+        Assert.Equal(manual, item.ManualQuantityOverride);
     }
 
     private static RequirementTechnicalProposalItem ProposalItem(

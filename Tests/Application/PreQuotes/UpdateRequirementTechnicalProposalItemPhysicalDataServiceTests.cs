@@ -16,6 +16,34 @@ namespace CotizadorBackend.Tests.Application.PreQuotes;
 public sealed class UpdateRequirementTechnicalProposalItemPhysicalDataServiceTests
 {
     [Theory]
+    [InlineData(RequirementExtractionValueStatus.Ambiguous, 1, false)]
+    [InlineData(RequirementExtractionValueStatus.Unknown, 1, false)]
+    [InlineData(RequirementExtractionValueStatus.Ambiguous, 2, true)]
+    public async Task Execute_ConfirmsUncertainQuantity_PreservesProvenance(
+        RequirementExtractionValueStatus status, int quantity, bool changed)
+    {
+        var context = CreateContext();
+        SetPrivateProperty(context.Item.ExtractedItem!, "QuantityExtractionStatus", status);
+        SetPrivateProperty(context.Item.ExtractedItem!, "QuantityExtractionConfidence", (decimal?)0.5m);
+        SetPrivateProperty(context.Proposal, "CommercialConfirmedAtUtc", (DateTimeOffset?)At);
+        var revision = context.Proposal.CommercialRevision;
+        Assert.NotNull(context.Item.QuantityResolution.ReviewReason);
+        var result = await context.Service.ExecuteAsync(new(context.Proposal.Id, context.Item.Id,
+            quantity, null, null), TestContext.Current.CancellationToken);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("MANUAL", result.PhysicalData!.QuantitySource);
+        Assert.Equal(status.ToString().ToUpperInvariant(), result.PhysicalData.QuantityExtractionStatus);
+        Assert.Equal(0.5m, result.PhysicalData.QuantityExtractionConfidence);
+        Assert.Equal(quantity, context.Item.ManualQuantityOverride);
+        Assert.Null(context.Item.QuantityResolution.ReviewReason);
+        Assert.Equal(1, context.Item.BaseQuantity);
+        Assert.Equal(1, context.Item.ExtractedItem!.Quantity);
+        Assert.Equal(revision + (changed ? 1 : 0), context.Proposal.CommercialRevision);
+        Assert.Equal(changed ? null : (DateTimeOffset?)At, context.Proposal.CommercialConfirmedAtUtc);
+        await context.Requirements.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task Controller_MapsPhysicalDataAndOwnerOnlyAccess(bool owner)
@@ -163,6 +191,39 @@ public sealed class UpdateRequirementTechnicalProposalItemPhysicalDataServiceTes
             TestContext.Current.CancellationToken);
         Assert.Equal(UpdateRequirementTechnicalProposalItemPhysicalDataFailure.InvalidRequest, result.Failure);
         await context.Requirements.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    public async Task Execute_ConfirmsAssumedQuantity_PersistsWithoutUnnecessaryCommercialChange(
+        int quantity, bool commercialChange)
+    {
+        var context = CreateContext();
+        SetPrivateProperty(context.Item, "BaseQuantity", (int?)null);
+        SetPrivateProperty(context.Item.ExtractedItem!, "Quantity", (int?)null);
+        SetPrivateProperty(context.Proposal, "CommercialConfirmedAtUtc", (DateTimeOffset?)At);
+        SetPrivateProperty(context.Proposal, "CommercialConfirmedByUserId", (Guid?)UserId);
+        var revision = context.Proposal.CommercialRevision;
+        Assert.Equal(RequirementQuantitySource.ASSUMED_DEFAULT, context.Item.QuantityResolution.Source);
+
+        var result = await context.Service.ExecuteAsync(new(context.Proposal.Id, context.Item.Id,
+            quantity, null, null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(quantity, context.Item.ManualQuantityOverride);
+        Assert.Equal(quantity, result.PhysicalData!.Quantity);
+        Assert.Equal("MANUAL", result.PhysicalData.QuantitySource);
+        Assert.Equal(revision + (commercialChange ? 1 : 0), context.Proposal.CommercialRevision);
+        Assert.Equal(commercialChange ? null : (DateTimeOffset?)At, context.Proposal.CommercialConfirmedAtUtc);
+        Assert.Equal(commercialChange ? null : (Guid?)UserId, context.Proposal.CommercialConfirmedByUserId);
+        Assert.Null(context.Item.BaseQuantity);
+        Assert.Null(context.Item.ExtractedItem!.Quantity);
+        await context.Requirements.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+
+        await context.Service.ExecuteAsync(new(context.Proposal.Id, context.Item.Id,
+            quantity, null, null), TestContext.Current.CancellationToken);
+        await context.Requirements.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     private static Context CreateContext(UserRole role = UserRole.User, bool owner = true, bool active = true)

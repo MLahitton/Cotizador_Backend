@@ -73,7 +73,10 @@ public sealed record RequirementTechnicalProposalItemResponse(
     string? ExtractedLocation = null,
     string? ManualLocationOverride = null,
     string? EffectiveLocation = null,
-    string? ManualObservation = null);
+    string? ManualObservation = null,
+    string? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null);
 
 public sealed record RequirementTechnicalProposalItemDataCompletenessResponse(
     string State,

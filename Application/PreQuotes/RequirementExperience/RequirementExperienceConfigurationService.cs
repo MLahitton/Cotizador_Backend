@@ -85,8 +85,11 @@ public sealed class RequirementExperienceConfigurationResolver(
                 level2.Finish.State,
                 level2.System.OverrideState,
                 level2.Glass.OverrideState,
-                CollectReviewReasons(level2),
-                CollectBlockingReasons(level2)));
+                CollectReviewReasons(level2, item.QuantityResolution),
+                CollectBlockingReasons(level2),
+                item.QuantityResolution.Source,
+                item.QuantityResolution.ExtractionStatusCode,
+                item.QuantityResolution.ExtractionConfidence));
         }
 
         return new RequirementExperienceCurrentConfiguration(
@@ -104,9 +107,14 @@ public sealed class RequirementExperienceConfigurationResolver(
             : item.ExtractedItem?.AreaSquareMeters;
 
     private static IReadOnlyList<string> CollectReviewReasons(
-        RequirementExperienceLevel2Response level2)
+        RequirementExperienceLevel2Response level2,
+        RequirementQuantityResolution quantity)
     {
         var reasons = new List<string>();
+        if (quantity.ReviewReason is { } quantityReviewReason)
+        {
+            reasons.Add(quantityReviewReason);
+        }
         reasons.AddRange(level2.System.ReviewReasons);
         reasons.AddRange(level2.Glass.ReviewReasons);
         reasons.AddRange(level2.Finish.ReviewReasons);
@@ -399,7 +407,10 @@ public sealed class RequirementExperienceConfigurationService(
                     item.GlassOverrideState,
                     itemReadiness.State,
                     itemReadiness.ReviewReasons,
-                    itemReadiness.BlockingReasons);
+                    itemReadiness.BlockingReasons,
+                    item.QuantitySource?.ToString(),
+                    item.QuantityExtractionStatus,
+                    item.QuantityExtractionConfidence);
             })
                 .ToArray());
     }
@@ -491,7 +502,10 @@ public sealed record RequirementExperienceCurrentConfigurationItem(
     string? SystemOverrideState,
     string? GlassOverrideState,
     IReadOnlyList<string> ReviewReasons,
-    IReadOnlyList<string> BlockingReasons)
+    IReadOnlyList<string> BlockingReasons,
+    RequirementQuantitySource? QuantitySource = null,
+    string? QuantityExtractionStatus = null,
+    decimal? QuantityExtractionConfidence = null)
 {
     public static RequirementExperienceCurrentConfigurationItem Excluded(
         Guid technicalProposalItemId,
@@ -536,7 +550,10 @@ public sealed record RequirementExperienceCurrentConfigurationItem(
         string systemOverrideState,
         string glassOverrideState,
         IReadOnlyList<string> reviewReasons,
-        IReadOnlyList<string> blockingReasons) =>
+        IReadOnlyList<string> blockingReasons,
+        RequirementQuantitySource? quantitySource = null,
+        string? quantityExtractionStatus = null,
+        decimal? quantityExtractionConfidence = null) =>
         new(
             technicalProposalItemId,
             reference,
@@ -556,7 +573,10 @@ public sealed record RequirementExperienceCurrentConfigurationItem(
             systemOverrideState,
             glassOverrideState,
             reviewReasons,
-            blockingReasons);
+            blockingReasons,
+            quantitySource,
+            quantityExtractionStatus,
+            quantityExtractionConfidence);
 
     public RequirementExperienceConfigurationConfirmationItem ToSnapshot(
         Guid confirmationId) =>

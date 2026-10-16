@@ -150,7 +150,10 @@ public sealed class TechnicalProposalItemPhysicalDataController(
             new RequirementTechnicalProposalItemDataCompletenessResponse(
                 location.DataCompleteness.State,
                 location.DataCompleteness.IsComplete,
-                location.DataCompleteness.MissingFields));
+                location.DataCompleteness.MissingFields),
+            location.QuantitySource,
+            location.QuantityExtractionStatus,
+            location.QuantityExtractionConfidence);
 
     private ObjectResult RequirementProblem(
         int statusCode,
