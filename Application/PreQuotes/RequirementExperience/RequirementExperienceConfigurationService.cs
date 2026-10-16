@@ -671,12 +671,14 @@ public static class RequirementExperienceConfigurationReadinessEvaluator
             blockingReasons.Add("HEIGHT_REQUIRED");
         }
 
-        if (item.SystemId is null)
+        var preferencesIncomplete = item.BlockingReasons.Contains(
+            RequirementExperienceLevel2Resolver.PreferencesIncomplete);
+        if (item.SystemId is null && !preferencesIncomplete)
         {
             blockingReasons.Add("SYSTEM_REQUIRED");
         }
 
-        if (item.GlassTypeId is null)
+        if (item.GlassTypeId is null && !preferencesIncomplete)
         {
             blockingReasons.Add("GLASS_REQUIRED");
         }

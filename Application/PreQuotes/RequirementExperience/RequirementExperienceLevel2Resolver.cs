@@ -10,6 +10,8 @@ public sealed class RequirementExperienceLevel2Resolver(
     IGlassCandidateResolver glassCandidateResolver,
     ISgTechnicalSelector technicalSelector)
 {
+    public const string PreferencesIncomplete = "EXPERIENCE_PREFERENCES_INCOMPLETE";
+
     public async Task<RequirementExperienceLevel2Response> ResolveAsync(
         RequirementTechnicalProposal technicalProposal,
         RequirementTechnicalProposalItem item,
@@ -26,7 +28,27 @@ public sealed class RequirementExperienceLevel2Resolver(
             RequestedCommercialLine = null
         };
         var effectiveFunctionalType = SgFunctionalCompatibilityEvaluator.EffectiveFunctionalType(systemInput);
-        var system = await ResolveSystemAsync(systemInput, systems, cancellationToken);
+        var finish = new RequirementExperienceLevel2FinishResponse(
+            RequirementExperienceLevel2States.PendingExternalSource, [], []);
+        if (level1Resolution is not { IsComplete: true }
+            || level1Resolution.SystemTier is not ("CLASSIC" or "PREMIUM")
+            || level1Resolution.GlassFamily is not ("TEMPLADO" or "LAMINADO"))
+        {
+            return new RequirementExperienceLevel2Response(
+                technicalProposal.Id, item.Id, technicalSelection?.Revision, effectiveFunctionalType,
+                new(RequirementExperienceLevel2States.Pending, null,
+                    technicalSelection?.SystemId is { } systemId ? MapStaleSystemOverride(systemId, systems) : null,
+                    null, RequirementExperienceLevel2OverrideStates.None, [], [], [PreferencesIncomplete]),
+                new(RequirementExperienceLevel2States.Pending, null, null,
+                    technicalSelection?.GlassTypeId is { } glassId ? MapStaleGlassOverride(glassId, glasses) : null,
+                    null, RequirementExperienceLevel2OverrideStates.None, [], [], [PreferencesIncomplete]),
+                finish, RequirementExperienceLevel2States.Pending);
+        }
+
+        var tierSystems = systems.Where(system => system.IsActive && system.IsSelectable
+            && ProductSystemExperienceTierResolver.Resolve(system) == level1Resolution.SystemTier).ToArray();
+        var system = await ResolveSystemAsync(systemInput, tierSystems, cancellationToken,
+            new DeterministicSgTechnicalSelector(new ExperienceSystemCatalog(tierSystems), constraintEvaluator));
         var glass = ResolveGlass(
             item.ExtractedItem,
             level1Resolution?.GlassFamily,
@@ -34,10 +56,6 @@ public sealed class RequirementExperienceLevel2Resolver(
             new RequirementGlassDimensions(
                 item.EffectiveWidthMillimeters,
                 item.EffectiveHeightMillimeters));
-        var finish = new RequirementExperienceLevel2FinishResponse(
-            RequirementExperienceLevel2States.PendingExternalSource,
-            ReviewReasons: [],
-            BlockingReasons: []);
 
         return new RequirementExperienceLevel2Response(
             technicalProposal.Id,
@@ -53,9 +71,14 @@ public sealed class RequirementExperienceLevel2Resolver(
     public async Task<RequirementExperienceLevel2SystemResponse> ResolveSystemAsync(
         SgTechnicalSelectionInput input,
         IReadOnlyList<ProductSystemCatalogReadModel> systems,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ISgTechnicalSelector? candidateSelector = null)
     {
-        var neutralInput = input with { RequestedCommercialLine = null };
+        var neutralInput = input with
+        {
+            RequestedCommercialLine = null,
+            EnforceLegacyCommercialLineEligibility = false
+        };
         var effectiveFunctionalType = SgFunctionalCompatibilityEvaluator.EffectiveFunctionalType(neutralInput);
         if (effectiveFunctionalType is null)
         {
@@ -70,9 +93,11 @@ public sealed class RequirementExperienceLevel2Resolver(
                 BlockingReasons: []);
         }
 
+        var eligibilityEvaluator = new DeterministicSgTechnicalSelector(
+            new ExperienceSystemCatalog(systems), constraintEvaluator);
         var candidates = systems
             .Where(system => system.IsActive && system.IsSelectable)
-            .Select(system => MapSystemCandidate(neutralInput, system))
+            .Select(system => MapSystemCandidate(neutralInput, system, eligibilityEvaluator))
             .Where(candidate => candidate is not null)
             .Cast<RequirementExperienceLevel2SystemCandidateResponse>()
             .ToArray();
@@ -84,10 +109,10 @@ public sealed class RequirementExperienceLevel2Resolver(
             .Where(candidate => candidate.CompatibilityState == RequirementExperienceLevel2CandidateStates.RequiresReview)
             .ToArray();
 
-        var suggestedCode = compatible.Length == 0
+        var selection = compatible.Length == 0
             ? null
-            : (await technicalSelector.SelectAsync(neutralInput, cancellationToken))
-                .SuggestedSystemCode;
+            : await (candidateSelector ?? technicalSelector).SelectAsync(neutralInput, cancellationToken);
+        var suggestedCode = selection?.SuggestedSystemCode;
         var suggested = suggestedCode is null
             ? null
             : compatible.FirstOrDefault(candidate => SameCode(candidate.Code, suggestedCode));
@@ -100,9 +125,8 @@ public sealed class RequirementExperienceLevel2Resolver(
             .Where(candidate => candidate.CompatibilityState == RequirementExperienceLevel2CandidateStates.RequiresReview)
             .ToArray();
 
-        if (compatible.Length > 0)
+        if (suggested is not null)
         {
-            suggested ??= compatible.First();
             return new RequirementExperienceLevel2SystemResponse(
                 RequirementExperienceLevel2States.Resolved,
                 suggested,
@@ -114,7 +138,7 @@ public sealed class RequirementExperienceLevel2Resolver(
                 BlockingReasons: []);
         }
 
-        if (review.Length > 0)
+        if (review.Length > 0 || compatible.Length > 0)
         {
             return new RequirementExperienceLevel2SystemResponse(
                 RequirementExperienceLevel2States.RequiresReview,
@@ -125,6 +149,8 @@ public sealed class RequirementExperienceLevel2Resolver(
                 Candidates: ordered,
                 ReviewReasons: review
                     .SelectMany(candidate => candidate.ReviewReasons)
+                    .Concat(selection?.ReviewReasons ?? [])
+                    .DefaultIfEmpty(SgTechnicalSelectionReviewReasons.TechnicalSelectionNoMatch)
                     .Distinct(StringComparer.Ordinal)
                     .ToArray(),
                 BlockingReasons: []);
@@ -143,6 +169,17 @@ public sealed class RequirementExperienceLevel2Resolver(
                 .DefaultIfEmpty("SYSTEM_NO_COMPATIBLE_CANDIDATE")
                 .Distinct(StringComparer.Ordinal)
                 .ToArray());
+    }
+
+    private sealed class ExperienceSystemCatalog(IReadOnlyList<ProductSystemCatalogReadModel> systems)
+        : IProductSystemCatalogRepository
+    {
+        public Task<IReadOnlyList<ProductSystemCatalogReadModel>> ListActiveAsync(CancellationToken cancellationToken)
+            => Task.FromResult(systems);
+        public Task<IReadOnlyList<ProductSystemCatalogReadModel>> ListActiveSelectableAsync(CancellationToken cancellationToken)
+            => Task.FromResult(systems);
+        public Task<ProductSystemCatalogReadModel?> FindActiveByCodeAsync(string code, CancellationToken cancellationToken)
+            => Task.FromResult(systems.FirstOrDefault(system => SameCode(system.Code, code)));
     }
 
     public RequirementExperienceLevel2GlassResponse ResolveGlass(
@@ -343,9 +380,10 @@ public sealed class RequirementExperienceLevel2Resolver(
         };
     }
 
-    private RequirementExperienceLevel2SystemCandidateResponse? MapSystemCandidate(
+    private static RequirementExperienceLevel2SystemCandidateResponse? MapSystemCandidate(
         SgTechnicalSelectionInput input,
-        ProductSystemCatalogReadModel system)
+        ProductSystemCatalogReadModel system,
+        DeterministicSgTechnicalSelector eligibilityEvaluator)
     {
         if (SgFunctionalCompatibilityEvaluator.Code(system.FunctionalType) is null)
         {
@@ -358,32 +396,10 @@ public sealed class RequirementExperienceLevel2Resolver(
             return null;
         }
 
-        List<string> reviewReasons = [];
-        List<string> blockingReasons = [];
-
-        var constraints = constraintEvaluator.Evaluate(
-            system,
-            input,
-            ConstraintEvaluationStage.PreSelection);
-        if (constraints.HasHardFailure)
-        {
-            blockingReasons.AddRange(constraints.Evaluations
-                .Where(value =>
-                    value.State == ProductSystemConstraintEvaluationState.Fail
-                    && value.Severity == ProductSystemConstraintSeverity.Hard
-                    && value.KnowledgeClass == ProductSystemConstraintKnowledgeClass.VerifiedTechnical)
-                .Select(value => value.ReviewReason));
-        }
-
-        reviewReasons.AddRange(constraints.ReviewReasons);
-        if (system.RequiresReview)
-        {
-            reviewReasons.Add("SYSTEM_REQUIRES_REVIEW");
-        }
-
-        var state = blockingReasons.Count > 0
+        var eligibility = eligibilityEvaluator.EvaluateCandidateEligibility(system, input);
+        var state = eligibility.IsIncompatible
             ? RequirementExperienceLevel2CandidateStates.Incompatible
-            : reviewReasons.Count > 0
+            : eligibility.RequiresReview
                 ? RequirementExperienceLevel2CandidateStates.RequiresReview
                 : RequirementExperienceLevel2CandidateStates.Compatible;
 
@@ -398,8 +414,8 @@ public sealed class RequirementExperienceLevel2Resolver(
             system.Series,
             state,
             Rank: 0,
-            reviewReasons.Distinct(StringComparer.Ordinal).ToArray(),
-            blockingReasons.Distinct(StringComparer.Ordinal).ToArray());
+            eligibility.ReviewReasons,
+            eligibility.BlockingReasons);
     }
 
     private static RequirementExperienceLevel2GlassCandidateResponse MapGlassCandidate(

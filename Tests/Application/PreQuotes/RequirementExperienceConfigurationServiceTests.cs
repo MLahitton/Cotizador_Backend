@@ -15,6 +15,26 @@ namespace Tests.Application.PreQuotes;
 
 public sealed class RequirementExperienceConfigurationServiceTests
 {
+    [Fact]
+    public void Readiness_IncompletePreferences_DoesNotInventMissingTechnicalSelection()
+    {
+        var context = CreateContext();
+        context.CurrentItem = context.CurrentItem with
+        {
+            SystemId = null,
+            GlassTypeId = null,
+            SystemState = "PENDING",
+            GlassState = "PENDING",
+            BlockingReasons = [RequirementExperienceLevel2Resolver.PreferencesIncomplete]
+        };
+        var readiness = RequirementExperienceConfigurationReadinessEvaluator.Evaluate(
+            new(context.Proposal.RequirementId, context.Proposal.Id, [context.CurrentItem]));
+        Assert.Contains(RequirementExperienceLevel2Resolver.PreferencesIncomplete, readiness.BlockingReasons);
+        Assert.DoesNotContain("SYSTEM_REQUIRED", readiness.BlockingReasons);
+        Assert.DoesNotContain("GLASS_REQUIRED", readiness.BlockingReasons);
+        Assert.False(readiness.CanConfirm);
+    }
+
     [Theory]
     [InlineData(RequirementExtractionValueStatus.Explicit, null)]
     [InlineData(RequirementExtractionValueStatus.Inferred, null)]

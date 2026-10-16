@@ -4,6 +4,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.RequirementExperience;
 using Domain.Clients;
+using Domain.Catalogs;
 using Domain.Identity;
 using Domain.PreQuotes;
 using Domain.Projects;
@@ -15,6 +16,120 @@ namespace Tests.Application.PreQuotes;
 
 public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
 {
+    [Theory]
+    [InlineData("VENTANA CORREDIZA LINEA CLASSIC SISTEMA SG", null, "SIGNATURE", "CLASSIC")]
+    [InlineData("PUERTA CORREDIZA LINEA PREMIUM SISTEMA VENECIA", null, "SIGNATURE", "PREMIUM")]
+    [InlineData("VENTANA CORREDIZA TRADICIONAL SISTEMA SG", null, null, "CLASSIC")]
+    [InlineData("CUERPO FIJO TRADICIONAL SG", null, null, "CLASSIC")]
+    [InlineData("Sin evidencia", null, "TRADITIONAL", "UNKNOWN")]
+    [InlineData("FACHADA STICK INOX BARANDA SPECIAL", null, "SPECIAL", "UNKNOWN")]
+    [InlineData("Sin evidencia", "sistema tradicional SG", null, "CLASSIC")]
+    [InlineData("TRADICIONAL", "LINEA PREMIUM", null, "CLASSIC")]
+    [InlineData("LINEA PREMIUM TRADICIONAL", null, null, "PREMIUM")]
+    [InlineData("TRADICIONALES", null, null, "UNKNOWN")]
+    [InlineData("Sin evidencia", null, "PREMIUM", "UNKNOWN")]
+    [InlineData("K70", null, "CLASSIC", "UNKNOWN")]
+    [InlineData("Sin evidencia", "LINEA PREMIUM", null, "PREMIUM")]
+    [InlineData("l\u00ednea  classic", "LINEA PREMIUM", null, "CLASSIC")]
+    [InlineData("LINEA PREMIUMPLUS", null, null, "UNKNOWN")]
+    [InlineData("LINEA PREMIUM LINEA CLASSIC", null, null, "PREMIUM")]
+    public void ExperienceTier_UsesOnlyExplicitCanonicalNames(string name, string? technicalName,
+        string? commercialLine, string expected)
+    {
+        var system = System("ANY", "FIXED", commercialLine: commercialLine)
+            with { Name = name, TechnicalName = technicalName };
+        Assert.Equal(expected, ProductSystemExperienceTierResolver.Resolve(system));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    public async Task GetLevel2_IncompletePreferences_GatesBothResults(int count)
+    {
+        var context = CreateContext();
+        context.StoredDraft = count == 0 ? null : PreferencesDraft(context, false, count);
+        var result = await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("PENDING", result.Value!.System.State);
+        Assert.Equal("PENDING", result.Value.Glass.State);
+        Assert.Null(result.Value.System.Suggested);
+        Assert.Null(result.Value.System.Effective);
+        Assert.Null(result.Value.Glass.Suggested);
+        Assert.Null(result.Value.Glass.Effective);
+        Assert.Empty(result.Value.System.Candidates);
+        Assert.Empty(result.Value.Glass.Candidates);
+        Assert.Contains(RequirementExperienceLevel2Resolver.PreferencesIncomplete, result.Value.System.BlockingReasons);
+        Assert.Equal(0, context.SaveCount);
+    }
+
+    [Fact]
+    public async Task GetLevel2_ChangedPreferences_ReevaluatesTierFamilyAndOverrides()
+    {
+        var classic = System("CLASSIC_FIXED", "FIXED", commercialLine: "SIGNATURE");
+        var premium = System("PREMIUM_FIXED", "FIXED", commercialLine: "CLASSIC")
+            with { Name = "LINEA PREMIUM FIJO" };
+        var unknown = System("UNKNOWN_FIXED", "FIXED", commercialLine: "PREMIUM")
+            with { Name = "Sin evidencia", TechnicalName = null };
+        var temp = Glass("TEMP_5", "MONOLITHIC", "TEMPERED");
+        var lam = Glass("LAM_4_4", "LAMINATED", "LAMINATED");
+        var context = CreateContext(systems: [classic, premium, unknown], glasses: [temp, lam]);
+        context.StoreSelection(systemId: classic.Id, glassTypeId: temp.GlassTypeId);
+
+        var before = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Equal(classic.Id, Assert.Single(before.System.Candidates).Id);
+        Assert.Equal(temp.GlassTypeId, before.Glass.Suggested!.Id);
+        Assert.Equal("VALID", before.System.OverrideState);
+
+        context.StoredDraft = PreferencesDraft(context, true);
+        var after = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Equal(premium.Id, Assert.Single(after.System.Candidates).Id);
+        Assert.Equal(premium.Id, after.System.Suggested!.Id);
+        Assert.Equal(premium.Id, after.System.Effective!.Id);
+        Assert.Equal(lam.GlassTypeId, after.Glass.Suggested!.Id);
+        Assert.Equal("STALE", after.System.OverrideState);
+        Assert.Equal("STALE", after.Glass.OverrideState);
+        Assert.Equal(classic.Id, context.StoredSelection!.SystemId);
+        Assert.Equal(temp.GlassTypeId, context.StoredSelection.GlassTypeId);
+        Assert.Equal(0, context.SaveCount);
+        await context.ProductSystems.Received(2).ListActiveSelectableAsync(Arg.Any<CancellationToken>());
+
+        var repeated = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Equal(after.System.Suggested.Id, repeated.System.Suggested!.Id);
+        Assert.NotSame(after.System, repeated.System);
+    }
+
+    [Fact]
+    public async Task GetLevel2_PremiumDoesNotBypassHardConstraints()
+    {
+        var premium = System("PREMIUM_FIXED", "FIXED") with
+        {
+            Name = "LINEA PREMIUM FIJO",
+            Constraints = [new(Guid.NewGuid(), Guid.NewGuid(), "MAX_WIDTH",
+                ProductSystemConstraintType.MaxWidth,
+                ProductSystemConstraintScope.Opening,
+                ConstraintEvaluationStage.PreSelection,
+                ProductSystemConstraintSeverity.Hard,
+                ProductSystemConstraintKnowledgeClass.VerifiedTechnical,
+                null, 100m, null, [], null, false, true, null, null,
+                ProductSystemConstraintSourceType.SgRule, null, null)]
+        };
+        var context = CreateContext(systems: [premium]);
+        context.StoredDraft = PreferencesDraft(context, true);
+        var result = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Null(result.System.Suggested);
+        Assert.Equal("INCOMPATIBLE", Assert.Single(result.System.Candidates).CompatibilityState);
+    }
+
+    private static RequirementItemExperienceDraft PreferencesDraft(TestContext context, bool premium, int count = 5)
+    {
+        var level = premium ? "HIGH" : "LOW";
+        return RequirementItemExperienceDraft.Create(context.Proposal.Id, context.Item.Id,
+            "sng-experience-v4-001", null,
+            new[] { "THERMAL", "ACOUSTIC", "SECURITY", "AESTHETICS", "UV" }
+                .Take(count).Select(code => new RequirementItemExperienceAnswerValue(code, code == "UV" ? "UV_NO" : $"{code}_{level}")).ToArray(),
+            context.User.Id, At);
+    }
+
     [Fact]
     public async Task UpdateExisting_NullRevision_CannotBypassConflict()
     {
@@ -365,10 +480,96 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
         Assert.Equal(laminated.GlassTypeId, result.Value.Glass.Effective!.Id);
     }
 
+    [Fact]
+    public async Task UpdateSystem_TraditionalHardFailureIsRejected()
+    {
+        var system = System("TRAD_FIXED", "FIXED", commercialLine: "TRADITIONAL") with
+        {
+            Name = "CUERPO FIJO TRADICIONAL SG",
+            Constraints = [new(Guid.NewGuid(), Guid.NewGuid(), "MAX_WIDTH",
+                ProductSystemConstraintType.MaxWidth, ProductSystemConstraintScope.Opening,
+                ConstraintEvaluationStage.PreSelection, ProductSystemConstraintSeverity.Hard,
+                ProductSystemConstraintKnowledgeClass.VerifiedTechnical,
+                null, 100m, null, [], null, false, true, null, null,
+                ProductSystemConstraintSourceType.SgRule, null, null)]
+        };
+        var context = CreateContext(systems: [system]);
+        var result = await context.UpdateService.UpdateSystemAsync(context.Proposal.Id, context.Item.Id,
+            new(system.Id, 0), CancellationToken.None);
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequirementExperienceFailure.CandidateNotAllowed, result.Error);
+        Assert.Null(context.StoredSelection);
+        Assert.Equal(0, context.SaveCount);
+    }
+
+    [Theory]
+    [InlineData("STANDARD", false)]
+    [InlineData("POCKET", true)]
+    public async Task UpdateSystem_PocketUsesTechnicalEligibility(string variant, bool allowed)
+    {
+        var system = System("TRAD_DOOR", "SLIDING_DOOR", commercialLine: "TRADITIONAL") with
+        {
+            Name = "PUERTA CORREDIZA TRADICIONAL", Variant = variant
+        };
+        var context = CreateContext(systems: [system], functionalType: "SLIDING_DOOR", features: ["POCKET"]);
+        var before = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        var candidate = Assert.Single(before.System.Candidates);
+        Assert.Equal(allowed ? "COMPATIBLE" : "INCOMPATIBLE", candidate.CompatibilityState);
+        var result = await context.UpdateService.UpdateSystemAsync(context.Proposal.Id, context.Item.Id,
+            new(system.Id, 0), CancellationToken.None);
+        Assert.Equal(allowed, result.IsSuccess);
+        if (allowed)
+        {
+            Assert.Equal("VALID", result.Value!.System.OverrideState);
+            Assert.Equal(system.Id, result.Value.System.Effective!.Id);
+        }
+        else
+        {
+            Assert.Equal(RequirementExperienceFailure.CandidateNotAllowed, result.Error);
+            Assert.Null(context.StoredSelection);
+            Assert.Equal(0, context.SaveCount);
+        }
+    }
+
+    [Fact]
+    public async Task GetLevel2_PersistedStandardUnderPocketIsStaleWithoutDeletingSelection()
+    {
+        var system = System("TRAD_DOOR", "SLIDING_DOOR", commercialLine: "TRADITIONAL") with
+        { Name = "PUERTA TRADICIONAL" };
+        var context = CreateContext(systems: [system], functionalType: "SLIDING_DOOR", features: ["POCKET"]);
+        context.StoreSelection(systemId: system.Id);
+        var result = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Equal("STALE", result.System.OverrideState);
+        Assert.Null(result.System.Effective);
+        Assert.Null(result.System.Suggested);
+        Assert.Equal(system.Id, result.System.Override!.Id);
+        Assert.Equal(system.Id, context.StoredSelection!.SystemId);
+        Assert.Equal(0, context.SaveCount);
+    }
+
+    [Fact]
+    public async Task UpdateSystem_CompatibleNonSuggestedTraditionalAlternativeIsAllowed()
+    {
+        var preferred = System("PREFERRED", "FIXED") with { Family = "VENECIA FERMO" };
+        var alternative = System("ALTERNATIVE", "FIXED", commercialLine: "TRADITIONAL") with
+        { Name = "CUERPO FIJO TRADICIONAL SG" };
+        var context = CreateContext(systems: [preferred, alternative]);
+        var before = (await context.GetService.ExecuteAsync(context.Proposal.Id, context.Item.Id, CancellationToken.None)).Value!;
+        Assert.Equal(preferred.Id, before.System.Suggested!.Id);
+        var result = await context.UpdateService.UpdateSystemAsync(context.Proposal.Id, context.Item.Id,
+            new(alternative.Id, 0), CancellationToken.None);
+        Assert.True(result.IsSuccess);
+        Assert.Equal("VALID", result.Value!.System.OverrideState);
+        Assert.Equal(preferred.Id, result.Value.System.Suggested!.Id);
+        Assert.Equal(alternative.Id, result.Value.System.Effective!.Id);
+    }
+
     private static TestContext CreateContext(
         IReadOnlyList<ProductSystemCatalogReadModel>? systems = null,
         IReadOnlyList<GlassTypeCatalogReadModel>? glasses = null,
-        Func<TestContext, RequirementItemExperienceDraft>? draft = null)
+        Func<TestContext, RequirementItemExperienceDraft>? draft = null,
+        string functionalType = "FIXED",
+        IReadOnlyList<string>? features = null)
     {
         var requirements = Substitute.For<IRequirementRepository>();
         var currentUser = Substitute.For<ICurrentUser>();
@@ -422,7 +623,7 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
             false,
             At);
         SetPrivateProperty(proposal, "Requirement", requirement);
-        var extracted = CreateExtractedItem(extractionId);
+        var extracted = CreateExtractedItem(extractionId, functionalType, features);
         var item = CreateProposalItem(proposal.Id, extracted);
         SetPrivateProperty(item, "ExtractedItem", extracted);
         proposal.AddItem(item);
@@ -436,7 +637,7 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
             proposal,
             item,
             user);
-        context.StoredDraft = draft?.Invoke(context);
+        context.StoredDraft = (draft ?? TempladoDraft).Invoke(context);
 
         currentUser.IsAuthenticated.Returns(true);
         currentUser.UserId.Returns(user.Id);
@@ -531,8 +732,8 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
         new(
             Guid.NewGuid(),
             code,
-            code,
-            code,
+            "LINEA CLASSIC " + code,
+            "LINEA CLASSIC " + code,
             code,
             functionalType,
             "FAMILY",
@@ -575,7 +776,8 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
             IsSelectable: true,
             RequiresReview: requiresReview);
 
-    private static RequirementExtractedItem CreateExtractedItem(Guid extractionId)
+    private static RequirementExtractedItem CreateExtractedItem(Guid extractionId,
+        string functionalType = "FIXED", IReadOnlyList<string>? features = null)
     {
         return RequirementExtractedItem.Create(
             requirementExtractionResultId: extractionId,
@@ -592,7 +794,7 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
             extractionStatus: RequirementExtractionValueStatus.Explicit,
             requiresReview: false,
             reviewReasons: [],
-            functionalType: "FIXED",
+            functionalType: functionalType,
             operation: null,
             panelCount: 1,
             movablePanelCount: null,
@@ -600,7 +802,7 @@ public sealed class UpdateRequirementExperienceLevel2SelectionServiceTests
             arrangement: null,
             modulation: null,
             openingDirection: null,
-            specialFeatures: [],
+            specialFeatures: features ?? [],
             geometryType: null,
             requestedSystemRaw: null,
             requestedProfileRaw: null,

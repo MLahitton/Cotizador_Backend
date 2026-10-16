@@ -32,7 +32,14 @@ public sealed record SgTechnicalSelectionInput(
     string? Description = null,
     int? PrimaryComponentHeightMillimeters = null,
     bool HasCompositeGeometry = false,
-    IReadOnlyList<string>? AssociatedContextTexts = null);
+    IReadOnlyList<string>? AssociatedContextTexts = null,
+    bool EnforceLegacyCommercialLineEligibility = true);
+
+public sealed record SgCandidateEligibility(
+    bool IsIncompatible,
+    bool RequiresReview,
+    IReadOnlyList<string> ReviewReasons,
+    IReadOnlyList<string> BlockingReasons);
 
 public sealed record SgHistoricalSystemEvidence(
     string ProductSystemCode,
@@ -274,8 +281,52 @@ public sealed class DeterministicSgTechnicalSelector(
         ProductSystemCatalogReadModel system,
         SgTechnicalSelectionInput input)
     {
+        var candidate = BuildEligibilityCandidate(system, input);
+        if (candidate.CompatibilityState == SgTechnicalCompatibilityState.Incompatible)
+        {
+            return candidate;
+        }
+
+        ApplyPreferencePriors(candidate, input);
+        ApplyVeniceOverLsa(candidate, input);
+        ApplyHistoricalSimilarity(candidate, input);
+        ApplyCommercialLine(candidate, input);
+        if (system.RequiresReview)
+        {
+            candidate.Score -= CatalogRequiresReviewPenalty;
+            candidate.ReviewReasons.Add(
+                SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMetadataIncomplete);
+        }
+
+        candidate.Tier = Tier(candidate);
+        return candidate;
+    }
+
+    public SgCandidateEligibility EvaluateCandidateEligibility(
+        ProductSystemCatalogReadModel system,
+        SgTechnicalSelectionInput input)
+    {
+        var candidate = BuildEligibilityCandidate(system, input);
+        var reviewReasons = candidate.ReviewReasons
+            .Concat(system.RequiresReview ? new[] { "SYSTEM_REQUIRES_REVIEW" } : [])
+            .Distinct(StringComparer.Ordinal).ToArray();
+        return new(
+            candidate.CompatibilityState == SgTechnicalCompatibilityState.Incompatible,
+            candidate.CompatibilityState == SgTechnicalCompatibilityState.Unknown || reviewReasons.Length > 0,
+            reviewReasons,
+            candidate.BlockingReasons.Concat(candidate.FailedRuleCodes)
+                .Distinct(StringComparer.Ordinal).ToArray());
+    }
+
+    private SgTechnicalCandidate BuildEligibilityCandidate(
+        ProductSystemCatalogReadModel system,
+        SgTechnicalSelectionInput input)
+    {
         var candidate = new SgTechnicalCandidate(system);
-        ApplyAutomaticCatalogEligibility(candidate);
+        if (input.EnforceLegacyCommercialLineEligibility)
+        {
+            ApplyAutomaticCatalogEligibility(candidate);
+        }
         if (candidate.CompatibilityState
             == SgTechnicalCompatibilityState.Incompatible)
         {
@@ -310,18 +361,6 @@ public sealed class DeterministicSgTechnicalSelector(
             return candidate;
         }
 
-        ApplyPreferencePriors(candidate, input);
-        ApplyVeniceOverLsa(candidate, input);
-        ApplyHistoricalSimilarity(candidate, input);
-        ApplyCommercialLine(candidate, input);
-        if (system.RequiresReview)
-        {
-            candidate.Score -= CatalogRequiresReviewPenalty;
-            candidate.ReviewReasons.Add(
-                SgTechnicalSelectionReviewReasons.TechnicalSelectionCatalogMetadataIncomplete);
-        }
-
-        candidate.Tier = Tier(candidate);
         return candidate;
     }
 
@@ -418,6 +457,11 @@ public sealed class DeterministicSgTechnicalSelector(
             ConstraintEvaluationStage.PreSelection);
         if (result.HasHardFailure)
         {
+            candidate.BlockingReasons.AddRange(result.Evaluations
+                .Where(value => value.State == ProductSystemConstraintEvaluationState.Fail
+                    && value.Severity == ProductSystemConstraintSeverity.Hard
+                    && value.KnowledgeClass == ProductSystemConstraintKnowledgeClass.VerifiedTechnical)
+                .Select(value => value.ReviewReason));
             candidate.CompatibilityState =
                 SgTechnicalCompatibilityState.Incompatible;
             candidate.FailedRuleCodes.AddRange(result.Evaluations
@@ -1095,6 +1139,7 @@ public sealed class DeterministicSgTechnicalSelector(
         public SgHistoricalSystemEvidence? HistoricalEvidence { get; set; }
         public List<string> MatchedRuleCodes { get; } = [];
         public List<string> FailedRuleCodes { get; } = [];
+        public List<string> BlockingReasons { get; } = [];
         public List<string> ReviewReasons { get; } = [];
     }
 

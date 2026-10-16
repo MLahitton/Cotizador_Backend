@@ -36,7 +36,7 @@ public sealed class RequirementExperienceLevel2ResolverTests
     }
 
     [Fact]
-    public async Task ResolveSystem_EquivalentCompatibleCandidatesUseStableTieBreak()
+    public async Task ResolveSystem_EquivalentCandidatesWithoutSuggestionRequireReview()
     {
         var resolver = Resolver(new FixedTechnicalSelector(null));
         var result = await resolver.ResolveSystemAsync(
@@ -44,12 +44,15 @@ public sealed class RequirementExperienceLevel2ResolverTests
             [System("B_FIXED", "FIXED"), System("A_FIXED", "FIXED")],
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequirementExperienceLevel2States.Resolved, result.State);
-        Assert.Equal("A_FIXED", result.Suggested!.Code);
+        Assert.Equal(RequirementExperienceLevel2States.RequiresReview, result.State);
+        Assert.Null(result.Suggested);
+        Assert.Null(result.Effective);
+        Assert.Equal(2, result.Candidates.Count);
+        Assert.Contains(SgTechnicalSelectionReviewReasons.TechnicalSelectionAmbiguous, result.ReviewReasons);
     }
 
     [Fact]
-    public async Task ResolveSystem_CompatibleBeatsReviewEvenWhenSelectorReturnsReviewCandidate()
+    public async Task ResolveSystem_ReviewSuggestionDoesNotFallbackToAnotherCandidate()
     {
         var resolver = Resolver(new FixedTechnicalSelector("A_REVIEW"));
         var result = await resolver.ResolveSystemAsync(
@@ -59,12 +62,13 @@ public sealed class RequirementExperienceLevel2ResolverTests
                 System("Z_COMPATIBLE", "SLIDING_DOOR")
             ]);
 
-        Assert.Equal(RequirementExperienceLevel2States.Resolved, result.State);
-        Assert.Equal("Z_COMPATIBLE", result.Suggested!.Code);
+        Assert.Equal(RequirementExperienceLevel2States.RequiresReview, result.State);
+        Assert.Null(result.Suggested);
+        Assert.Null(result.Effective);
     }
 
     [Fact]
-    public async Task ResolveSystem_SelectorNullTieStillResolvesWithCompatiblePool()
+    public async Task ResolveSystem_SelectorNullDoesNotResolveCompatiblePool()
     {
         var resolver = Resolver(new FixedTechnicalSelector(null));
         var result = await resolver.ResolveSystemAsync(
@@ -72,8 +76,9 @@ public sealed class RequirementExperienceLevel2ResolverTests
             [System("NAPOLES", "SLIDING_DOOR"), System("MONACO", "SLIDING_DOOR")],
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequirementExperienceLevel2States.Resolved, result.State);
-        Assert.NotNull(result.Suggested);
+        Assert.Equal(RequirementExperienceLevel2States.RequiresReview, result.State);
+        Assert.Null(result.Suggested);
+        Assert.Null(result.Effective);
     }
 
     [Fact]
@@ -85,8 +90,9 @@ public sealed class RequirementExperienceLevel2ResolverTests
             [System("B_SLIDING", "SLIDING_DOOR"), System("C_FIXED", "FIXED")],
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(RequirementExperienceLevel2States.Resolved, result.State);
-        Assert.Equal("B_SLIDING", result.Suggested!.Code);
+        Assert.Equal(RequirementExperienceLevel2States.RequiresReview, result.State);
+        Assert.Null(result.Suggested);
+        Assert.Null(result.Effective);
         Assert.DoesNotContain(result.Candidates, candidate => candidate.Code == "C_FIXED");
     }
 
@@ -99,7 +105,7 @@ public sealed class RequirementExperienceLevel2ResolverTests
         string functionalType,
         string expectedCode)
     {
-        var resolver = Resolver(new FixedTechnicalSelector(null));
+        var resolver = Resolver(new FixedTechnicalSelector(expectedCode));
         var result = await resolver.ResolveSystemAsync(
             Input(functionalType: functionalType),
             [
@@ -151,7 +157,7 @@ public sealed class RequirementExperienceLevel2ResolverTests
     [Fact]
     public async Task ResolveSystem_RequirementCommercialLineDoesNotAffectLevel2()
     {
-        var resolver = Resolver(new FixedTechnicalSelector(null));
+        var resolver = Resolver(new FixedTechnicalSelector("CLASSIC_FIXED"));
         var systems = new[]
         {
             System("CLASSIC_FIXED", "FIXED", commercialLine: "CLASSIC"),
@@ -406,6 +412,153 @@ public sealed class RequirementExperienceLevel2ResolverTests
         Assert.Null(result.Suggested);
         Assert.Empty(result.Candidates);
         Assert.Contains("GLASS_FAMILY_NOT_RESOLVED", result.ReviewReasons);
+    }
+
+    [Theory]
+    [InlineData("POCKET", "SLIDING_DOOR", false)]
+    [InlineData(null, "SLIDING_DOOR", true)]
+    [InlineData(null, "FIXED", false)]
+    public async Task Resolve_ClassicSlidingDoor_RespectsRealSelectorDecision(
+        string? feature, string candidateType, bool expectedSuggestion)
+    {
+        var extracted = ExtractedItem(1200, 2200, 2,
+            elementType: StructuredElementType.Door,
+            functionalType: "SLIDING_DOOR", operation: "SLIDING",
+            specialFeatures: feature is null ? [] : [feature]);
+        var proposal = RequirementTechnicalProposal.Create(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), false, Now);
+        var item = RequirementTechnicalProposalItem.Create(
+            proposal.Id, extracted.Id, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            extracted.Sequence, extracted.Reference, extracted.Description, extracted.ElementType,
+            extracted.Quantity, extracted.WidthMillimeters, extracted.HeightMillimeters,
+            0.9m, 0.9m, 0.9m, 0.9m, false, true, true,
+            [], [], [], [], 0, null, null, "NotEvaluated", Now);
+        typeof(RequirementTechnicalProposalItem).GetProperty("ExtractedItem")!.SetValue(item, extracted);
+        proposal.AddItem(item);
+        var system = System("CLASSIC_STANDARD", candidateType,
+            commercialLine: "CLASSIC", family: "VENECIA NAPOLES") with
+        {
+            Name = "PUERTA CORREDIZA LINEA CLASSIC",
+            TechnicalName = "PUERTA CORREDIZA LINEA CLASSIC"
+        };
+        ProductSystemCatalogReadModel[] systems = [system];
+        var selector = new DeterministicSgTechnicalSelector(
+            new FixedProductSystemCatalogRepository(systems), ConstraintEvaluator());
+        var input = RequirementFunctionalSelectionContextResolver.ResolveInput(item, requestedCommercialLine: null);
+        var selection = await selector.SelectAsync(input, TestContext.Current.CancellationToken);
+        var result = await Resolver(selector).ResolveAsync(proposal, item,
+            new("CLASSIC", "TEMPLADO", true, 5, 5), null, systems, GlassCatalog(),
+            TestContext.Current.CancellationToken);
+
+        if (expectedSuggestion)
+        {
+            Assert.Equal(system.Code, selection.SuggestedSystemCode);
+            Assert.Equal(system.Code, result.System.Suggested!.Code);
+            Assert.Equal(RequirementExperienceLevel2States.Resolved, result.System.State);
+        }
+        else
+        {
+            Assert.Null(selection.SuggestedSystemCode);
+            Assert.Null(result.System.Suggested);
+            Assert.Null(result.System.Effective);
+            Assert.NotEqual(RequirementExperienceLevel2States.Resolved, result.System.State);
+            if (feature == "POCKET")
+            {
+                Assert.Equal(RequirementExperienceLevel2States.Blocked, result.System.State);
+                Assert.Equal("INCOMPATIBLE", Assert.Single(result.System.Candidates).CompatibilityState);
+                Assert.Contains("SPECIAL_FEATURE_POCKET", result.System.BlockingReasons);
+            }
+            else
+            {
+                Assert.Equal(RequirementExperienceLevel2States.Blocked, result.System.State);
+                Assert.Empty(result.System.Candidates);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("SYS_CUERPO_FIJO_TRADICIONAL_SG", "FIXED", "FIXED", "CLASSIC", false, true)]
+    [InlineData("SYS_CUERPO_PROYECTANTE_TRADICI", "PROJECTING", "PROJECTING", "CLASSIC", false, true)]
+    [InlineData("SYS_PUERTA_CORREDIZA_TRADICI_2", "SLIDING_DOOR", "SLIDING_DOOR", "CLASSIC", false, true)]
+    [InlineData("SYS_CUERPO_FIJO_TRADICIONAL_SG", "FIXED", "FIXED", "CLASSIC", true, false)]
+    [InlineData("SYS_CUERPO_FIJO_TRADICIONAL_SG", "FIXED", "SLIDING_DOOR", "CLASSIC", false, false)]
+    [InlineData("SYS_CUERPO_FIJO_TRADICIONAL_SG", "FIXED", "FIXED", "PREMIUM", false, false)]
+    public async Task Resolve_TraditionalEligibilityIsExperienceOnly(
+        string code, string candidateType, string itemType, string tier,
+        bool hardFailure, bool expectedSuggestion)
+    {
+        var extracted = ExtractedItem(1200, 2200, 1,
+            functionalType: itemType, operation: null);
+        var proposal = RequirementTechnicalProposal.Create(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), false, Now);
+        var item = RequirementTechnicalProposalItem.Create(
+            proposal.Id, extracted.Id, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            extracted.Sequence, extracted.Reference, extracted.Description, extracted.ElementType,
+            extracted.Quantity, extracted.WidthMillimeters, extracted.HeightMillimeters,
+            0.9m, 0.9m, 0.9m, 0.9m, false, true, true,
+            [], [], [], [], 0, null, null, "NotEvaluated", Now);
+        typeof(RequirementTechnicalProposalItem).GetProperty("ExtractedItem")!.SetValue(item, extracted);
+        proposal.AddItem(item);
+        var system = System(code, candidateType, commercialLine: "TRADITIONAL",
+            constraints: hardFailure ? [Constraint("MAX_WIDTH", ProductSystemConstraintType.MaxWidth,
+                maxValue: 1000m, severity: ProductSystemConstraintSeverity.Hard,
+                knowledgeClass: ProductSystemConstraintKnowledgeClass.VerifiedTechnical)] : []) with
+        {
+            Name = candidateType == "FIXED" ? "CUERPO FIJO TRADICIONAL SG" : "SISTEMA TRADICIONAL",
+            TechnicalName = "SISTEMA TRADICIONAL"
+        };
+        ProductSystemCatalogReadModel[] systems = [system];
+        var selector = new DeterministicSgTechnicalSelector(
+            new FixedProductSystemCatalogRepository(systems), ConstraintEvaluator());
+        var input = RequirementFunctionalSelectionContextResolver.ResolveInput(item, requestedCommercialLine: null);
+
+        Assert.True(input.EnforceLegacyCommercialLineEligibility);
+        var legacy = await selector.SelectAsync(input, TestContext.Current.CancellationToken);
+        Assert.Null(legacy.SuggestedSystemCode);
+        Assert.Equal("CLASSIC", ProductSystemExperienceTierResolver.Resolve(system));
+
+        var result = await Resolver(selector).ResolveAsync(proposal, item,
+            new(tier, "TEMPLADO", true, 5, 5), null, systems, GlassCatalog(),
+            TestContext.Current.CancellationToken);
+        if (expectedSuggestion)
+        {
+            Assert.Equal(code, result.System.Suggested!.Code);
+            Assert.Equal(RequirementExperienceLevel2States.Resolved, result.System.State);
+        }
+        else
+        {
+            Assert.Null(result.System.Suggested);
+            Assert.Null(result.System.Effective);
+            Assert.Equal(RequirementExperienceLevel2States.Blocked, result.System.State);
+            if (hardFailure)
+                Assert.Contains("SYSTEM_CONSTRAINT_MAX_WIDTH_FAIL", result.System.BlockingReasons);
+            else
+                Assert.Empty(result.System.Candidates);
+        }
+        Assert.Equal("TRADITIONAL", system.CommercialLine);
+    }
+
+    [Theory]
+    [InlineData("SLIDING_DOOR", "GENERIC", "STANDARD", "POCKET", "SPECIAL_FEATURE_POCKET")]
+    [InlineData("SLIDING_DOOR", "VENECIA MONZA", "STANDARD", null, "VENICE_MONZA_WINDOW_ONLY")]
+    [InlineData("SWING_DOOR", "GENERIC", "DOUBLE", null, "SWING_DOOR_SPECIAL_VARIANT_EVIDENCE")]
+    [InlineData("SWING_DOOR", "GENERIC", "INOX", null, "SWING_DOOR_SPECIAL_VARIANT_EVIDENCE")]
+    [InlineData("SWING_DOOR", "GENERIC", "SPECIAL", null, "SWING_DOOR_SPECIAL_VARIANT_EVIDENCE")]
+    public async Task EligibilityAndExperienceShareTechnicalExclusions(
+        string type, string family, string variant, string? feature, string reason)
+    {
+        var system = System("CANDIDATE", type, family: family) with { Variant = variant };
+        var input = Input(type) with { SpecialFeatures = feature is null ? [] : [feature] };
+        var selector = new DeterministicSgTechnicalSelector(
+            new FixedProductSystemCatalogRepository([system]), ConstraintEvaluator());
+        var eligibility = selector.EvaluateCandidateEligibility(system, input);
+        Assert.True(eligibility.IsIncompatible);
+        Assert.Contains(reason, eligibility.BlockingReasons);
+        var automatic = await selector.SelectAsync(input, TestContext.Current.CancellationToken);
+        Assert.Null(automatic.SuggestedSystemCode);
+        var manual = await Resolver(selector).ResolveSystemAsync(input, [system]);
+        Assert.Equal("INCOMPATIBLE", Assert.Single(manual.Candidates).CompatibilityState);
+        Assert.Contains(reason, manual.BlockingReasons);
     }
 
     private static RequirementExperienceLevel2Resolver Resolver(
