@@ -61,7 +61,11 @@ public sealed class ProjectWorkspaceController(
                 workspace.Workflow.RequirementId,
                 workspace.Workflow.RequirementStatus,
                 workspace.Workflow.TechnicalProposalId,
-                workspace.Workflow.HasTechnicalProposal)));
+                workspace.Workflow.HasTechnicalProposal),
+            workspace.PublicContext is { } publicContext
+                ? new ProjectWorkspacePublicContextResponse(publicContext.ProjectType,
+                    publicContext.ProjectTypeOther, publicContext.InstallationWindow)
+                : null));
     }
 
     private ActionResult<ProjectWorkspaceResponse> MapFailure(

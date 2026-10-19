@@ -30,7 +30,9 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
         {
             BaseAddress = new Uri("http://localhost/")
         };
-        var client = CreateClient(httpClient);
+        var logger = new CapturingLogger();
+        handler.BeforeResponse = () => Assert.Contains("[REQ-AI2-HTTP-START]", logger.Message);
+        var client = CreateClient(httpClient, logger);
         var request = CreateRequest(
             [new DocumentProcessingFile(
                 Guid.NewGuid(), fileName, contentType, 3,
@@ -46,6 +48,12 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
         Assert.DoesNotContain("name=\"files[]\"", handler.MultipartBody);
         Assert.Contains($"filename={fileName}", handler.MultipartBody);
         Assert.Contains(contentType, handler.MultipartBody);
+        Assert.Equal(request.CorrelationId.ToString("D"), handler.CorrelationId);
+        Assert.Equal(request.ProcessingAttemptId.ToString("D"), handler.AttemptId);
+        Assert.Contains("[REQ-AI2-HTTP-RESPONSE]", logger.Message);
+        Assert.Contains("[REQ-AI2-HTTP-END]", logger.Message);
+        Assert.Contains("TargetBaseUrl=http://localhost/", logger.Message);
+        Assert.Contains("TotalBytes=3", logger.Message);
     }
 
     [Fact]
@@ -209,6 +217,9 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
     private sealed class CaptureHandler(string payload) : HttpMessageHandler
     {
         public int CallCount { get; private set; }
+        public Action? BeforeResponse { get; set; }
+        public string? CorrelationId { get; private set; }
+        public string? AttemptId { get; private set; }
         public Uri? RequestUri { get; private set; }
         public string MultipartBody { get; private set; } = string.Empty;
 
@@ -217,6 +228,9 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
             CancellationToken cancellationToken)
         {
             CallCount++;
+            BeforeResponse?.Invoke();
+            CorrelationId = request.Headers.GetValues("X-Correlation-ID").Single();
+            AttemptId = request.Headers.GetValues("X-Processing-Attempt-ID").Single();
             RequestUri = request.RequestUri;
             MultipartBody = await request.Content!.ReadAsStringAsync(
                 cancellationToken);
@@ -248,8 +262,8 @@ public sealed class CotizadorAi2DocumentProcessingClientTests
             Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            Exception = exception;
-            Message = formatter(state, exception);
+            Exception = exception ?? Exception;
+            Message += formatter(state, exception) + Environment.NewLine;
         }
     }
 }

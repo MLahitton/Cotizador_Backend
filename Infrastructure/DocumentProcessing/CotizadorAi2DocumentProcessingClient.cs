@@ -1,4 +1,5 @@
 using System.Net;
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Globalization;
 using System.IO;
@@ -40,6 +41,8 @@ public sealed class CotizadorAi2DocumentProcessingClient(
             .CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(TimeSpan.FromSeconds(options.TimeoutSeconds));
         var stage = "request_validation";
+        var elapsed = Stopwatch.StartNew();
+        int? responseStatus = null;
         string? payload = null;
 
         try
@@ -47,10 +50,20 @@ public sealed class CotizadorAi2DocumentProcessingClient(
             ValidateRequest(request);
             stage = "http_request";
             using var message = CreateRequest(request);
+            logger.LogInformation(
+                "[REQ-AI2-HTTP-START] RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} ProjectId={ProjectId} FileCount={FileCount} TotalBytes={TotalBytes} TargetBaseUrl={TargetBaseUrl} TargetPath={TargetPath}",
+                request.RequirementId, request.ProcessingAttemptId, request.CorrelationId,
+                request.ProjectId, request.Files.Count, request.Files.Sum(file => file.SizeBytes),
+                options.BaseUri, ExtractionPath);
             using var response = await httpClient.SendAsync(
                 message,
                 HttpCompletionOption.ResponseHeadersRead,
                 timeoutSource.Token);
+            responseStatus = (int)response.StatusCode;
+            logger.LogInformation(
+                "[REQ-AI2-HTTP-RESPONSE] RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} StatusCode={StatusCode} ElapsedMs={ElapsedMs}",
+                request.RequirementId, request.ProcessingAttemptId, request.CorrelationId,
+                responseStatus, elapsed.ElapsedMilliseconds);
 
             stage = "response_body";
             payload = await ReadBodyAsync(
@@ -110,11 +123,17 @@ public sealed class CotizadorAi2DocumentProcessingClient(
         }
         catch (HttpRequestException)
         {
+            logger.LogWarning(
+                "[REQ-AI2-HTTP-ERROR] RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} Stage={Stage} ExceptionType=HttpRequestException",
+                request.RequirementId, request.ProcessingAttemptId, request.CorrelationId, stage);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.ServiceUnavailable);
         }
         catch (IOException)
         {
+            logger.LogWarning(
+                "[REQ-AI2-HTTP-ERROR] RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} Stage={Stage} ExceptionType=IOException",
+                request.RequirementId, request.ProcessingAttemptId, request.CorrelationId, stage);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.ServiceUnavailable);
         }
@@ -138,6 +157,15 @@ public sealed class CotizadorAi2DocumentProcessingClient(
                 payloadDiagnostics.ExtractionStatus);
             return DocumentProcessingClientResult.Failed(
                 DocumentProcessingClientFailure.InvalidResponse);
+        }
+        finally
+        {
+            logger.LogInformation(
+                "[REQ-AI2-HTTP-END] RequirementId={RequirementId} ProcessingAttemptId={ProcessingAttemptId} CorrelationId={CorrelationId} Stage={Stage} StatusCode={StatusCode} ElapsedMs={ElapsedMs} Cancelled={Cancelled} Timeout={Timeout}",
+                request.RequirementId, request.ProcessingAttemptId, request.CorrelationId,
+                stage, responseStatus, elapsed.ElapsedMilliseconds,
+                cancellationToken.IsCancellationRequested,
+                timeoutSource.IsCancellationRequested && !cancellationToken.IsCancellationRequested);
         }
     }
 
@@ -330,6 +358,7 @@ public sealed class CotizadorAi2DocumentProcessingClient(
         message.Headers.Add(
             "X-Correlation-ID",
             request.CorrelationId.ToString("D"));
+        message.Headers.Add("X-Processing-Attempt-ID", request.ProcessingAttemptId.ToString("D"));
 
         var multipart = new MultipartFormDataContent();
         if (request.ProjectId is { } projectId)

@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Clients;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.Projects.GetProjectWorkspace;
+using Application.PublicExperience;
 using Domain.Clients;
 using Domain.Identity;
 using Domain.PreQuotes;
@@ -43,6 +44,7 @@ public sealed class GetProjectWorkspaceServiceTests
         Assert.Null(result.Workspace.Workflow.RequirementStatus);
         Assert.Null(result.Workspace.Workflow.TechnicalProposalId);
         Assert.False(result.Workspace.Workflow.HasTechnicalProposal);
+        Assert.Null(result.Workspace.PublicContext);
     }
 
     [Fact]
@@ -191,6 +193,8 @@ public sealed class GetProjectWorkspaceServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(GetProjectWorkspaceFailure.NotFound, result.Failure);
+        await context.PublicContext.DidNotReceive().GetProjectContextByProjectIdAsync(
+            Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -212,6 +216,41 @@ public sealed class GetProjectWorkspaceServiceTests
                 Arg.Any<CancellationToken>());
     }
 
+    [Theory]
+    [InlineData("{\"tipo\":\"casa\",\"ventana_ejecucion\":\"4-6m\",\"tipo_otro\":\"ignored\",\"termico\":5}", "casa", null, "4-6m")]
+    [InlineData("{\"tipo\":\"otro\",\"tipo_otro\":\"Taller\"}", "otro", "Taller", null)]
+    [InlineData("{}", null, null, null)]
+    [InlineData("{\"tipo\":2,\"ventana_ejecucion\":[]}", null, null, null)]
+    public async Task ExecuteAsync_PublicContext_IsMappedToMinimalHttpContract(
+        string answers, string? type, string? other, string? window)
+    {
+        var context = CreateContext();
+        context.PublicContext.GetProjectContextByProjectIdAsync(context.Project.Id, Arg.Any<CancellationToken>())
+            .Returns(PublicExperienceProjectContext.FromAnswers(answers));
+        var controller = new global::Api.Controllers.ProjectWorkspaceController(context.Service);
+        var result = await controller.Get(context.Project.Id, TestContext.Current.CancellationToken);
+        var ok = Assert.IsType<Microsoft.AspNetCore.Mvc.OkObjectResult>(result.Result);
+        var response = Assert.IsType<global::Contracts.Projects.ProjectWorkspaceResponse>(ok.Value);
+        Assert.Equal(new global::Contracts.Projects.ProjectWorkspacePublicContextResponse(type, other, window), response.PublicContext);
+        Assert.Equal("EMPTY", response.Workflow.ResolutionState);
+        using var json = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(
+            response, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        Assert.Equal(new[] { "installationWindow", "projectType", "projectTypeOther" },
+            json.RootElement.GetProperty("publicContext").EnumerateObject().Select(x => x.Name).OrderBy(x => x).ToArray());
+    }
+
+    [Theory]
+    [InlineData(UserRole.User, false)]
+    [InlineData(UserRole.Admin, true)]
+    public async Task ExecuteAsync_PublicContext_RespectsExistingOwnerAndAdminAccess(UserRole role, bool allowed)
+    {
+        var context = CreateContext(role, Guid.NewGuid());
+        var result = await context.Service.ExecuteAsync(new(context.Project.Id), TestContext.Current.CancellationToken);
+        Assert.Equal(allowed, result.IsSuccess);
+        await context.PublicContext.Received(allowed ? 1 : 0).GetProjectContextByProjectIdAsync(
+            context.Project.Id, Arg.Any<CancellationToken>());
+    }
+
     private static Context CreateContext(
         UserRole role = UserRole.User,
         Guid? projectOwnerUserId = null)
@@ -222,6 +261,7 @@ public sealed class GetProjectWorkspaceServiceTests
         var clients = Substitute.For<IClientRepository>();
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
+        var publicContext = Substitute.For<IPublicExperienceProjectContextRepository>();
         var user = User.CreateFromGoogle(
             "user@example.com",
             "User",
@@ -270,14 +310,16 @@ public sealed class GetProjectWorkspaceServiceTests
             projects,
             clients,
             preQuotes,
-            requirements);
+            requirements,
+            publicContext);
 
         return new Context(
             service,
             project,
             preQuotes,
             requirements,
-            projects);
+            projects,
+            publicContext);
     }
 
     private static CurrentRequirementReadModel CreateRequirement(
@@ -310,5 +352,6 @@ public sealed class GetProjectWorkspaceServiceTests
         ProjectEntity Project,
         IPreQuoteRepository PreQuotes,
         IRequirementRepository Requirements,
-        IProjectRepository Projects);
+        IProjectRepository Projects,
+        IPublicExperienceProjectContextRepository PublicContext);
 }

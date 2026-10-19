@@ -195,6 +195,18 @@ public static class DependencyInjection
             PreQuoteStoredDocumentRepository>();
         services.AddScoped<IPreQuoteDraftRepository, PreQuoteDraftRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<Application.PublicExperience.IPublicExperienceSubmissionRepository,
+            PublicExperienceSubmissionRepository>();
+        services.AddScoped<Application.PublicExperience.IPublicExperienceProjectContextRepository,
+            PublicExperienceSubmissionRepository>();
+        services.AddScoped<Application.Common.Abstractions.PreQuotes.IRequirementProcessingLock,
+            RequirementProcessingLock>();
+        services.AddScoped<Application.PublicExperience.IPublicExperienceProcessingRepository,
+            PublicExperienceProcessingRepository>();
+        services.AddScoped<Application.PublicExperience.IPublicExperienceRequirementPreparationRepository,
+            PublicExperienceRequirementPreparationRepository>();
+        services.Configure<Application.PublicExperience.PublicExperienceOptions>(
+            configuration.GetSection(Application.PublicExperience.PublicExperienceOptions.SectionName));
 
         services.AddScoped<
             IUserDashboardReader,

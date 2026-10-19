@@ -30,4 +30,10 @@ public sealed record ProjectWorkspaceWorkflowResponse(
 public sealed record ProjectWorkspaceResponse(
     ProjectWorkspaceProjectResponse Project,
     ProjectWorkspaceClientResponse Client,
-    ProjectWorkspaceWorkflowResponse Workflow);
+    ProjectWorkspaceWorkflowResponse Workflow,
+    ProjectWorkspacePublicContextResponse? PublicContext = null);
+
+public sealed record ProjectWorkspacePublicContextResponse(
+    string? ProjectType,
+    string? ProjectTypeOther,
+    string? InstallationWindow);

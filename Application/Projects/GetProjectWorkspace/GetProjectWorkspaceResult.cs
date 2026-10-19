@@ -47,7 +47,8 @@ public sealed record ProjectWorkspaceWorkflowResult(
 public sealed record ProjectWorkspaceResult(
     ProjectWorkspaceProjectResult Project,
     ProjectWorkspaceClientResult Client,
-    ProjectWorkspaceWorkflowResult Workflow);
+    ProjectWorkspaceWorkflowResult Workflow,
+    Application.PublicExperience.PublicExperienceProjectContext? PublicContext = null);
 
 public sealed record GetProjectWorkspaceResult(
     GetProjectWorkspaceFailure Failure,

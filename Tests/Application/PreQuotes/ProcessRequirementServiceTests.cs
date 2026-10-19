@@ -22,7 +22,7 @@ using ProjectEntity = global::Domain.Projects.Project;
 
 namespace CotizadorBackend.Tests.Application.PreQuotes;
 
-public sealed class ProcessRequirementServiceTests
+public sealed partial class ProcessRequirementServiceTests
 {
     private static readonly Guid UserId =
         Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -1262,6 +1262,9 @@ public sealed class ProcessRequirementServiceTests
         var projects = Substitute.For<IProjectRepository>();
         var clients = Substitute.For<IClientRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
+        var processingLock = Substitute.For<IRequirementProcessingLock>();
+        processingLock.TryAcquireAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(call => (IRequirementProcessingLease?)new TestProcessingLease(call.ArgAt<Guid>(0)));
         var storage = Substitute.For<IFileStorage>();
         var ai2 = Substitute.For<IAi2DocumentProcessingClient>();
         var cancellationRegistry = Substitute.For<IOperationCancellationRegistry>();
@@ -1495,23 +1498,31 @@ public sealed class ProcessRequirementServiceTests
                 productSystems,
                 new DeterministicSgTechnicalSelector(productSystems)));
 
-        var service = new ProcessRequirementService(
-            new ProcessRequirementCommandValidator(),
-            currentUser,
+        var core = new ProcessRequirementCoreService(
             identity,
             preQuotes,
             projects,
             clients,
             requirements,
+            processingLock,
             storage,
             ai2,
             cancellationRegistry,
             technicalProposal,
             new FixedTimeProvider(At.AddMinutes(10)),
             Substitute.For<ILogger<ProcessRequirementService>>());
+        var service = new ProcessRequirementService(new ProcessRequirementCommandValidator(), currentUser, core);
 
         return new Context(
             service,
+            core,
+            currentUser,
+            identity,
+            storage,
+            user,
+            processingLock,
+            preQuotes,
+            projects,
             requirement,
             project,
             requirements,
@@ -1748,7 +1759,7 @@ public sealed class ProcessRequirementServiceTests
                     $"A{index + 1}:B{index + 1}")
             ])).ToArray();
 
-    private static DocumentProcessingResponseData CreateResponse(
+    internal static DocumentProcessingResponseData CreateResponse(
         DocumentProcessingClientRequest request,
         DocumentProcessingOutcome outcome = DocumentProcessingOutcome.Completed,
         int itemsRequiringReview = 0,
@@ -2195,6 +2206,14 @@ public sealed class ProcessRequirementServiceTests
 
     private sealed record Context(
         ProcessRequirementService Service,
+        ProcessRequirementCoreService Core,
+        ICurrentUser CurrentUser,
+        IIdentityRepository Identity,
+        IFileStorage Storage,
+        User User,
+        IRequirementProcessingLock ProcessingLock,
+        IPreQuoteRepository PreQuotes,
+        IProjectRepository Projects,
         Requirement Requirement,
         ProjectEntity Project,
         IRequirementRepository Requirements,
@@ -2203,4 +2222,10 @@ public sealed class ProcessRequirementServiceTests
         IReadOnlyList<GlassTypeCatalogReadModel> Glasses,
         IReadOnlyList<ProductSystemCatalogReadModel> Systems,
         IReadOnlyList<FinishTypeCatalogReadModel> Finishes);
+
+    private sealed class TestProcessingLease(Guid requirementId) : IRequirementProcessingLease
+    {
+        public Guid RequirementId => requirementId;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
 }

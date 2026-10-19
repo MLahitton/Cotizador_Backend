@@ -71,6 +71,10 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(
             typeof(DependencyInjection).Assembly);
 
+        services.AddScoped<Application.PublicExperience.PublicExperienceIntakeService>();
+        services.AddScoped<Application.PublicExperience.ProcessPublicExperienceSubmissionService>();
+        services.AddScoped<Application.PublicExperience.PreparePublicExperienceRequirementService>();
+        services.AddScoped<Application.PublicExperience.ProcessPublicExperienceRequirementService>();
         services.AddScoped<GoogleSignInService>();
         services.AddScoped<PreviewFpProReportService>();
         services.AddScoped<GenerateFpProQuotationService>();
@@ -87,6 +91,7 @@ public static class DependencyInjection
         services.AddScoped<CreateDocumentProcessingAttemptService>();
         services.AddScoped<CreateRequirementService>();
         services.AddScoped<ProcessRequirementService>();
+        services.AddScoped<ProcessRequirementCoreService>();
         services.AddScoped<CancelRequirementProcessingAttemptService>();
         services.AddScoped<PriceRequirementTechnicalProposalService>();
         services.AddScoped<GetDocumentProcessingAttemptService>();

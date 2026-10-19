@@ -4,6 +4,7 @@ using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Domain.Identity;
 using FluentValidation;
+using Application.PublicExperience;
 
 namespace Application.Projects.GetProjectWorkspace;
 
@@ -14,7 +15,8 @@ public sealed class GetProjectWorkspaceService(
     IProjectRepository projectRepository,
     IClientRepository clientRepository,
     IPreQuoteRepository preQuoteRepository,
-    IRequirementRepository requirementRepository)
+    IRequirementRepository requirementRepository,
+    IPublicExperienceProjectContextRepository publicContextRepository)
 {
     public async Task<GetProjectWorkspaceResult> ExecuteAsync(
         GetProjectWorkspaceQuery query,
@@ -145,7 +147,9 @@ public sealed class GetProjectWorkspaceService(
                     client.Email,
                     client.Phone,
                     client.City),
-                workflow));
+                workflow,
+                await publicContextRepository.GetProjectContextByProjectIdAsync(
+                    project.Id, cancellationToken)));
     }
 
     private async Task<ProjectWorkspaceWorkflowResult?> ResolveWorkflowAsync(
