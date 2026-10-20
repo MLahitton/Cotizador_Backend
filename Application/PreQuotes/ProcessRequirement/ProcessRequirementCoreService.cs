@@ -258,7 +258,8 @@ public sealed class ProcessRequirementCoreService(
             cancellationToken);
         using var perfContext = NewPipePerformanceContext.Begin(
             requirement.Id,
-            attempt.Id);
+            attempt.Id,
+            attempt.CorrelationId);
 
         try
         {

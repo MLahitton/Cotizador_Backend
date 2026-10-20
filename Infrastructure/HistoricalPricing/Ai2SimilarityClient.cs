@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -32,8 +33,8 @@ public sealed class Ai2SimilarityClient : IAi2SimilarityClient
 
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync(
-                _options.Endpoint, request, cancellationToken);
+            using var message = CreateMessage(_options.Endpoint, request, 1, request.Candidates.Count);
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 return Ai2SimilarityClientResult.Failed("AI2_SIMILARITY_REMOTE_ERROR");
@@ -81,8 +82,8 @@ public sealed class Ai2SimilarityClient : IAi2SimilarityClient
         var started = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync(
-                _options.BatchEndpoint, request, cancellationToken);
+            using var message = CreateMessage(_options.BatchEndpoint, request, itemGroupCount, candidateCount);
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
                 started.Stop();
@@ -169,6 +170,23 @@ public sealed class Ai2SimilarityClient : IAi2SimilarityClient
         }
     }
 
+    private HttpRequestMessage CreateMessage<T>(Uri endpoint, T request, int itemGroupCount, int candidateCount)
+    {
+        var context = NewPipePerformanceContext.Current;
+        var message = new HttpRequestMessage(HttpMethod.Post, endpoint) { Content = JsonContent.Create(request) };
+        if (context is not null)
+        {
+            message.Headers.Add("X-Processing-Attempt-ID", context.AttemptId.ToString("D"));
+            if (context.CorrelationId is { } correlationId)
+                message.Headers.Add("X-Correlation-ID", correlationId.ToString("D"));
+        }
+        _logger.LogInformation(
+            "[NEWPIPE-AI2-SIMILARITY-START] RequirementId={RequirementId} AttemptId={AttemptId} CorrelationId={CorrelationId} ItemGroupCount={ItemGroupCount} CandidateCount={CandidateCount} Endpoint={Endpoint}",
+            context?.RequirementId, context?.AttemptId, context?.CorrelationId, itemGroupCount, candidateCount,
+            endpoint.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped));
+        return message;
+    }
+
     private void LogBatch(
         int itemGroupCount,
         int candidateCount,
@@ -177,8 +195,10 @@ public sealed class Ai2SimilarityClient : IAi2SimilarityClient
         int? providerStatusCode,
         string? failureCode)
     {
+        var context = NewPipePerformanceContext.Current;
         _logger.LogInformation(
-            "[NEWPIPE-AI2-SIMILARITY-BATCH] itemGroupCount={ItemGroupCount} candidateCount={CandidateCount} elapsedMs={ElapsedMs} failedStage={FailedStage} exceptionType={ExceptionType} providerStatusCode={ProviderStatusCode} failureCode={FailureCode}",
+            "[NEWPIPE-AI2-SIMILARITY-BATCH] RequirementId={RequirementId} AttemptId={AttemptId} CorrelationId={CorrelationId} itemGroupCount={ItemGroupCount} candidateCount={CandidateCount} elapsedMs={ElapsedMs} failedStage={FailedStage} exceptionType={ExceptionType} providerStatusCode={ProviderStatusCode} failureCode={FailureCode}",
+            context?.RequirementId, context?.AttemptId, context?.CorrelationId,
             itemGroupCount,
             candidateCount,
             elapsedMs,

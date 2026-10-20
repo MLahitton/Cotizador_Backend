@@ -4,14 +4,16 @@ public sealed class NewPipePerformanceContext
 {
     private static readonly AsyncLocal<NewPipePerformanceContext?> CurrentHolder = new();
 
-    private NewPipePerformanceContext(Guid requirementId, Guid attemptId)
+    private NewPipePerformanceContext(Guid requirementId, Guid attemptId, Guid? correlationId)
     {
         RequirementId = requirementId;
         AttemptId = attemptId;
+        CorrelationId = correlationId;
     }
 
     public Guid RequirementId { get; }
     public Guid AttemptId { get; }
+    public Guid? CorrelationId { get; }
     public int SimilarityCallCount { get; private set; }
     public int SimilarityCandidateCountTotal { get; private set; }
     public int CorpusReloadCount { get; private set; }
@@ -20,12 +22,12 @@ public sealed class NewPipePerformanceContext
 
     public static NewPipePerformanceContext? Current => CurrentHolder.Value;
 
-    public static IDisposable Begin(Guid requirementId, Guid attemptId)
+    public static IDisposable Begin(Guid requirementId, Guid attemptId, Guid? correlationId = null)
     {
         var previous = CurrentHolder.Value;
         CurrentHolder.Value = new NewPipePerformanceContext(
             requirementId,
-            attemptId);
+            attemptId, correlationId);
         return new Scope(previous);
     }
 

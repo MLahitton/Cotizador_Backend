@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Application.Common.Abstractions.HistoricalPricing;
+using Application.Common.Diagnostics;
 using Infrastructure.HistoricalPricing;
 using Xunit;
 
@@ -8,6 +9,48 @@ namespace CotizadorBackend.Tests.Infrastructure.HistoricalPricing;
 
 public sealed class Ai2SimilarityClientTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TraceHeaders_UseExistingContextOnly(bool withContext, bool single)
+    {
+        var requirement = Guid.NewGuid();
+        var attempt = Guid.NewGuid();
+        var correlation = Guid.NewGuid();
+        using var scope = withContext ? NewPipePerformanceContext.Begin(requirement, attempt, correlation) : null;
+        var handler = new CaptureHandler("{\"results\":[],\"candidates\":[]}");
+        using var httpClient = new HttpClient(handler);
+        var client = new Ai2SimilarityClient(httpClient, new Ai2SimilarityOptions(new Uri("http://localhost/similarity/evaluate")));
+        var request = CreateBatchRequest();
+        if (single)
+            await client.EvaluateAsync(new(request.Requests[0].Element, request.Requests[0].Candidates), TestContext.Current.CancellationToken);
+        else
+            await client.EvaluateBatchAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(withContext ? correlation.ToString("D") : null, handler.CorrelationId);
+        Assert.Equal(withContext ? attempt.ToString("D") : null, handler.AttemptId);
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Theory]
+    [InlineData(true, "AI2_SIMILARITY_TIMEOUT")]
+    [InlineData(false, "AI2_SIMILARITY_TRANSPORT_ERROR")]
+    public async Task BatchExceptions_KeepFailureCodes(bool timeout, string code)
+    {
+        using var httpClient = new HttpClient(new ThrowingHandler(timeout));
+        var client = new Ai2SimilarityClient(httpClient, new Ai2SimilarityOptions(new Uri("http://localhost/similarity/evaluate")));
+        var result = await client.EvaluateBatchAsync(CreateBatchRequest(), TestContext.Current.CancellationToken);
+        Assert.Equal(code, result.FailureCode);
+        Assert.False(result.IsSuccess);
+    }
+
+    private sealed class ThrowingHandler(bool timeout) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(timeout ? new TaskCanceledException() : new HttpRequestException());
+    }
+
     [Fact]
     public async Task EvaluateBatchAsync_UsesDerivedBatchEndpointAndSendsRequests()
     {
@@ -180,6 +223,8 @@ public sealed class Ai2SimilarityClientTests
         public Uri? RequestUri { get; private set; }
         public string? Body { get; private set; }
         public int CallCount { get; private set; }
+        public string? CorrelationId { get; private set; }
+        public string? AttemptId { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -187,6 +232,8 @@ public sealed class Ai2SimilarityClientTests
         {
             CallCount++;
             RequestUri = request.RequestUri;
+            CorrelationId = request.Headers.TryGetValues("X-Correlation-ID", out var correlations) ? correlations.Single() : null;
+            AttemptId = request.Headers.TryGetValues("X-Processing-Attempt-ID", out var attempts) ? attempts.Single() : null;
             Body = request.Content is null
                 ? null
                 : await request.Content.ReadAsStringAsync(cancellationToken);
