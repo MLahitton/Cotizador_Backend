@@ -77,6 +77,7 @@ public sealed class RequirementsProcessingController(
     [ProducesResponseType(
         typeof(ApiProblemDetailsResponse),
         StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> Cancel(
         [FromRoute] Guid processingAttemptId,
         CancellationToken cancellationToken)
@@ -110,6 +111,7 @@ public sealed class RequirementsProcessingController(
     [ProducesResponseType(
         typeof(ApiProblemDetailsResponse),
         StatusCodes.Status500InternalServerError)]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> CancelActiveForRequirement(
         [FromRoute] Guid requirementId,
         CancellationToken cancellationToken)
@@ -141,6 +143,9 @@ public sealed class RequirementsProcessingController(
                     RequirementErrorCodes.InvalidRequest,
                     "Solicitud invalida",
                     "El intento de procesamiento indicado no es valido."),
+            CancelRequirementProcessingAttemptFailure.InactiveUser =>
+                ProcessRequirementProblemMapper.Create(
+                    HttpContext, ProcessRequirementFailure.InactiveUser),
             CancelRequirementProcessingAttemptFailure.Unauthorized =>
                 RequirementProblem(
                     StatusCodes.Status401Unauthorized,

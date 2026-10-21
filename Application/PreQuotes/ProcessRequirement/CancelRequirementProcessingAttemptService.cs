@@ -1,6 +1,7 @@
 using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.Operations;
 using Application.Common.Abstractions.PreQuotes;
+using Application.Common.Abstractions.Projects;
 using Domain.PreQuotes;
 
 namespace Application.PreQuotes.ProcessRequirement;
@@ -18,7 +19,8 @@ public enum CancelRequirementProcessingAttemptFailure
     Unauthorized,
     ProcessingAttemptNotFound,
     QueryError,
-    PersistenceError
+    PersistenceError,
+    InactiveUser
 }
 
 public sealed record CancelRequirementProcessingAttemptResult(
@@ -37,84 +39,72 @@ public sealed record CancelRequirementProcessingAttemptResult(
 
 public sealed class CancelRequirementProcessingAttemptService(
     ICurrentUser currentUser,
+    IIdentityRepository identityRepository,
+    IPreQuoteRepository preQuoteRepository,
+    IProjectRepository projectRepository,
     IRequirementRepository requirementRepository,
     IOperationCancellationRegistry cancellationRegistry,
     TimeProvider timeProvider)
 {
-    public async Task<CancelRequirementProcessingAttemptResult> ExecuteAsync(
+    public Task<CancelRequirementProcessingAttemptResult> ExecuteAsync(
         CancelRequirementProcessingAttemptCommand command,
+        CancellationToken cancellationToken) =>
+        ExecuteAsync(command.ProcessingAttemptId, byRequirement: false, cancellationToken);
+
+    public Task<CancelRequirementProcessingAttemptResult> ExecuteAsync(
+        CancelRequirementProcessingByRequirementCommand command,
+        CancellationToken cancellationToken) =>
+        ExecuteAsync(command.RequirementId, byRequirement: true, cancellationToken);
+
+    private async Task<CancelRequirementProcessingAttemptResult> ExecuteAsync(
+        Guid id,
+        bool byRequirement,
         CancellationToken cancellationToken)
     {
-        if (command.ProcessingAttemptId == Guid.Empty)
-        {
+        if (id == Guid.Empty)
             return CancelRequirementProcessingAttemptResult.Failed(
                 CancelRequirementProcessingAttemptFailure.InvalidRequest);
-        }
 
-        if (!currentUser.IsAuthenticated || currentUser.UserId is null)
-        {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not Guid userId)
             return CancelRequirementProcessingAttemptResult.Failed(
                 CancelRequirementProcessingAttemptFailure.Unauthorized);
-        }
 
         RequirementProcessingAttempt? attempt;
         try
         {
-            attempt = await requirementRepository.FindProcessingAttemptByIdAsync(
-                command.ProcessingAttemptId,
-                cancellationToken);
+            var user = await identityRepository.FindUserByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return CancelRequirementProcessingAttemptResult.Failed(
+                    CancelRequirementProcessingAttemptFailure.Unauthorized);
+            if (!user.IsActive)
+                return CancelRequirementProcessingAttemptResult.Failed(
+                    CancelRequirementProcessingAttemptFailure.InactiveUser);
+
+            attempt = byRequirement
+                ? await requirementRepository.FindActiveProcessingAttemptByRequirementIdAsync(id, cancellationToken)
+                : await requirementRepository.FindProcessingAttemptByIdAsync(id, cancellationToken);
+            if (attempt is null)
+                return CancelRequirementProcessingAttemptResult.Failed(
+                    CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound);
+
+            // Authorize through current Project ownership, never the attempt's original actor.
+            // This also protects the read of an already finished attempt below.
+            var requirement = await requirementRepository.FindByIdAsync(attempt.RequirementId, cancellationToken);
+            var preQuote = requirement is null ? null
+                : await preQuoteRepository.FindByIdAsync(requirement.PreQuoteId, cancellationToken);
+            var project = preQuote is null ? null
+                : await projectRepository.FindByIdAsync(preQuote.ProjectId, cancellationToken);
+            if (project is null || project.CreatedByUserId != userId)
+                return CancelRequirementProcessingAttemptResult.Failed(
+                    CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
             return CancelRequirementProcessingAttemptResult.Failed(
                 CancelRequirementProcessingAttemptFailure.QueryError);
-        }
-
-        if (attempt is null)
-        {
-            return CancelRequirementProcessingAttemptResult.Failed(
-                CancelRequirementProcessingAttemptFailure
-                    .ProcessingAttemptNotFound);
         }
 
         return await CancelAsync(attempt, cancellationToken);
-    }
-
-    public async Task<CancelRequirementProcessingAttemptResult> ExecuteAsync(
-        CancelRequirementProcessingByRequirementCommand command,
-        CancellationToken cancellationToken)
-    {
-        if (command.RequirementId == Guid.Empty)
-        {
-            return CancelRequirementProcessingAttemptResult.Failed(
-                CancelRequirementProcessingAttemptFailure.InvalidRequest);
-        }
-
-        if (!currentUser.IsAuthenticated || currentUser.UserId is null)
-        {
-            return CancelRequirementProcessingAttemptResult.Failed(
-                CancelRequirementProcessingAttemptFailure.Unauthorized);
-        }
-
-        RequirementProcessingAttempt? attempt;
-        try
-        {
-            attempt = await requirementRepository
-                .FindActiveProcessingAttemptByRequirementIdAsync(
-                    command.RequirementId,
-                    cancellationToken);
-        }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            return CancelRequirementProcessingAttemptResult.Failed(
-                CancelRequirementProcessingAttemptFailure.QueryError);
-        }
-
-        return attempt is null
-            ? CancelRequirementProcessingAttemptResult.Failed(
-                CancelRequirementProcessingAttemptFailure
-                    .ProcessingAttemptNotFound)
-            : await CancelAsync(attempt, cancellationToken);
     }
 
     private async Task<CancelRequirementProcessingAttemptResult> CancelAsync(

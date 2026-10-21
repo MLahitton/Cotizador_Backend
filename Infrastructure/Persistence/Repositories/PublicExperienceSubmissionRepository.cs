@@ -1,4 +1,6 @@
 using Application.PublicExperience;
+using Application.Projects.GetProjectDiagnosis;
+using System.Data.Common;
 using Domain.PublicExperience;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -6,9 +8,22 @@ using Npgsql;
 namespace Infrastructure.Persistence.Repositories;
 
 public sealed class PublicExperienceSubmissionRepository(ApplicationDbContext context)
-    : IPublicExperienceSubmissionRepository, IPublicExperienceProjectContextRepository
+    : IPublicExperienceSubmissionRepository, IPublicExperienceProjectContextRepository, IProjectDiagnosisSourceRepository
 {
     public const string UniqueSubmissionIndex = "ux_public_experience_submissions_submission_id";
+
+    public async Task<IReadOnlyList<ProjectDiagnosisSource>> FindByProjectIdAsync(
+        Guid projectId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await context.Set<PublicExperienceSubmission>().AsNoTracking()
+                .Where(x => x.ProjectId == projectId && x.Source == "SNG_WEB")
+                .Select(x => new ProjectDiagnosisSource(x.SubmissionId, x.Source, x.SchemaVersion, x.AnswersJson))
+                .Take(2).ToListAsync(cancellationToken);
+        }
+        catch (DbException exception) { throw new ProjectDiagnosisQueryException(exception); }
+    }
 
     public async Task<PublicExperienceProjectContext?> GetProjectContextByProjectIdAsync(
         Guid projectId, CancellationToken cancellationToken)

@@ -160,6 +160,7 @@ public static class DependencyInjection
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
         services.AddScoped<GetProjectWorkspaceService>();
+        services.AddScoped<Application.Projects.GetProjectDiagnosis.GetProjectDiagnosisService>();
         services.AddScoped<GetProjectsService>();
         services.AddScoped<SetProjectActivationService>();
         services.AddScoped<UpdateProjectService>();

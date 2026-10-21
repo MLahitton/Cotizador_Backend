@@ -199,6 +199,8 @@ public static class DependencyInjection
             PublicExperienceSubmissionRepository>();
         services.AddScoped<Application.PublicExperience.IPublicExperienceProjectContextRepository,
             PublicExperienceSubmissionRepository>();
+        services.AddScoped<Application.Projects.GetProjectDiagnosis.IProjectDiagnosisSourceRepository,
+            PublicExperienceSubmissionRepository>();
         services.AddScoped<Application.Common.Abstractions.PreQuotes.IRequirementProcessingLock,
             RequirementProcessingLock>();
         services.AddScoped<Application.PublicExperience.IPublicExperienceProcessingRepository,
