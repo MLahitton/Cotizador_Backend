@@ -61,7 +61,9 @@ public sealed class ProjectWorkspaceController(
                 workspace.Workflow.RequirementId,
                 workspace.Workflow.RequirementStatus,
                 workspace.Workflow.TechnicalProposalId,
-                workspace.Workflow.HasTechnicalProposal),
+                workspace.Workflow.HasTechnicalProposal,
+                workspace.Workflow.Extraction is { } extraction
+                    ? new WorkspaceExtractionResponse(extraction.State, extraction.RefreshRecommended, extraction.CanAnalyze) : null),
             workspace.PublicContext is { } publicContext
                 ? new ProjectWorkspacePublicContextResponse(publicContext.ProjectType,
                     publicContext.ProjectTypeOther, publicContext.InstallationWindow)

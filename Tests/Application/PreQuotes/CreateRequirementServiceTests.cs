@@ -53,9 +53,10 @@ public sealed class CreateRequirementServiceTests
         Assert.Equal(requirement!.Id, file!.RequirementId);
         Assert.Equal(PdfContentType, file.ContentType);
         Assert.EndsWith("/original.pdf", file.StorageKey, StringComparison.Ordinal);
-        await context.Storage.Received(1).SaveAsync(
+        await context.Storage.Received(1).SaveVerifiedAsync(
             file.StorageKey,
             Arg.Any<Stream>(),
+            Arg.Any<long>(), Arg.Any<long>(),
             Arg.Any<CancellationToken>());
         await context.Requirements.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
@@ -110,9 +111,10 @@ public sealed class CreateRequirementServiceTests
         Assert.Equal(
             [PdfContentType, JpegContentType, XlsxContentType],
             files.Select(file => file.ContentType).ToArray());
-        await context.Storage.Received(3).SaveAsync(
+        await context.Storage.Received(3).SaveVerifiedAsync(
             Arg.Any<string>(),
             Arg.Any<Stream>(),
+            Arg.Any<long>(), Arg.Any<long>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -171,7 +173,7 @@ public sealed class CreateRequirementServiceTests
     }
 
     [Fact]
-    public async Task Execute_WhenSecondStorageFails_DeletesPreviouslyStoredFiles()
+    public async Task Execute_WhenSecondStorageFails_RetainsPreviouslyStoredFiles()
     {
         var context = CreateContext("storage_second_failure");
 
@@ -184,7 +186,7 @@ public sealed class CreateRequirementServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CreateRequirementFailure.StorageError, result.Failure);
-        await context.Storage.Received(1).DeleteIfExistsAsync(
+        await context.Storage.DidNotReceive().DeleteIfExistsAsync(
             Arg.Is<string>(key => key.EndsWith(
                 "/original.pdf",
                 StringComparison.Ordinal)),
@@ -194,7 +196,7 @@ public sealed class CreateRequirementServiceTests
     }
 
     [Fact]
-    public async Task Execute_WhenPersistenceFails_DeletesAllStoredFiles()
+    public async Task Execute_WhenPersistenceFails_RetainsAllStoredFiles()
     {
         var context = CreateContext("persistence");
 
@@ -207,7 +209,7 @@ public sealed class CreateRequirementServiceTests
 
         Assert.False(result.IsSuccess);
         Assert.Equal(CreateRequirementFailure.PersistenceError, result.Failure);
-        await context.Storage.Received(2).DeleteIfExistsAsync(
+        await context.Storage.DidNotReceive().DeleteIfExistsAsync(
             Arg.Any<string>(),
             CancellationToken.None);
     }
@@ -220,6 +222,8 @@ public sealed class CreateRequirementServiceTests
         var projects = Substitute.For<IProjectRepository>();
         var clients = Substitute.For<IClientRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
+        requirements.GetDocumentCapabilitiesAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new RequirementDocumentCapabilities(true, true, false));
         var storage = Substitute.For<IFileStorage>();
         var user = User.CreateFromGoogle(
             "user@example.com", "User", null, null, At);
@@ -257,18 +261,20 @@ public sealed class CreateRequirementServiceTests
             .Returns(client);
 
         var saveCallCount = 0;
-        storage.SaveAsync(
+        storage.SaveVerifiedAsync(
                 Arg.Any<string>(),
                 Arg.Any<Stream>(),
+                Arg.Any<long>(), Arg.Any<long>(),
                 Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 saveCallCount++;
                 return scenario == "storage_second_failure"
                     && saveCallCount == 2
-                        ? Task.FromException(new FileStorageWriteException(
+                        ? Task.FromException<StoredContentReceipt>(new FileStorageWriteException(
                             new IOException("sensitive")))
-                        : Task.CompletedTask;
+                        : global::CotizadorBackend.Tests.Infrastructure.Persistence.StoredReceiptTestWriter.Write(
+                            call.Arg<Stream>()!, call.ArgAt<long>(2), call.ArgAt<long>(3), call.Arg<CancellationToken>());
             });
         requirements.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(scenario == "persistence"

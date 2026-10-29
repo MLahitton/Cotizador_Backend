@@ -129,15 +129,25 @@ public sealed class GetRequirementDetailsService(
                 file.CreatedAtUtc))
             .ToArray();
 
+        RequirementDocumentCapabilities capabilities;
+        try
+        {
+            capabilities = await requirementRepository.GetDocumentCapabilitiesAsync(
+                requirement.Id, userId, cancellationToken);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return GetRequirementDetailsResult.Failed(GetRequirementDetailsFailure.QueryError);
+        }
         return GetRequirementDetailsResult.Success(
             new RequirementDetailsReadModel(
                 requirement.Id,
                 requirement.PreQuoteId,
                 requirement.Status,
                 requirement.CommercialLine,
-                requirement.CanEditDocuments,
-                requirement.CanCancel,
-                requirement.CanReplace,
+                capabilities.CanEditDocuments,
+                capabilities.CanCancel,
+                capabilities.CanReplace,
                 requirement.IsCurrent,
                 requirement.SupersedesRequirementId,
                 requirement.SupersededByRequirementId,

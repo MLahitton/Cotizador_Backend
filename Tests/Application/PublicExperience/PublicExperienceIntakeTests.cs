@@ -194,32 +194,33 @@ public sealed class PublicExperienceIntakeTests
     }
 
     [Fact]
-    public async Task StorageFailure_CleansSuccessfulAndPartialWrites()
+    public async Task StorageFailure_RetainsSuccessfulAndPartialWrites()
     {
         var repository = new IntakeRepository();
         var storage = new IntakeStorage { FailOnWrite = 2 };
         var files = new[] { Upload(), Upload() };
         await Assert.ThrowsAsync<IOException>(() => Service(repository, storage).ExecuteAsync(Payload(files), files, Token));
-        Assert.Empty(storage.Files);
-        Assert.Equal(2, storage.Deletes);
+        Assert.Equal(2, storage.Files.Count);
+        Assert.Equal(0, storage.Deletes);
         Assert.Empty(repository.Rows);
     }
 
     [Fact]
-    public async Task PersistenceFailure_CleansFiles()
+    public async Task PersistenceFailure_RetainsFiles()
     {
         var storage = new IntakeStorage();
         var repository = new IntakeRepository { FailInsert = true };
         var file = Upload();
         await Assert.ThrowsAsync<IOException>(() => Service(repository, storage).ExecuteAsync(Payload([file]), [file], Token));
-        Assert.Empty(storage.Files);
+        Assert.Single(storage.Files);
+        Assert.Equal(0, storage.Deletes);
         Assert.Empty(repository.Rows);
     }
 
     [Theory]
     [InlineData(false, 200)]
     [InlineData(true, 409)]
-    public async Task ConcurrentInsert_OneSubmission_LoserCompensates(bool different, int loserStatus)
+    public async Task ConcurrentInsert_OneSubmission_LoserRetainsBytes(bool different, int loserStatus)
     {
         var repository = new IntakeRepository { SynchronizeInserts = true };
         var storage = new IntakeStorage();
@@ -231,11 +232,15 @@ public sealed class PublicExperienceIntakeTests
         Assert.Contains(results, x => x.StatusCode == 201);
         Assert.Contains(results, x => x.StatusCode == loserStatus);
         Assert.Single(repository.Rows);
-        Assert.Single(storage.Files);
+        Assert.Equal(2, storage.Files.Count);
+        Assert.Equal(0, storage.Deletes);
     }
 
     public static PublicExperienceIntakeService Service(IntakeRepository? repository = null, IntakeStorage? storage = null) =>
-        new(repository ?? new(), storage ?? new(), TimeProvider.System, NullLogger<PublicExperienceIntakeService>.Instance);
+        new(repository ?? new(), storage ?? new(), TimeProvider.System, NullLogger<PublicExperienceIntakeService>.Instance, Capture());
+
+    public static IInitialContentCapture Capture() => new global::Infrastructure.Storage.InitialContentCapture(
+        NullLogger<global::Infrastructure.Storage.InitialContentCapture>.Instance);
 
     public static PublicExperienceUpload Upload(byte[]? bytes = null)
     {
@@ -279,6 +284,19 @@ public sealed class IntakeRepository : IPublicExperienceSubmissionRepository
 
 public sealed class IntakeStorage : IFileStorage
 {
+    public async Task<StoredContentReceipt> SaveVerifiedAsync(string key, Stream content, long expectedLength,
+        long maximumLength, CancellationToken cancellationToken)
+    {
+        using var bytes = new MemoryStream();
+        await content.CopyToAsync(bytes, cancellationToken);
+        bytes.Position = 0;
+        var receipt = await global::CotizadorBackend.Tests.Infrastructure.Persistence.StoredReceiptTestWriter.Write(
+            bytes, expectedLength, maximumLength, cancellationToken);
+        Files[key] = bytes.ToArray();
+        if (Interlocked.Increment(ref Writes) == FailOnWrite) throw new IOException("Simulated partial write");
+        return receipt;
+    }
+
     public ConcurrentDictionary<string, byte[]> Files { get; } = new();
     public int Writes;
     public int Deletes;

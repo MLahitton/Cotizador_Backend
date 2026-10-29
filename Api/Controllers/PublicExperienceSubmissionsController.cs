@@ -4,6 +4,8 @@ using Contracts.PublicExperience;
 using Domain.PublicExperience;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace Api.Controllers;
 
@@ -18,36 +20,58 @@ public sealed class PublicExperienceSubmissionsController(
     [HttpPost]
     [AllowAnonymous]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(PublicExperiencePayloadValidation.MaximumTotalBytes + 1024 * 1024)]
+    [ManualMultipart]
+    [RequestSizeLimit(IdeaPhotoLimits.MaximumRequestBytes)]
     [RequestFormLimits(
-        MultipartBodyLengthLimit = PublicExperiencePayloadValidation.MaximumTotalBytes + 1024 * 1024,
+        MultipartBodyLengthLimit = IdeaPhotoLimits.MaximumRequestBytes,
         ValueLengthLimit = PublicExperiencePayloadValidation.MaximumPayloadBytes,
         ValueCountLimit = PublicExperiencePayloadValidation.MaximumFiles + 1)]
     [ProducesResponseType<PublicExperienceSubmissionResponse>(201)]
     [ProducesResponseType<PublicExperienceSubmissionResponse>(200)]
     [ProducesResponseType<ProblemDetails>(400)]
     [ProducesResponseType<ProblemDetails>(409)]
+    [ProducesResponseType<ProblemDetails>(413)]
+    [ProducesResponseType<ProblemDetails>(415)]
     [ProducesResponseType<ProblemDetails>(422)]
     [ProducesResponseType<ProblemDetails>(503)]
     [ProducesResponseType<ProblemDetails>(500)]
     public async Task<IActionResult> Post(CancellationToken cancellationToken)
     {
+        if (Request.ContentLength > IdeaPhotoLimits.MaximumRequestBytes)
+            return ApiProblemDetailsFactory.Create(HttpContext, 413, "PUBLIC_EXPERIENCE_REQUEST_TOO_LARGE",
+                "Solicitud demasiado grande", "El multipart supera 121 MiB.");
         IFormCollection form;
         try
         {
             form = await Request.ReadFormAsync(cancellationToken);
+        }
+        catch (BadHttpRequestException exception) when (exception.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            return ApiProblemDetailsFactory.Create(HttpContext, 413, "PUBLIC_EXPERIENCE_REQUEST_TOO_LARGE",
+                "Solicitud demasiado grande", "El multipart supera 121 MiB.");
+        }
+        catch (BadHttpRequestException exception) when (exception.StatusCode == StatusCodes.Status400BadRequest)
+        {
+            return Invalid("Multipart invalido o incompleto.");
         }
         catch (InvalidDataException)
         {
             return Invalid("Multipart invalido o supera los limites permitidos.");
         }
         if (form.Count != 1 || !form.TryGetValue("payload", out var payload) || payload.Count != 1
-            || form.Files.Any(file => file.Name != "files"))
-            return Invalid("Se requiere un campo payload JSON y archivos con nombre files.");
+            || form.Files.Any(file => file.Name is not ("files" or "ideaPhoto"))
+            || form.Files.Count(file => file.Name == "ideaPhoto") > 1)
+            return Invalid("Se requiere payload JSON, archivos files y como maximo una ideaPhoto.");
 
-        var files = form.Files.Select(file => new PublicExperienceUpload(
+        var files = form.Files.Where(file => file.Name == "files").Select(file => new PublicExperienceUpload(
             file.FileName, file.ContentType, file.Length, file.OpenReadStream)).ToArray();
-        var result = await service.ExecuteAsync(payload[0] ?? "", files, cancellationToken);
+        var photo = form.Files.SingleOrDefault(file => file.Name == "ideaPhoto");
+        var upload = photo is null ? null : new PublicExperienceUpload(photo.FileName,
+            photo.ContentType, photo.Length, photo.OpenReadStream);
+        var result = await service.ExecuteAsync(payload[0] ?? "", files, upload, cancellationToken);
+        if (result.ErrorCode is not null)
+            return ApiProblemDetailsFactory.Create(HttpContext, result.StatusCode, result.ErrorCode,
+                "Fotografia invalida", result.Error!);
         if (result.StatusCode == 400) return Invalid(result.Error!);
         if (result.StatusCode == 409)
             return ApiProblemDetailsFactory.Create(HttpContext, 409, "PUBLIC_EXPERIENCE_CONFLICT",
@@ -125,4 +149,17 @@ public sealed class PublicExperienceSubmissionsController(
     private ObjectResult Invalid(string detail) =>
         ApiProblemDetailsFactory.Create(HttpContext, 400, "PUBLIC_EXPERIENCE_INVALID_REQUEST",
             "Solicitud invalida", detail);
+
+    // This action owns form parsing so size failures keep their explicit 413 mapping.
+    private sealed class ManualMultipartAttribute : Attribute, IResourceFilter
+    {
+        public void OnResourceExecuting(ResourceExecutingContext context)
+        {
+            context.ValueProviderFactories.RemoveType<FormValueProviderFactory>();
+            context.ValueProviderFactories.RemoveType<FormFileValueProviderFactory>();
+            context.ValueProviderFactories.RemoveType<JQueryFormValueProviderFactory>();
+        }
+
+        public void OnResourceExecuted(ResourceExecutedContext context) { }
+    }
 }

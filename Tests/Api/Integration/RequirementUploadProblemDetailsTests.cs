@@ -108,12 +108,13 @@ public sealed class RequirementUploadProblemDetailsTests
         Assert.Equal(3, body.FileCount);
         Assert.Equal("ESSENTIAL", body.CommercialLine);
         Assert.Equal("PENDING", body.Status);
-        await host.Storage.Received(3).SaveAsync(
+        await host.Storage.Received(3).SaveVerifiedAsync(
             Arg.Is<string>(key =>
                 key.StartsWith(
                     $"requirements/{body.RequirementId:D}/",
                     StringComparison.Ordinal)),
             Arg.Any<Stream>(),
+            Arg.Any<long>(), Arg.Any<long>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -126,6 +127,7 @@ public sealed class RequirementUploadProblemDetailsTests
     [InlineData("unsupported", 415, RequirementErrorCodes.UnsupportedFileType)]
     [InlineData("empty", 422, RequirementErrorCodes.EmptyFile)]
     [InlineData("storage", 500, RequirementErrorCodes.StorageError)]
+    [InlineData("mismatch", 400, RequirementErrorCodes.InvalidRequest)]
     [InlineData("persistence", 500, RequirementErrorCodes.PersistenceError)]
     public async Task Post_Failure_ReturnsStableProblem(
         string scenario,
@@ -291,6 +293,8 @@ public sealed class RequirementUploadProblemDetailsTests
             var projects = Substitute.For<IProjectRepository>();
             var clients = Substitute.For<IClientRepository>();
             var requirements = Substitute.For<IRequirementRepository>();
+            requirements.GetDocumentCapabilitiesAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                .Returns(new RequirementDocumentCapabilities(true, true, false));
             var storage = Substitute.For<IFileStorage>();
             var user = User.CreateFromGoogle(
                 "user@example.com",
@@ -345,14 +349,17 @@ public sealed class RequirementUploadProblemDetailsTests
                 .Returns(project);
             clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>())
                 .Returns(client);
-            storage.SaveAsync(
+            storage.SaveVerifiedAsync(
                     Arg.Any<string>(),
                     Arg.Any<Stream>(),
+                    Arg.Any<long>(), Arg.Any<long>(),
                     Arg.Any<CancellationToken>())
-                .Returns(scenario == "storage"
-                    ? Task.FromException(new FileStorageWriteException(
+                .Returns(call => scenario == "storage"
+                    ? Task.FromException<StoredContentReceipt>(new FileStorageWriteException(
                         new IOException("sensitive")))
-                    : Task.CompletedTask);
+                    : global::CotizadorBackend.Tests.Infrastructure.Persistence.StoredReceiptTestWriter.Write(
+                        call.Arg<Stream>()!, call.ArgAt<long>(2) + (scenario == "mismatch" ? 1 : 0),
+                        call.ArgAt<long>(3), call.Arg<CancellationToken>()));
             requirements.SaveChangesAsync(Arg.Any<CancellationToken>())
                 .Returns(scenario == "persistence"
                     ? Task.FromException(new RequirementPersistenceException(

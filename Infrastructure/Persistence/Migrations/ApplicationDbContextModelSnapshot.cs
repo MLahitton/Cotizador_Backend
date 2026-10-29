@@ -3515,6 +3515,194 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.ExpiredExecutionCancellation", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<DateTimeOffset>("AssignedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at_utc");
+
+                    b.Property<DateTimeOffset>("CancellationRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancellation_requested_at_utc");
+
+                    b.Property<Guid>("ClaimOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_operation_id");
+
+                    b.Property<Guid>("ClosedByActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("closed_by_actor_user_id");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<Guid>("ExecutionRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_request_id");
+
+                    b.Property<DateTimeOffset>("ExpectedLeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expected_lease_expires_at_utc");
+
+                    b.Property<Guid?>("ExpectedProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expected_processing_attempt_id");
+
+                    b.Property<DateTimeOffset>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<DateTimeOffset>("GuardAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("guard_at_utc");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<long>("LeaseGeneration")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_generation");
+
+                    b.Property<string>("LeaseOwner")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("lease_owner");
+
+                    b.Property<short>("PolicyVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("policy_version");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.HasKey("OperationId")
+                        .HasName("pk_expired_execution_cancellations");
+
+                    b.HasIndex("ClaimOperationId");
+
+                    b.HasIndex("ClosedByActorUserId");
+
+                    b.HasIndex("ExpectedProcessingAttemptId");
+
+                    b.HasIndex("JobId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_expired_cancellation_job");
+
+                    b.HasIndex("RequirementId");
+
+                    b.ToTable("expired_execution_cancellations", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_expired_cancellation_ids", "operation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND requirement_id <> '00000000-0000-0000-0000-000000000000'::uuid AND execution_request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND closed_by_actor_user_id <> '00000000-0000-0000-0000-000000000000'::uuid AND correlation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND (expected_processing_attempt_id IS NULL OR expected_processing_attempt_id <> '00000000-0000-0000-0000-000000000000'::uuid)");
+
+                            t.HasCheckConstraint("ck_expired_cancellation_owner", "length(lease_owner) = 78 AND lease_owner ~ '^exec:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND substring(lease_owner from 6 for 36) <> '00000000-0000-0000-0000-000000000000' AND substring(lease_owner from 43 for 36) = claim_operation_id::text");
+
+                            t.HasCheckConstraint("ck_expired_cancellation_shape", "lease_generation = 1 AND policy_version = 1 AND isfinite(assigned_at_utc) AND isfinite(expected_lease_expires_at_utc) AND isfinite(cancellation_requested_at_utc) AND isfinite(finished_at_utc) AND isfinite(guard_at_utc) AND assigned_at_utc < expected_lease_expires_at_utc AND expected_lease_expires_at_utc <= finished_at_utc AND finished_at_utc <= guard_at_utc AND cancellation_requested_at_utc <= finished_at_utc");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.JobLeaseOperation", b =>
+                {
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<DateTimeOffset>("AppliedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at_utc");
+
+                    b.Property<DateTimeOffset>("AssignedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at_utc");
+
+                    b.Property<Guid>("ClaimOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("claim_operation_id");
+
+                    b.Property<Guid>("ExecutionRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_request_id");
+
+                    b.Property<DateTimeOffset?>("ExpectedLeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expected_lease_expires_at_utc");
+
+                    b.Property<Guid?>("ExpectedProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expected_processing_attempt_id");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("LeaseGeneration")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_generation");
+
+                    b.Property<string>("LeaseOwner")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("lease_owner");
+
+                    b.Property<short>("PolicyVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("policy_version");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.HasKey("OperationId")
+                        .HasName("pk_job_lease_operations");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("ClaimOperationId");
+
+                    b.HasIndex("JobId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_lease_operation_claim_job")
+                        .HasFilter("kind = 'Claim'");
+
+                    b.HasIndex("LeaseOwner")
+                        .IsUnique()
+                        .HasDatabaseName("ux_lease_operation_claim_owner")
+                        .HasFilter("kind = 'Claim'");
+
+                    b.HasIndex("RequirementId");
+
+                    b.ToTable("job_lease_operations", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_lease_operation_ids", "operation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND requirement_id <> '00000000-0000-0000-0000-000000000000'::uuid AND execution_request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND actor_user_id <> '00000000-0000-0000-0000-000000000000'::uuid AND claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND (expected_processing_attempt_id IS NULL OR expected_processing_attempt_id <> '00000000-0000-0000-0000-000000000000'::uuid)");
+
+                            t.HasCheckConstraint("ck_lease_operation_owner", "length(lease_owner) = 78 AND lease_owner ~ '^exec:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' AND substring(lease_owner from 6 for 36) <> '00000000-0000-0000-0000-000000000000' AND substring(lease_owner from 43 for 36) = claim_operation_id::text");
+
+                            t.HasCheckConstraint("ck_lease_operation_shape", "kind IN ('Claim', 'Renew') AND lease_generation = 1 AND policy_version = 1 AND isfinite(assigned_at_utc) AND isfinite(applied_at_utc) AND isfinite(expires_at_utc) AND expires_at_utc > assigned_at_utc AND ((kind = 'Claim' AND claim_operation_id = operation_id AND expected_lease_expires_at_utc IS NULL AND expected_processing_attempt_id IS NULL AND assigned_at_utc = applied_at_utc AND expires_at_utc = applied_at_utc + interval '120 seconds') OR (kind = 'Renew' AND claim_operation_id <> operation_id AND expected_lease_expires_at_utc IS NOT NULL AND isfinite(expected_lease_expires_at_utc) AND applied_at_utc >= assigned_at_utc AND expected_lease_expires_at_utc > applied_at_utc AND expires_at_utc = greatest(expected_lease_expires_at_utc, applied_at_utc + interval '120 seconds')))");
+                        });
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.PreQuote", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5081,6 +5269,170 @@ namespace Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExecutionDocument", b =>
+                {
+                    b.Property<Guid>("EvidenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("evidence_id");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<long>("DeclaredLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("declared_length_bytes");
+
+                    b.Property<long>("ExpectedLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("expected_length_bytes");
+
+                    b.Property<string>("ExpectedSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("expected_sha256");
+
+                    b.Property<DateTimeOffset>("FileCreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("file_created_at_utc");
+
+                    b.Property<long>("ObservedLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("observed_length_bytes");
+
+                    b.Property<string>("ObservedSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("observed_sha256");
+
+                    b.Property<int>("Ordinal")
+                        .HasColumnType("integer")
+                        .HasColumnName("ordinal");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset>("StoredEvidenceAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stored_evidence_at_utc");
+
+                    b.Property<short>("StoredEvidenceVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("stored_evidence_version");
+
+                    b.HasKey("EvidenceId", "FileId")
+                        .HasName("pk_execution_documents");
+
+                    b.HasIndex("FileId");
+
+                    b.HasIndex("EvidenceId", "Ordinal")
+                        .IsUnique()
+                        .HasDatabaseName("ux_execution_document_ordinal");
+
+                    b.ToTable("requirement_execution_documents", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_execution_document_ids", "evidence_id <> '00000000-0000-0000-0000-000000000000'::uuid AND file_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_execution_document_shape", "ordinal >= 0 AND stored_evidence_version = 1 AND declared_length_bytes > 0 AND declared_length_bytes = expected_length_bytes AND expected_length_bytes = observed_length_bytes AND expected_sha256 ~ '^[0-9A-F]{64}$' AND observed_sha256 = expected_sha256");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExecutionEvidence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<Guid>("ExecutionRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_request_id");
+
+                    b.Property<int>("FileCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("file_count");
+
+                    b.Property<Guid>("JobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("job_id");
+
+                    b.Property<long>("LeaseGeneration")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_generation");
+
+                    b.Property<string>("ManifestHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("manifest_hash");
+
+                    b.Property<short>("ManifestVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("manifest_version");
+
+                    b.Property<Guid>("PrimaryDocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("primary_document_id");
+
+                    b.Property<Guid>("ProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("processing_attempt_id");
+
+                    b.Property<DateTimeOffset>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at_utc");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<DateTimeOffset>("VerifiedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at_utc");
+
+                    b.HasKey("Id")
+                        .HasName("pk_execution_evidence");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("JobId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_execution_evidence_job");
+
+                    b.HasIndex("ProcessingAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_execution_evidence_attempt");
+
+                    b.HasIndex("RequirementId");
+
+                    b.ToTable("requirement_execution_evidence", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_execution_evidence_ids", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND requirement_id <> '00000000-0000-0000-0000-000000000000'::uuid AND job_id <> '00000000-0000-0000-0000-000000000000'::uuid AND execution_request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND processing_attempt_id <> '00000000-0000-0000-0000-000000000000'::uuid AND actor_user_id <> '00000000-0000-0000-0000-000000000000'::uuid AND primary_document_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_execution_evidence_shape", "manifest_version = 1 AND lease_generation = 1 AND file_count > 0 AND manifest_hash ~ '^[0-9A-F]{64}$'");
+                        });
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.RequirementExperienceConfigurationConfirmation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5768,6 +6120,23 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("storage_key");
 
+                    b.Property<DateTimeOffset?>("StoredEvidenceAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stored_evidence_at_utc");
+
+                    b.Property<short?>("StoredEvidenceVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("stored_evidence_version");
+
+                    b.Property<long?>("StoredLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stored_length_bytes");
+
+                    b.Property<string>("StoredSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("stored_sha256");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RequirementId")
@@ -5780,6 +6149,8 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("requirement_files", "core", t =>
                         {
                             t.HasCheckConstraint("ck_requirement_files_size_bytes_positive", "\"size_bytes\" > 0");
+
+                            t.HasCheckConstraint("ck_requirement_files_stored_evidence", "(stored_sha256 IS NULL AND stored_length_bytes IS NULL AND stored_evidence_at_utc IS NULL AND stored_evidence_version IS NULL) OR (stored_sha256 IS NOT NULL AND stored_length_bytes IS NOT NULL AND stored_evidence_at_utc IS NOT NULL AND stored_evidence_version IS NOT NULL AND stored_evidence_version = 1 AND length(stored_sha256) = 64 AND stored_sha256 ~ '^[0-9A-F]{64}$' AND stored_length_bytes > 0 AND stored_length_bytes = size_bytes)");
                         });
                 });
 
@@ -6173,6 +6544,200 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("requirement_processing_attempts", "core", t =>
                         {
                             t.HasCheckConstraint("ck_requirement_processing_attempts_lifecycle", "((\"processing_state\" = 'Pending' AND \"started_at_utc\" IS NULL AND \"outcome\" IS NULL AND \"completed_at_utc\" IS NULL AND \"error_code\" IS NULL) OR (\"processing_state\" = 'Processing' AND \"started_at_utc\" IS NOT NULL AND \"started_at_utc\" >= \"created_at_utc\" AND \"outcome\" IS NULL AND \"completed_at_utc\" IS NULL AND \"error_code\" IS NULL) OR (\"processing_state\" = 'Finished' AND \"started_at_utc\" IS NOT NULL AND \"started_at_utc\" >= \"created_at_utc\" AND \"completed_at_utc\" IS NOT NULL AND \"completed_at_utc\" >= \"started_at_utc\" AND ((\"outcome\" IN ('Completed', 'RequiresReview') AND \"error_code\" IS NULL) OR (\"outcome\" = 'Failed' AND \"error_code\" IS NOT NULL AND \"error_code\" <> '') OR (\"outcome\" = 'Cancelled' AND \"error_code\" IS NULL))))");
+                        });
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementProcessingJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTimeOffset?>("AuthorizationExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("authorization_expires_at_utc");
+
+                    b.Property<DateTimeOffset?>("AuthorizationRevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("authorization_revoked_at_utc");
+
+                    b.Property<Guid?>("AuthorizedActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("authorized_actor_user_id");
+
+                    b.Property<DateTimeOffset?>("AuthorizedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("authorized_at_utc");
+
+                    b.Property<int?>("AutomaticAuthorizationPolicyVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("automatic_authorization_policy_version");
+
+                    b.Property<DateTimeOffset?>("CancellationRequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancellation_requested_at_utc");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset?>("DispatchAdmittedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatch_admitted_at_utc");
+
+                    b.Property<Guid?>("DispatchClaimOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dispatch_claim_operation_id");
+
+                    b.Property<Guid?>("DispatchInstanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("dispatch_instance_id");
+
+                    b.Property<Guid>("ExecutionRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("execution_request_id");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at_utc");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("last_error_code");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_expires_at_utc");
+
+                    b.Property<long>("LeaseGeneration")
+                        .HasColumnType("bigint")
+                        .HasColumnName("lease_generation");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("lease_owner");
+
+                    b.Property<Guid?>("ProcessingAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("processing_attempt_id");
+
+                    b.Property<string>("PublicationContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("publication_content_hash");
+
+                    b.Property<string>("PublicationContractVersion")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("publication_contract_version");
+
+                    b.Property<Guid?>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<string>("RequiredPublicationVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("sng-job-publication-v1")
+                        .HasColumnName("required_publication_version");
+
+                    b.Property<Guid>("RequirementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requirement_id");
+
+                    b.Property<Guid?>("RetryOfJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("retry_of_job_id");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("state");
+
+                    b.Property<Guid?>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.Property<string>("TriggerKind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("trigger_kind");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizedActorUserId");
+
+                    b.HasIndex("ExecutionRequestId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_processing_jobs_execution_request");
+
+                    b.HasIndex("ProcessingAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_processing_jobs_attempt");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("RetryOfJobId");
+
+                    b.HasIndex("SubmissionId");
+
+                    b.HasIndex("State", "CreatedAtUtc", "Id")
+                        .HasDatabaseName("ix_processing_jobs_state_created_id");
+
+                    b.HasIndex(new[] { "SubmissionId" }, "AutomaticSubmission")
+                        .IsUnique()
+                        .HasDatabaseName("ux_processing_jobs_automatic_submission")
+                        .HasFilter("automatic_authorization_policy_version IS NOT NULL");
+
+                    b.HasIndex(new[] { "RequirementId" }, "JobActiveRequirement")
+                        .IsUnique()
+                        .HasDatabaseName("ux_processing_jobs_active_requirement")
+                        .HasFilter("state IN ('Queued', 'Running')");
+
+                    b.HasIndex(new[] { "RequirementId" }, "JobRequirementHistory")
+                        .HasDatabaseName("ix_processing_jobs_requirement");
+
+                    b.ToTable("requirement_processing_jobs", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_processing_jobs_attempt", "(attempt_count = 0 AND processing_attempt_id IS NULL) OR (attempt_count = 1 AND processing_attempt_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_processing_jobs_automatic_authorization", "(automatic_authorization_policy_version IS NULL AND authorized_actor_user_id IS NULL AND authorized_at_utc IS NULL AND authorization_expires_at_utc IS NULL) OR (automatic_authorization_policy_version IS NOT NULL AND automatic_authorization_policy_version = 1 AND authorized_actor_user_id IS NOT NULL AND authorized_actor_user_id <> '00000000-0000-0000-0000-000000000000'::uuid AND authorized_at_utc IS NOT NULL AND authorization_expires_at_utc IS NOT NULL AND isfinite(authorized_at_utc) AND isfinite(authorization_expires_at_utc) AND authorization_expires_at_utc - authorized_at_utc = interval '24 hours' AND trigger_kind = 'PublicPreparation' AND required_publication_version = 'sng-job-publication-v2' AND submission_id IS NOT NULL AND submission_id <> '00000000-0000-0000-0000-000000000000'::uuid AND retry_of_job_id IS NULL AND requested_by_user_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_processing_jobs_automatic_dispatch", "(dispatch_admitted_at_utc IS NULL AND dispatch_instance_id IS NULL AND dispatch_claim_operation_id IS NULL) OR (automatic_authorization_policy_version IS NOT NULL AND dispatch_admitted_at_utc IS NOT NULL AND dispatch_instance_id IS NOT NULL AND dispatch_claim_operation_id IS NOT NULL AND dispatch_instance_id <> '00000000-0000-0000-0000-000000000000'::uuid AND dispatch_claim_operation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND isfinite(dispatch_admitted_at_utc) AND dispatch_admitted_at_utc >= authorized_at_utc AND dispatch_admitted_at_utc < authorization_expires_at_utc)");
+
+                            t.HasCheckConstraint("ck_processing_jobs_automatic_revocation", "authorization_revoked_at_utc IS NULL OR (automatic_authorization_policy_version IS NOT NULL AND isfinite(authorization_revoked_at_utc) AND authorization_revoked_at_utc >= authorized_at_utc AND (dispatch_admitted_at_utc IS NULL OR authorization_revoked_at_utc >= dispatch_admitted_at_utc))");
+
+                            t.HasCheckConstraint("ck_processing_jobs_dates", "(started_at_utc IS NULL OR started_at_utc >= created_at_utc) AND (cancellation_requested_at_utc IS NULL OR (cancellation_requested_at_utc >= created_at_utc AND (started_at_utc IS NULL OR cancellation_requested_at_utc >= started_at_utc))) AND (finished_at_utc IS NULL OR (finished_at_utc >= created_at_utc AND (started_at_utc IS NULL OR finished_at_utc >= started_at_utc) AND (cancellation_requested_at_utc IS NULL OR finished_at_utc >= cancellation_requested_at_utc)))");
+
+                            t.HasCheckConstraint("ck_processing_jobs_error", "(state = 'Failed' AND last_error_code IS NOT NULL AND last_error_code ~ '^[A-Z][A-Z0-9_]{0,63}$') OR (state <> 'Failed' AND last_error_code IS NULL)");
+
+                            t.HasCheckConstraint("ck_processing_jobs_identity", "execution_request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND correlation_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_processing_jobs_lifecycle", "(state = 'Queued' AND started_at_utc IS NULL AND finished_at_utc IS NULL AND lease_owner IS NULL AND lease_expires_at_utc IS NULL AND lease_generation = 0 AND attempt_count = 0 AND cancellation_requested_at_utc IS NULL) OR (state = 'Running' AND started_at_utc IS NOT NULL AND finished_at_utc IS NULL AND lease_owner IS NOT NULL AND btrim(lease_owner) <> '' AND lease_expires_at_utc IS NOT NULL AND lease_expires_at_utc > started_at_utc AND lease_generation = 1) OR (state IN ('Succeeded', 'Failed', 'Cancelled') AND finished_at_utc IS NOT NULL AND lease_owner IS NULL AND lease_expires_at_utc IS NULL AND ((started_at_utc IS NOT NULL AND lease_generation = 1) OR (state = 'Cancelled' AND started_at_utc IS NULL AND lease_generation = 0 AND attempt_count = 0)) AND ((state = 'Cancelled' AND cancellation_requested_at_utc IS NOT NULL) OR (state IN ('Succeeded', 'Failed') AND cancellation_requested_at_utc IS NULL AND started_at_utc IS NOT NULL)) AND (state <> 'Succeeded' OR attempt_count = 1))");
+
+                            t.HasCheckConstraint("ck_processing_jobs_publication_receipt", "(publication_contract_version IS NULL AND publication_content_hash IS NULL) OR (publication_contract_version IS NOT NULL AND publication_content_hash IS NOT NULL AND publication_contract_version ~ '[^[:space:]]' AND publication_content_hash ~ '^[A-F0-9]{64}$' AND state = 'Succeeded')");
+
+                            t.HasCheckConstraint("ck_processing_jobs_required_publication", "required_publication_version IN ('sng-job-publication-v1', 'sng-job-publication-v2') AND (publication_contract_version IS NULL OR publication_contract_version = required_publication_version) AND (required_publication_version <> 'sng-job-publication-v2' OR state <> 'Succeeded' OR publication_contract_version IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_processing_jobs_trigger", "trigger_kind IN ('PublicPreparation', 'ManualInitial', 'ManualRetry') AND ((trigger_kind = 'ManualRetry' AND retry_of_job_id IS NOT NULL AND retry_of_job_id <> id) OR (trigger_kind <> 'ManualRetry' AND retry_of_job_id IS NULL))");
                         });
                 });
 
@@ -7540,6 +8105,70 @@ namespace Infrastructure.Persistence.Migrations
                     b.ToTable("projects", "core");
                 });
 
+            modelBuilder.Entity("Domain.PublicExperience.PublicExperienceIdeaPhoto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<short>("IdentityVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("identity_version");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset>("StoredEvidenceAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stored_evidence_at_utc");
+
+                    b.Property<short>("StoredEvidenceVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("stored_evidence_version");
+
+                    b.Property<long>("StoredLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stored_length_bytes");
+
+                    b.Property<string>("StoredSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("stored_sha256");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submission_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("SubmissionId")
+                        .IsUnique();
+
+                    b.ToTable("public_experience_idea_photos", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_idea_photos_evidence", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND submission_id <> '00000000-0000-0000-0000-000000000000'::uuid AND identity_version = 1 AND stored_evidence_version = 1 AND stored_sha256 ~ '^[0-9A-F]{64}$' AND length(stored_sha256) = 64 AND stored_length_bytes > 0 AND stored_length_bytes <= 20971520 AND content_type IN ('image/jpeg', 'image/png')");
+                        });
+                });
+
             modelBuilder.Entity("Domain.PublicExperience.PublicExperienceSubmission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -7735,6 +8364,18 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("storage_key");
 
+                    b.Property<DateTimeOffset?>("StoredEvidenceAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("stored_evidence_at_utc");
+
+                    b.Property<short?>("StoredEvidenceVersion")
+                        .HasColumnType("smallint")
+                        .HasColumnName("stored_evidence_version");
+
+                    b.Property<long?>("StoredLengthBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("stored_length_bytes");
+
                     b.Property<Guid>("SubmissionId")
                         .HasColumnType("uuid")
                         .HasColumnName("submission_id");
@@ -7747,7 +8388,10 @@ namespace Infrastructure.Persistence.Migrations
                     b.HasIndex("SubmissionId", "Sequence")
                         .IsUnique();
 
-                    b.ToTable("public_experience_submission_files", "core");
+                    b.ToTable("public_experience_submission_files", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_submission_files_stored_evidence", "(stored_length_bytes IS NULL AND stored_evidence_at_utc IS NULL AND stored_evidence_version IS NULL) OR (stored_length_bytes IS NOT NULL AND stored_evidence_at_utc IS NOT NULL AND stored_evidence_version IS NOT NULL AND stored_evidence_version = 1 AND stored_length_bytes > 0 AND stored_length_bytes = size_bytes AND content_hash IS NOT NULL AND length(content_hash) = 64 AND content_hash ~ '^[0-9A-F]{64}$')");
+                        });
                 });
 
             modelBuilder.Entity("Domain.Catalogs.GlassPriceRangeVersion", b =>
@@ -7837,6 +8481,74 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("PreQuoteDocument");
 
                     b.Navigation("RequestedByUser");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.ExpiredExecutionCancellation", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.JobLeaseOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expired_cancellation_claim");
+
+                    b.HasOne("Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("ClosedByActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expired_cancellation_actor");
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("ExpectedProcessingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_expired_cancellation_attempt");
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expired_cancellation_job");
+
+                    b.HasOne("Domain.PreQuotes.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_expired_cancellation_requirement");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.JobLeaseOperation", b =>
+                {
+                    b.HasOne("Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lease_operation_actor");
+
+                    b.HasOne("Domain.PreQuotes.JobLeaseOperation", null)
+                        .WithMany()
+                        .HasForeignKey("ClaimOperationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lease_operation_claim");
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lease_operation_job");
+
+                    b.HasOne("Domain.PreQuotes.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_lease_operation_requirement");
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.PreQuote", b =>
@@ -8145,6 +8857,54 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("Requirement");
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExecutionDocument", b =>
+                {
+                    b.HasOne("Domain.PreQuotes.RequirementExecutionEvidence", null)
+                        .WithMany("Files")
+                        .HasForeignKey("EvidenceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_document_evidence");
+
+                    b.HasOne("Domain.PreQuotes.RequirementFile", null)
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_document_file");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExecutionEvidence", b =>
+                {
+                    b.HasOne("Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_evidence_actor");
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_evidence_job");
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_evidence_attempt");
+
+                    b.HasOne("Domain.PreQuotes.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_execution_evidence_requirement");
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.RequirementExperienceConfigurationConfirmation", b =>
                 {
                     b.HasOne("Domain.Identity.User", "ConfirmedByUser")
@@ -8425,6 +9185,40 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("RequestedByUser");
 
                     b.Navigation("Requirement");
+                });
+
+            modelBuilder.Entity("Domain.PreQuotes.RequirementProcessingJob", b =>
+                {
+                    b.HasOne("Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorizedActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessingAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.PreQuotes.Requirement", null)
+                        .WithMany()
+                        .HasForeignKey("RequirementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Domain.PreQuotes.RequirementProcessingJob", null)
+                        .WithMany()
+                        .HasForeignKey("RetryOfJobId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Domain.PublicExperience.PublicExperienceSubmission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Domain.PreQuotes.RequirementTechnicalProposal", b =>
@@ -8766,6 +9560,15 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("UpdatedByUser");
                 });
 
+            modelBuilder.Entity("Domain.PublicExperience.PublicExperienceIdeaPhoto", b =>
+                {
+                    b.HasOne("Domain.PublicExperience.PublicExperienceSubmission", null)
+                        .WithOne("IdeaPhoto")
+                        .HasForeignKey("Domain.PublicExperience.PublicExperienceIdeaPhoto", "SubmissionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Domain.PublicExperience.PublicExperienceSubmission", b =>
                 {
                     b.HasOne("Domain.Clients.Client", null)
@@ -8865,6 +9668,11 @@ namespace Infrastructure.Persistence.Migrations
                     b.Navigation("Messages");
                 });
 
+            modelBuilder.Entity("Domain.PreQuotes.RequirementExecutionEvidence", b =>
+                {
+                    b.Navigation("Files");
+                });
+
             modelBuilder.Entity("Domain.PreQuotes.RequirementExperienceConfigurationConfirmation", b =>
                 {
                     b.Navigation("Items");
@@ -8947,6 +9755,8 @@ namespace Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Domain.PublicExperience.PublicExperienceSubmission", b =>
                 {
                     b.Navigation("Files");
+
+                    b.Navigation("IdeaPhoto");
                 });
 #pragma warning restore 612, 618
         }

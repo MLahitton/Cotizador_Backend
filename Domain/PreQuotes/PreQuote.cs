@@ -52,7 +52,8 @@ public sealed class PreQuote
         Guid createdByUserId,
         string serial,
         string? name,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        Guid? reservedId = null)
     {
         if (projectId == Guid.Empty)
         {
@@ -68,8 +69,9 @@ public sealed class PreQuote
                 nameof(createdByUserId));
         }
 
+        if (reservedId == Guid.Empty) throw new ArgumentException("A nonempty identity is required.", nameof(reservedId));
         return new PreQuote(
-            Guid.NewGuid(),
+            reservedId ?? Guid.NewGuid(),
             projectId,
             createdByUserId,
             serial,

@@ -14,7 +14,8 @@ public sealed class CotizadorAi2DocumentProcessingClient(
     HttpClient httpClient,
     CotizadorAi2Options options,
     Ai2RequirementExtractionAdapter adapter,
-    ILogger<CotizadorAi2DocumentProcessingClient> logger)
+    ILogger<CotizadorAi2DocumentProcessingClient> logger,
+    bool captureRawResponse = true)
     : IAi2DocumentProcessingClient
 {
     private const string ExtractionPath = "requirements/extract";
@@ -81,10 +82,11 @@ public sealed class CotizadorAi2DocumentProcessingClient(
                     payload,
                     payloadDiagnostics);
 
-                await TryWriteRawAi2ResponseAsync(
-                    payload,
-                    request,
-                    timeoutSource.Token);
+                if (captureRawResponse)
+                    await TryWriteRawAi2ResponseAsync(
+                        payload,
+                        request,
+                        timeoutSource.Token);
                 return DocumentProcessingClientResult.Success(
                     adapter.Adapt(payload, request));
             }

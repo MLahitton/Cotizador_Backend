@@ -2,6 +2,13 @@ namespace Application.Common.Abstractions.Storage;
 
 public interface IFileStorage
 {
+    Task<StoredContentReceipt> SaveVerifiedAsync(
+        string storageKey,
+        Stream content,
+        long expectedLength,
+        long maximumLength,
+        CancellationToken cancellationToken);
+
     Task SaveAsync(
         string storageKey,
         Stream content,

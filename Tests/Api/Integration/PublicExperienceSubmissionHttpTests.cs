@@ -189,8 +189,9 @@ public sealed class PublicExperienceSubmissionHttpTests
                 .Returns(call => (IRequirementProcessingLease?)new MemoryLease(call.ArgAt<Guid>(0)));
             builder.Services.AddSingleton(processingLock);
             builder.Services.AddSingleton(new PreparePublicExperienceRequirementService(
-                new HttpPreparationRepository(repository), projects, preQuotes, requirements,
-                storage, TimeProvider.System, NullLogger<PreparePublicExperienceRequirementService>.Instance));
+                new HttpPreparationRepository(repository, projects, preQuotes, requirements),
+                storage, PreparePublicExperienceRequirementTests.Copy(), TimeProvider.System,
+                NullLogger<PreparePublicExperienceRequirementService>.Instance));
             builder.Services.AddControllers().AddApplicationPart(typeof(PublicExperienceSubmissionsController).Assembly);
             var app = builder.Build();
             app.MapControllers();
@@ -220,15 +221,16 @@ public sealed class PublicExperienceSubmissionHttpTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private sealed class HttpPreparationRepository(IntakeRepository intake) : IPublicExperienceRequirementPreparationRepository
+    private sealed class HttpPreparationRepository(IntakeRepository intake, IProjectRepository projects,
+        IPreQuoteRepository preQuotes, IRequirementRepository requirements) : IPublicExperienceRequirementPreparationRepository
     {
-        public async Task<PublicExperienceRequirementPreparationResult?> PrepareLockedAsync(string id,
-            Func<PublicExperienceSubmission, CancellationToken, Task> prepare, Func<Task> compensate, CancellationToken token)
-        {
-            var submission = intake.Rows[id];
-            var replay = submission.RequirementId is not null;
-            if (!replay) await prepare(submission, token);
-            return new(id, submission.PreQuoteId, submission.RequirementId, null, replay);
-        }
+        private PreparePublicExperienceRequirementTests.PreparationMemoryRepository Inner(string id) =>
+            new(intake.Rows[id], projects, preQuotes, requirements);
+        public Task<PublicPreparationRead> ReadAsync(string id, CancellationToken token) => Inner(id).ReadAsync(id, token);
+        public Task<PublicExperienceRequirementPreparationResult> CommitAsync(PublicPreparationSnapshot snapshot,
+            Requirement candidate, IReadOnlyList<PublicPreparedFile> files, CancellationToken token) =>
+            Inner(snapshot.SubmissionId).CommitAsync(snapshot, candidate, files, token);
+        public Task<PublicExperienceRequirementPreparationResult> FailAsync(PublicPreparationSnapshot snapshot,
+            string code, CancellationToken token) => Inner(snapshot.SubmissionId).FailAsync(snapshot, code, token);
     }
 }

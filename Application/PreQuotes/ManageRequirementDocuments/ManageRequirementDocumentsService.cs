@@ -138,26 +138,46 @@ public sealed class ManageRequirementDocumentsService(
             normalized.StorageExtension);
         try
         {
-            await fileStorage.SaveAsync(
+            var receipt = await fileStorage.SaveVerifiedAsync(
                 storageKey,
                 normalized.Content!,
+                normalized.SizeBytes,
+                RequirementFileValidation.MaximumFileSizeBytes,
                 cancellationToken);
-            requirementRepository.AddFile(RequirementFile.Create(
+            var evidenceAt = timeProvider.GetUtcNow();
+            await using var write = await requirementRepository.BeginDocumentWriteAsync(
+                command.RequirementId, currentUser.UserId!.Value, cancellationToken);
+            if (!write.Capabilities.CanEditDocuments)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotMutable);
+            if (write.Files.Count >= RequirementFileValidation.MaximumFileCount)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.TooManyFiles);
+            if (write.Files.Sum(f => f.SizeBytes) + normalized.SizeBytes > RequirementFileValidation.MaximumTotalSizeBytes)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.FileTooLarge);
+            requirement = write.Requirement;
+            now = timeProvider.GetUtcNow();
+            requirementRepository.AddFile(RequirementFile.CreateWithStoredEvidence(
                 requirement.Id,
                 normalized.OriginalFileName,
                 normalized.ContentType,
                 normalized.SizeBytes,
                 storageKey,
-                now));
-            loaded.PreQuote!.RegisterActivity(now);
+                now, receipt.Sha256, receipt.Length, evidenceAt, 1));
+            write.PreQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
             return RequirementLifecycleResult.Success(
                 await MapAsync(requirement, now, cancellationToken));
         }
+        catch (RequirementDocumentRejectedException exception)
+        {
+            return RequirementLifecycleResult.Failed(exception.Failure);
+        }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
+            if (exception is ContentVerificationException)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.InvalidRequest);
             LogFailure(exception, requirement.Id, "add_document");
-            await fileStorage.DeleteIfExistsAsync(storageKey, CancellationToken.None);
+            // A failed write or save does not prove ownership or rollback. Retain the destination.
             return RequirementLifecycleResult.Failed(
                 ManageRequirementDocumentsFailure.PersistenceError);
         }
@@ -200,12 +220,32 @@ public sealed class ManageRequirementDocumentsService(
         var now = timeProvider.GetUtcNow();
         try
         {
+            await using var write = await requirementRepository.BeginDocumentWriteAsync(
+                command.RequirementId, currentUser.UserId!.Value, cancellationToken);
+            if (!write.Capabilities.CanEditDocuments)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotMutable);
+            file = write.Files.SingleOrDefault(f => f.Id == command.RequirementFileId);
+            if (file is null)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.DocumentNotFound);
+            if (write.Files.Count <= 1)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.InvalidRequest);
+            if (write.Files.Count - 1 > RequirementFileValidation.MaximumFileCount)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.TooManyFiles);
+            if (write.Files.Where(f => f.Id != file.Id).Sum(f => f.SizeBytes) > RequirementFileValidation.MaximumTotalSizeBytes)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.FileTooLarge);
+            requirement = write.Requirement;
+            now = timeProvider.GetUtcNow();
             requirementRepository.RemoveFile(file);
-            loaded.PreQuote!.RegisterActivity(now);
+            write.PreQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
-            await fileStorage.DeleteIfExistsAsync(file.StorageKey, CancellationToken.None);
+            await write.CommitAsync(cancellationToken);
+            // Only the reference is removed; shared or historical bytes require coordinated cleanup.
             return RequirementLifecycleResult.Success(
                 await MapAsync(requirement, now, cancellationToken));
+        }
+        catch (RequirementDocumentRejectedException exception)
+        {
+            return RequirementLifecycleResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -264,32 +304,77 @@ public sealed class ManageRequirementDocumentsService(
         var storageKey = RequirementFileValidation.CreateStorageKey(
             requirement.Id,
             normalized.StorageExtension);
+        StoredContentReceipt receipt;
+        DateTimeOffset evidenceAt;
         try
         {
-            await fileStorage.SaveAsync(
+            receipt = await fileStorage.SaveVerifiedAsync(
                 storageKey,
                 normalized.Content!,
+                normalized.SizeBytes,
+                RequirementFileValidation.MaximumFileSizeBytes,
                 cancellationToken);
-            requirementRepository.AddFile(RequirementFile.Create(
+            evidenceAt = timeProvider.GetUtcNow();
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // A failed write does not establish ownership of the destination key.
+            if (exception is ContentVerificationException)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.InvalidRequest);
+            LogFailure(exception, requirement.Id, "replace_document_storage");
+            return RequirementLifecycleResult.Failed(
+                ManageRequirementDocumentsFailure.PersistenceError);
+        }
+
+        try
+        {
+            await using var write = await requirementRepository.BeginDocumentWriteAsync(
+                command.RequirementId, currentUser.UserId!.Value, cancellationToken);
+            if (!write.Capabilities.CanEditDocuments)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotMutable);
+            oldFile = write.Files.SingleOrDefault(f => f.Id == command.RequirementFileId);
+            if (oldFile is null)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.DocumentNotFound);
+            if (write.Files.Count > RequirementFileValidation.MaximumFileCount)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.TooManyFiles);
+            if (write.Files.Where(f => f.Id != oldFile.Id).Sum(f => f.SizeBytes) + normalized.SizeBytes
+                > RequirementFileValidation.MaximumTotalSizeBytes)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.FileTooLarge);
+            requirement = write.Requirement;
+            now = timeProvider.GetUtcNow();
+            requirementRepository.AddFile(RequirementFile.CreateWithStoredEvidence(
                 requirement.Id,
                 normalized.OriginalFileName,
                 normalized.ContentType,
                 normalized.SizeBytes,
                 storageKey,
-                now));
+                now, receipt.Sha256, receipt.Length, evidenceAt, 1));
             requirementRepository.RemoveFile(oldFile);
-            loaded.PreQuote!.RegisterActivity(now);
+            write.PreQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
-            await fileStorage.DeleteIfExistsAsync(
-                oldFile.StorageKey,
-                CancellationToken.None);
+            await write.CommitAsync(cancellationToken);
+        }
+        catch (RequirementDocumentRejectedException exception)
+        {
+            return RequirementLifecycleResult.Failed(exception.Failure);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // SaveChanges may have committed. Retain both files on an uncertain outcome.
+            LogFailure(exception, requirement.Id, "replace_document_persistence");
+            return RequirementLifecycleResult.Failed(
+                ManageRequirementDocumentsFailure.PersistenceError);
+        }
+
+        // References are saved; old bytes await coordinated cleanup, not inline deletion.
+        try
+        {
             return RequirementLifecycleResult.Success(
                 await MapAsync(requirement, now, cancellationToken));
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            LogFailure(exception, requirement.Id, "replace_document");
-            await fileStorage.DeleteIfExistsAsync(storageKey, CancellationToken.None);
+            LogFailure(exception, requirement.Id, "replace_document_response");
             return RequirementLifecycleResult.Failed(
                 ManageRequirementDocumentsFailure.PersistenceError);
         }
@@ -314,7 +399,8 @@ public sealed class ManageRequirementDocumentsService(
         }
 
         var requirement = loaded.Requirement!;
-        if (!requirement.CanCancel)
+        if (!(await requirementRepository.GetDocumentCapabilitiesAsync(
+                requirement.Id, currentUser.UserId!.Value, cancellationToken)).CanCancel)
         {
             return RequirementLifecycleResult.Failed(
                 ManageRequirementDocumentsFailure.RequirementNotMutable);
@@ -323,11 +409,22 @@ public sealed class ManageRequirementDocumentsService(
         var now = timeProvider.GetUtcNow();
         try
         {
+            await using var write = await requirementRepository.BeginDocumentWriteAsync(
+                command.RequirementId, currentUser.UserId!.Value, cancellationToken);
+            if (!write.Capabilities.CanCancel)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotMutable);
+            requirement = write.Requirement;
+            now = timeProvider.GetUtcNow();
             requirement.Cancel(now);
-            loaded.PreQuote!.RegisterActivity(now);
+            write.PreQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
             return RequirementLifecycleResult.Success(
                 await MapAsync(requirement, now, cancellationToken));
+        }
+        catch (RequirementDocumentRejectedException exception)
+        {
+            return RequirementLifecycleResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -385,7 +482,8 @@ public sealed class ManageRequirementDocumentsService(
         }
 
         var oldRequirement = loaded.Requirement!;
-        if (!oldRequirement.CanReplace)
+        if (!(await requirementRepository.GetDocumentCapabilitiesAsync(
+                oldRequirement.Id, currentUser.UserId!.Value, cancellationToken)).CanReplace)
         {
             return RequirementLifecycleResult.Failed(
                 ManageRequirementDocumentsFailure.RequirementNotReplaceable);
@@ -399,43 +497,63 @@ public sealed class ManageRequirementDocumentsService(
                 ?? RequirementCommercialLine.Essential,
             now);
         replacement.MarkAsReplacementOf(oldRequirement.Id);
-        var storedKeys = new List<string>(normalizedFiles.Count);
 
         try
         {
-            requirementRepository.Add(replacement);
+            var preparedFiles = new List<RequirementFile>();
             foreach (var file in normalizedFiles)
             {
                 var storageKey = RequirementFileValidation.CreateStorageKey(
                     replacement.Id,
                     file.StorageExtension);
-                await fileStorage.SaveAsync(
+                var receipt = await fileStorage.SaveVerifiedAsync(
                     storageKey,
                     file.Content!,
+                    file.SizeBytes,
+                    RequirementFileValidation.MaximumFileSizeBytes,
                     cancellationToken);
-                storedKeys.Add(storageKey);
-                requirementRepository.AddFile(RequirementFile.Create(
+                var evidenceAt = timeProvider.GetUtcNow();
+                preparedFiles.Add(RequirementFile.CreateWithStoredEvidence(
                     replacement.Id,
                     file.OriginalFileName,
                     file.ContentType,
                     file.SizeBytes,
                     storageKey,
-                    now));
+                    now, receipt.Sha256, receipt.Length, evidenceAt, 1));
             }
 
-            oldRequirement.SupersedeBy(replacement.Id, now);
-            loaded.PreQuote!.RegisterActivity(now);
+            await using var write = await requirementRepository.BeginDocumentWriteAsync(
+                command.RequirementId, currentUser.UserId!.Value, cancellationToken);
+            if (!write.Capabilities.CanReplace)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotReplaceable);
+            if (write.Requirement.PreQuoteId != oldRequirement.PreQuoteId
+                || write.Requirement.CreatedByUserId != oldRequirement.CreatedByUserId
+                || write.Requirement.CommercialLine != oldRequirement.CommercialLine)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.RequirementNotReplaceable);
+            oldRequirement = write.Requirement;
+            now = timeProvider.GetUtcNow();
+            requirementRepository.Add(replacement);
+            foreach (var file in preparedFiles) requirementRepository.AddFile(file);
+            if (oldRequirement.Status == RequirementStatus.Pending)
+                oldRequirement.SupersedeAfterConfirmedCancellationBy(replacement.Id, now);
+            else
+                oldRequirement.SupersedeBy(replacement.Id, now);
+            write.PreQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
             return RequirementLifecycleResult.Success(
                 await MapAsync(replacement, now, cancellationToken));
         }
+        catch (RequirementDocumentRejectedException exception)
+        {
+            return RequirementLifecycleResult.Failed(exception.Failure);
+        }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
+            if (exception is ContentVerificationException)
+                return RequirementLifecycleResult.Failed(ManageRequirementDocumentsFailure.InvalidRequest);
             LogFailure(exception, oldRequirement.Id, "replace_requirement");
-            foreach (var storageKey in storedKeys)
-            {
-                await fileStorage.DeleteIfExistsAsync(storageKey, CancellationToken.None);
-            }
+            // A save or response failure may follow commit. Keep the complete batch and old files.
 
             return RequirementLifecycleResult.Failed(
                 ManageRequirementDocumentsFailure.PersistenceError);
@@ -452,7 +570,8 @@ public sealed class ManageRequirementDocumentsService(
             return loaded;
         }
 
-        if (!loaded.Requirement!.CanEditDocuments)
+        if (!(await requirementRepository.GetDocumentCapabilitiesAsync(
+                requirementId, currentUser.UserId!.Value, cancellationToken)).CanEditDocuments)
         {
             return LoadedRequirement.Failed(
                 ManageRequirementDocumentsFailure.RequirementNotMutable);
@@ -548,22 +667,25 @@ public sealed class ManageRequirementDocumentsService(
                 requirement.Id,
                 cancellationToken);
 
-        return Map(requirement, updatedAtUtc, documents);
+        var capabilities = await requirementRepository.GetDocumentCapabilitiesAsync(
+            requirement.Id, currentUser.UserId!.Value, cancellationToken);
+        return Map(requirement, updatedAtUtc, documents, capabilities);
     }
 
     private static RequirementLifecycleReadModel Map(
         Requirement requirement,
         DateTimeOffset updatedAtUtc,
-        IReadOnlyList<RequirementDocumentReadModel> documents) =>
+        IReadOnlyList<RequirementDocumentReadModel> documents,
+        RequirementDocumentCapabilities capabilities) =>
         new(
             requirement.Id,
             requirement.PreQuoteId,
             documents.Count,
             requirement.CommercialLine?.ToString().ToUpperInvariant(),
             requirement.Status.ToString().ToUpperInvariant(),
-            requirement.CanEditDocuments,
-            requirement.CanCancel,
-            requirement.CanReplace,
+            capabilities.CanEditDocuments,
+            capabilities.CanCancel,
+            capabilities.CanReplace,
             requirement.IsCurrent,
             requirement.SupersedesRequirementId,
             requirement.SupersededByRequirementId,

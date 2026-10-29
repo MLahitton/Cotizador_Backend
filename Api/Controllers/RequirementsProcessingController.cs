@@ -62,6 +62,7 @@ public sealed class RequirementsProcessingController(
     }
 
     [HttpPost("/api/v2/processing-attempts/{processingAttemptId:guid}/cancel")]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(
         typeof(ProcessRequirementResponse),
         StatusCodes.Status200OK)]
@@ -96,6 +97,7 @@ public sealed class RequirementsProcessingController(
     }
 
     [HttpPost("cancel")]
+    [ProducesResponseType(typeof(ApiProblemDetailsResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(
         typeof(ProcessRequirementResponse),
         StatusCodes.Status200OK)]
@@ -137,6 +139,8 @@ public sealed class RequirementsProcessingController(
     {
         return failure switch
         {
+            CancelRequirementProcessingAttemptFailure.ProcessingManagedByJob =>
+                ProcessRequirementProblemMapper.Create(HttpContext, ProcessRequirementFailure.ProcessingManagedByJob),
             CancelRequirementProcessingAttemptFailure.InvalidRequest =>
                 RequirementProblem(
                     StatusCodes.Status400BadRequest,

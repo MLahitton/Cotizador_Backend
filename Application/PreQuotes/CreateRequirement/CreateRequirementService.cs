@@ -216,19 +216,22 @@ public sealed class CreateRequirementService(
                 var storageKey = RequirementFileValidation.CreateStorageKey(
                     requirement.Id,
                     file.StorageExtension);
-                await fileStorage.SaveAsync(
+                var receipt = await fileStorage.SaveVerifiedAsync(
                     storageKey,
                     file.Content!,
+                    file.SizeBytes,
+                    RequirementFileValidation.MaximumFileSizeBytes,
                     cancellationToken);
+                var evidenceAt = timeProvider.GetUtcNow();
                 storedKeys.Add(storageKey);
 
-                var requirementFile = RequirementFile.Create(
+                var requirementFile = RequirementFile.CreateWithStoredEvidence(
                     requirement.Id,
                     file.OriginalFileName,
                     file.ContentType,
                     file.SizeBytes,
                     storageKey,
-                    now);
+                    now, receipt.Sha256, receipt.Length, evidenceAt, 1);
                 persistedFiles.Add(requirementFile);
                 requirementRepository.AddFile(requirementFile);
             }
@@ -236,17 +239,31 @@ public sealed class CreateRequirementService(
             preQuote.RegisterActivity(now);
             await requirementRepository.SaveChangesAsync(cancellationToken);
         }
+        catch (ContentVerificationException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return CreateRequirementResult.Failed(CreateRequirementFailure.InvalidRequest);
+        }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
         {
             LogFailure(exception, command.PreQuoteId, userId, "storage_or_persistence");
-            await CompensateAsync(storedKeys);
+            // SaveChanges may have committed; even a partial batch is retained for coordinated cleanup.
             return CreateRequirementResult.Failed(
                 storedKeys.Count < normalizedFiles.Count
                     ? CreateRequirementFailure.StorageError
                     : CreateRequirementFailure.PersistenceError);
         }
 
+        RequirementDocumentCapabilities capabilities;
+        try
+        {
+            capabilities = await requirementRepository.GetDocumentCapabilitiesAsync(requirement.Id, userId, cancellationToken);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            LogFailure(exception, command.PreQuoteId, userId, "capabilities");
+            return CreateRequirementResult.Failed(CreateRequirementFailure.PersistenceError);
+        }
         return CreateRequirementResult.Success(
             new CreatedRequirementResult(
                 requirement.Id,
@@ -264,7 +281,12 @@ public sealed class CreateRequirementService(
                         file.ContentType,
                         file.SizeBytes,
                         file.CreatedAtUtc))
-                    .ToArray()));
+                    .ToArray())
+            {
+                CanEditDocuments = capabilities.CanEditDocuments,
+                CanCancel = capabilities.CanCancel,
+                CanReplace = capabilities.CanReplace
+            });
     }
 
     private static bool TryParseCommercialLine(
@@ -299,27 +321,6 @@ public sealed class CreateRequirementService(
             RequirementCommercialLine.Signature => "SIGNATURE",
             _ => throw new ArgumentOutOfRangeException(nameof(commercialLine))
         };
-
-    private async Task CompensateAsync(IReadOnlyList<string> storageKeys)
-    {
-        foreach (var storageKey in storageKeys)
-        {
-            try
-            {
-                await fileStorage.DeleteIfExistsAsync(
-                    storageKey,
-                    CancellationToken.None);
-            }
-            catch (Exception exception)
-            {
-                logger.LogError(
-                    exception,
-                    "Requirement upload compensation failed. StorageKey={StorageKey} ExceptionType={ExceptionType}",
-                    storageKey,
-                    exception.GetType().Name);
-            }
-        }
-    }
 
     private void LogFailure(
         Exception exception,

@@ -1,5 +1,6 @@
 using Domain.PreQuotes;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Infrastructure.Persistence.Configurations;
@@ -12,9 +13,24 @@ public sealed class RequirementFileConfiguration
         builder.ToTable(
             "requirement_files",
             "core",
-            tableBuilder => tableBuilder.HasCheckConstraint(
+            tableBuilder => { tableBuilder.HasCheckConstraint(
                 "ck_requirement_files_size_bytes_positive",
-                "\"size_bytes\" > 0"));
+                "\"size_bytes\" > 0");
+                tableBuilder.HasCheckConstraint("ck_requirement_files_stored_evidence",
+                    "(stored_sha256 IS NULL AND stored_length_bytes IS NULL AND stored_evidence_at_utc IS NULL AND stored_evidence_version IS NULL) OR "
+                    + "(stored_sha256 IS NOT NULL AND stored_length_bytes IS NOT NULL AND stored_evidence_at_utc IS NOT NULL AND stored_evidence_version IS NOT NULL "
+                    + "AND stored_evidence_version = 1 AND length(stored_sha256) = 64 AND stored_sha256 ~ '^[0-9A-F]{64}$' "
+                    + "AND stored_length_bytes > 0 AND stored_length_bytes = size_bytes)");
+            });
+
+        builder.Property(file => file.StoredSha256).HasColumnName("stored_sha256")
+            .HasMaxLength(64).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(file => file.StoredLengthBytes).HasColumnName("stored_length_bytes")
+            .HasColumnType("bigint").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(file => file.StoredEvidenceAtUtc).HasColumnName("stored_evidence_at_utc")
+            .HasColumnType("timestamp with time zone").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(file => file.StoredEvidenceVersion).HasColumnName("stored_evidence_version")
+            .HasColumnType("smallint").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
 
         builder.HasKey(file => file.Id);
 

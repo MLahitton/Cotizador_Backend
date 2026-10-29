@@ -1,6 +1,7 @@
 using Domain.PublicExperience;
 using Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Infrastructure.Persistence.Configurations;
@@ -52,7 +53,18 @@ public sealed class PublicExperienceSubmissionFileConfiguration : IEntityTypeCon
 {
     public void Configure(EntityTypeBuilder<PublicExperienceSubmissionFile> builder)
     {
-        builder.ToTable("public_experience_submission_files", "core");
+        builder.ToTable("public_experience_submission_files", "core", t =>
+            t.HasCheckConstraint("ck_submission_files_stored_evidence",
+                "(stored_length_bytes IS NULL AND stored_evidence_at_utc IS NULL AND stored_evidence_version IS NULL) OR "
+                + "(stored_length_bytes IS NOT NULL AND stored_evidence_at_utc IS NOT NULL AND stored_evidence_version IS NOT NULL "
+                + "AND stored_evidence_version = 1 AND stored_length_bytes > 0 AND stored_length_bytes = size_bytes "
+                + "AND content_hash IS NOT NULL AND length(content_hash) = 64 AND content_hash ~ '^[0-9A-F]{64}$')"));
+        builder.Property(x => x.StoredLengthBytes).HasColumnName("stored_length_bytes")
+            .HasColumnType("bigint").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(x => x.StoredEvidenceAtUtc).HasColumnName("stored_evidence_at_utc")
+            .HasColumnType("timestamp with time zone").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(x => x.StoredEvidenceVersion).HasColumnName("stored_evidence_version")
+            .HasColumnType("smallint").Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(x => x.SubmissionId).HasColumnName("submission_id");

@@ -67,11 +67,12 @@ public sealed class ManageRequirementDocumentsServiceTests
         Assert.True(result.Requirement!.IsCurrent);
         Assert.True(result.Requirement.CanEditDocuments);
         Assert.Equal(1, result.Requirement.FileCount);
-        await context.Storage.Received(1).SaveAsync(
+        await context.Storage.Received(1).SaveVerifiedAsync(
             Arg.Is<string>(key => key.EndsWith(
                 "/original.pdf",
                 StringComparison.Ordinal)),
             Arg.Any<Stream>(),
+            Arg.Any<long>(), Arg.Any<long>(),
             Arg.Any<CancellationToken>());
         await context.Requirements.Received(1).SaveChangesAsync(
             Arg.Any<CancellationToken>());
@@ -147,6 +148,16 @@ public sealed class ManageRequirementDocumentsServiceTests
         }
 
         currentUser.IsAuthenticated.Returns(true);
+        requirements.GetDocumentCapabilitiesAsync(Arg.Any<Guid>(), UserId, Arg.Any<CancellationToken>())
+            .Returns(c => c.ArgAt<Guid>(0) == requirement.Id
+                ? RequirementDocumentPolicy.Evaluate(requirement, [], [], true)
+                : new RequirementDocumentCapabilities(true, true, false));
+        var write = Substitute.For<IRequirementDocumentWrite>();
+        write.Requirement.Returns(requirement);
+        write.PreQuote.Returns(preQuote);
+        write.Files.Returns(requirement.Files.ToArray());
+        write.Capabilities.Returns(_ => RequirementDocumentPolicy.Evaluate(requirement, [], [], true));
+        requirements.BeginDocumentWriteAsync(requirement.Id, UserId, Arg.Any<CancellationToken>()).Returns(write);
         currentUser.UserId.Returns(UserId);
         identity.FindUserByIdAsync(UserId, Arg.Any<CancellationToken>())
             .Returns(user);
@@ -181,11 +192,13 @@ public sealed class ManageRequirementDocumentsServiceTests
             .Returns(project);
         clients.FindByIdAsync(client.Id, Arg.Any<CancellationToken>())
             .Returns(client);
-        storage.SaveAsync(
+        storage.SaveVerifiedAsync(
                 Arg.Any<string>(),
                 Arg.Any<Stream>(),
+                Arg.Any<long>(), Arg.Any<long>(),
                 Arg.Any<CancellationToken>())
-            .Returns(Task.CompletedTask);
+            .Returns(call => global::CotizadorBackend.Tests.Infrastructure.Persistence.StoredReceiptTestWriter.Write(
+                call.Arg<Stream>()!, call.ArgAt<long>(2), call.ArgAt<long>(3), call.Arg<CancellationToken>()));
         requirements.SaveChangesAsync(Arg.Any<CancellationToken>())
             .Returns(Task.CompletedTask);
 

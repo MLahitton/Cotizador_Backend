@@ -34,8 +34,6 @@ public sealed class ProcessRequirementCoreService(
     private const string AiInvalidResponseErrorCode = "AI_INVALID_RESPONSE";
     private const string AiServiceErrorCode = "AI2_SERVICE_ERROR";
     private const string PersistenceErrorCode = "REQUIREMENT_PERSISTENCE_ERROR";
-    private const string InvalidEvidenceLocationReason =
-        "INVALID_EVIDENCE_LOCATION";
 
     public Task<ProcessRequirementResult> ExecuteAsync(
         Guid requirementId, Guid actorUserId, CancellationToken cancellationToken) =>
@@ -78,10 +76,16 @@ public sealed class ProcessRequirementCoreService(
         IRequirementProcessingLease? acquiredLease = null;
         try
         {
+            // Authorize before revealing either job ownership or operational state.
+            await using (await requirementRepository.BeginLegacyWriteAsync(requirementId, userId, true, cancellationToken)) { }
             if (heldLease is null)
                 acquiredLease = await processingLock.TryAcquireAsync(requirementId, cancellationToken);
             else if (heldLease.RequirementId != requirementId)
                 throw new InvalidOperationException("Processing lease belongs to another requirement.");
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return ProcessRequirementResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -264,16 +268,25 @@ public sealed class ProcessRequirementCoreService(
         try
         {
             var persistAttempt = Stopwatch.StartNew();
+            await using var write = await requirementRepository.BeginLegacyWriteAsync(requirement.Id, userId, true, operationCancellationToken);
+            requirement = write.Requirement;
+            preQuote = write.PreQuote;
+            if (!requirement.IsActive) throw new LegacyProcessingRejectedException(ProcessRequirementFailure.RequirementNotFound);
+            if (requirement.Status == RequirementStatus.Processing
+                || write.Attempts.Any(x => x.ProcessingState is DocumentProcessingState.Pending or DocumentProcessingState.Processing))
+                throw new LegacyProcessingRejectedException(ProcessRequirementFailure.AlreadyProcessing);
+            if (requirement.CommercialLine is null) throw new LegacyProcessingRejectedException(ProcessRequirementFailure.InvalidRequest);
+            commercialLine = requirement.CommercialLine.Value;
+            files = await requirementRepository.ListFilesByRequirementIdAsync(requirement.Id, operationCancellationToken);
+            if (files.Count == 0) throw new LegacyProcessingRejectedException(ProcessRequirementFailure.NoFiles);
             requirementRepository.AddProcessingAttempt(attempt);
-            await requirementRepository.SaveChangesAsync(
-                operationCancellationToken);
-
             var startedAtUtc = timeProvider.GetUtcNow();
             attempt.Start(startedAtUtc);
             requirement.StartProcessing(startedAtUtc);
             preQuote.RegisterActivity(startedAtUtc);
             await requirementRepository.SaveChangesAsync(
                 operationCancellationToken);
+            await write.CommitAsync(operationCancellationToken);
             RecordPerfStage(
                 stages,
                 requirement.Id,
@@ -283,17 +296,13 @@ public sealed class ProcessRequirementCoreService(
         }
         catch (OperationCanceledException)
         {
-            try
-            {
-                // Save may have committed before cancellation was observed; re-read via finalization.
-                if (attempt.ProcessingState == DocumentProcessingState.Processing)
-                    await CancelAttemptAsync(requirement, attempt, CancellationToken.None);
-            }
-            finally
-            {
-                cancellationRegistry.Complete(operationKey);
-            }
+            cancellationRegistry.Complete(operationKey);
             throw;
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            cancellationRegistry.Complete(operationKey);
+            return ProcessRequirementResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -494,6 +503,16 @@ public sealed class ProcessRequirementCoreService(
                 : DocumentProcessingOutcome.Completed;
 
             var persistExtraction = Stopwatch.StartNew();
+            await using var write = await requirementRepository.BeginLegacyWriteAsync(requirement.Id,
+                attempt.RequestedByUserId, false, cancellationToken);
+            requirement = write.Requirement;
+            preQuote = write.PreQuote;
+            var current = write.Attempts.SingleOrDefault(x => x.Id == attempt.Id && x.CorrelationId == attempt.CorrelationId);
+            if (current is null || current.ProcessingState != DocumentProcessingState.Processing
+                || requirement.Status != RequirementStatus.Processing || !requirement.IsCurrent
+                || write.Attempts.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id).Last().Id != current.Id)
+                throw new LegacyProcessingRejectedException(ProcessRequirementFailure.PersistenceError);
+            attempt = current;
             requirementRepository.AddExtractionResult(result);
             foreach (var item in extractedItems)
             {
@@ -528,6 +547,7 @@ public sealed class ProcessRequirementCoreService(
             requirement.MarkProcessed(completedAtUtc);
             preQuote.RegisterActivity(completedAtUtc);
             await requirementRepository.SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
             RecordPerfStage(
                 stages,
                 requirement.Id,
@@ -535,6 +555,10 @@ public sealed class ProcessRequirementCoreService(
                 "FINALIZE_ATTEMPT",
                 finalizeAttempt,
                 ("outcome", outcome));
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return ProcessRequirementResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -568,189 +592,9 @@ public sealed class ProcessRequirementCoreService(
             CreateAttemptResult(requirement.Id, attempt, null, summary));
     }
 
-    private IReadOnlyList<ExtractedItemWithEvidence> CreateExtractedItems(
-        Guid requirementId,
-        Guid extractionResultId,
-        IReadOnlyList<StructuredItemData> items,
-        DateTimeOffset createdAtUtc)
-    {
-        return items.Select(item =>
-        {
-            var rawEvidenceSources = item.Glass is null
-                ? item.Evidence
-                : item.Evidence.Concat(item.Glass.Evidence);
-            var evidenceSources = rawEvidenceSources
-                .GroupBy(value => new
-                {
-                    value.PageNumber,
-                    value.SourceType,
-                    value.Text,
-                    value.SheetName,
-                    value.CellRange,
-                    value.SourceId
-                })
-                .Select(group => group.First())
-                .ToArray();
-            var validEvidenceSources = evidenceSources
-                .Where(value => IsValidEvidenceLocation(value))
-                .ToArray();
-            var invalidEvidenceSources = evidenceSources
-                .Where(value => !IsValidEvidenceLocation(value))
-                .ToArray();
-            var reviewReasons = item.ReviewReasons.Select(reason =>
-                reason.ToString()).ToList();
-            if (invalidEvidenceSources.Length > 0)
-            {
-                reviewReasons.Add(InvalidEvidenceLocationReason);
-            }
-
-            var extracted = RequirementExtractedItem.Create(
-                extractionResultId,
-                item.Ai2ElementId,
-                item.Sequence,
-                item.Reference,
-                item.Description,
-                item.ElementType,
-                item.Quantity,
-                item.WidthMillimeters,
-                item.HeightMillimeters,
-                item.AreaSquareMeters,
-                item.Confidence,
-                MapExtractionStatus(item.ExtractionStatus),
-                item.RequiresReview || invalidEvidenceSources.Length > 0,
-                reviewReasons,
-                item.FunctionalType,
-                item.Operation,
-                item.PanelCount,
-                item.MovablePanelCount,
-                item.FixedPanelCount,
-                item.Arrangement,
-                item.Modulation,
-                item.OpeningDirection,
-                item.SpecialFeatures,
-                item.GeometryType,
-                item.RequestedSystemRaw,
-                item.RequestedProfileRaw,
-                item.Glass?.RawSpecification,
-                item.GlassTypeRaw,
-                item.GlassTypeNormalized,
-                item.GlassThicknessMm,
-                item.GlassColorRaw,
-                item.GlassColorNormalized,
-                item.GlassTreatmentRaw,
-                item.GlassTreatmentNormalized,
-                item.GlassComposition,
-                item.GlassCoating,
-                item.GlassTransparency,
-                item.Glass?.RequiresReview,
-                item.FinishRawDescription,
-                item.FinishNormalizedType,
-                item.FinishColorRaw,
-                item.FinishColorNormalized,
-                item.FinishTextureRaw,
-                item.FinishTextureNormalized,
-                item.FinishExplicitCode,
-                item.FinishRequiresReview,
-                createdAtUtc,
-                item.AssemblyType,
-                item.OccurrenceContext,
-                item.QuantityStatus is { } quantityStatus ? MapExtractionStatus(quantityStatus) : null,
-                item.QuantityConfidence);
-            foreach (var invalidEvidence in invalidEvidenceSources)
-            {
-                LogInvalidEvidence(
-                    requirementId,
-                    extracted.Id,
-                    item.Reference,
-                    item.Sequence,
-                    invalidEvidence);
-            }
-
-            var persistableEvidence = validEvidenceSources.Select(value =>
-                RequirementExtractedItemEvidence.Create(
-                    extracted.Id,
-                    value.PageNumber,
-                    value.SourceType,
-                    value.Text,
-                    value.SheetName,
-                    value.CellRange,
-                    value.SourceId,
-                    value.Confidence,
-                    MapExtractionStatus(value.Status),
-                    createdAtUtc)).ToArray();
-            foreach (var evidence in persistableEvidence)
-            {
-                extracted.AddEvidence(evidence);
-            }
-
-            var segments = item.Segments?.Select((segment, index) =>
-                RequirementExtractedItemSegment.Create(
-                    extracted.Id,
-                    segment.Sequence > 0 ? segment.Sequence : index + 1,
-                    segment.Role,
-                    segment.WidthMillimeters,
-                    segment.HeightMillimeters,
-                    segment.Quantity,
-                    segment.Operation,
-                    segment.GeometryType,
-                    segment.Evidence.FirstOrDefault()?.Text,
-                    segment.Evidence.FirstOrDefault()?.SourceId,
-                    segment.Evidence.FirstOrDefault()?.SourceType,
-                    segment.Evidence.FirstOrDefault()?.PageNumber,
-                    segment.Evidence.FirstOrDefault()?.SheetName,
-                    segment.Evidence.FirstOrDefault()?.CellRange,
-                    segment.Evidence.FirstOrDefault()?.Confidence,
-                    MapExtractionStatus(segment.Evidence.FirstOrDefault()?.Status
-                        ?? CanonicalExtractionValueStatus.Explicit),
-                    createdAtUtc)).ToArray() ?? [];
-
-            foreach (var segment in segments)
-            {
-                extracted.AddSegment(segment);
-            }
-
-            return new ExtractedItemWithEvidence(extracted, persistableEvidence, segments);
-        }).ToArray();
-    }
-
-    private static bool IsValidEvidenceLocation(SourceEvidenceData evidence)
-    {
-        var hasSheet = !string.IsNullOrWhiteSpace(evidence.SheetName);
-        var hasCellRange = !string.IsNullOrWhiteSpace(evidence.CellRange);
-
-        return evidence.SourceType switch
-        {
-            EvidenceSourceType.Native or EvidenceSourceType.Ocr =>
-                evidence.PageNumber is > 0
-                && !hasSheet
-                && !hasCellRange,
-            EvidenceSourceType.Xlsx =>
-                evidence.PageNumber is null
-                && hasSheet
-                && hasCellRange,
-            _ => false
-        };
-    }
-
-    private void LogInvalidEvidence(
-        Guid requirementId,
-        Guid extractedItemId,
-        string? reference,
-        int itemSequence,
-        SourceEvidenceData evidence)
-    {
-        logger.LogWarning(
-            "[NEWPIPE-EVIDENCE-INVALID] RequirementId={RequirementId} ExtractedItemId={ExtractedItemId} Reference={Reference} ItemSequence={ItemSequence} SourceType={SourceType} SourceId={SourceId} PageNumber={PageNumber} SheetName={SheetName} CellRange={CellRange}",
-            requirementId,
-            extractedItemId,
-            reference,
-            itemSequence,
-            evidence.SourceType,
-            evidence.SourceId,
-            evidence.PageNumber,
-            evidence.SheetName,
-            evidence.CellRange);
-    }
+    private IReadOnlyList<RequirementExtractionMapper.ExtractedItemWithEvidence> CreateExtractedItems(
+        Guid requirementId, Guid extractionResultId, IReadOnlyList<StructuredItemData> items, DateTimeOffset createdAtUtc) =>
+        new RequirementExtractionMapper(logger).CreateExtractedItems(requirementId, extractionResultId, items, createdAtUtc);
 
     private async Task<ProcessRequirementResult> FailAttemptAsync(
         Requirement requirement,
@@ -769,7 +613,8 @@ public sealed class ProcessRequirementCoreService(
                     attempt.Id,
                     failure.ErrorCode,
                     completedAtUtc,
-                    cancellationToken);
+                    cancellationToken,
+                    attempt.RequestedByUserId);
 
             if (finalization is null)
             {
@@ -785,6 +630,10 @@ public sealed class ProcessRequirementCoreService(
             return ProcessRequirementResult.Failed(
                 failure.Failure,
                 CreateAttemptResult(finalization, failure.ErrorCode, null));
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return ProcessRequirementResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -813,7 +662,8 @@ public sealed class ProcessRequirementCoreService(
                     requirement.Id,
                     attempt.Id,
                     completedAtUtc,
-                    cancellationToken);
+                    cancellationToken,
+                    attempt.RequestedByUserId);
 
             if (finalization is null)
             {
@@ -824,6 +674,10 @@ public sealed class ProcessRequirementCoreService(
             return ProcessRequirementResult.Failed(
                 ProcessRequirementFailure.Cancelled,
                 CreateAttemptResult(finalization));
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return ProcessRequirementResult.Failed(exception.Failure);
         }
         catch (Exception exception) when (
             !cancellationToken.IsCancellationRequested)
@@ -943,22 +797,6 @@ public sealed class ProcessRequirementCoreService(
         };
     }
 
-    private static RequirementExtractionValueStatus MapExtractionStatus(
-        CanonicalExtractionValueStatus status)
-    {
-        return status switch
-        {
-            CanonicalExtractionValueStatus.Explicit =>
-                RequirementExtractionValueStatus.Explicit,
-            CanonicalExtractionValueStatus.Inferred =>
-                RequirementExtractionValueStatus.Inferred,
-            CanonicalExtractionValueStatus.Ambiguous =>
-                RequirementExtractionValueStatus.Ambiguous,
-            CanonicalExtractionValueStatus.NotApplicable =>
-                RequirementExtractionValueStatus.NotApplicable,
-            _ => RequirementExtractionValueStatus.Unknown
-        };
-    }
 
     private void LogFailure(
         Exception exception,
@@ -1051,8 +889,4 @@ public sealed class ProcessRequirementCoreService(
             stageSummary);
     }
 
-    private sealed record ExtractedItemWithEvidence(
-        RequirementExtractedItem Item,
-        IReadOnlyList<RequirementExtractedItemEvidence> Evidence,
-        IReadOnlyList<RequirementExtractedItemSegment> Segments);
 }

@@ -93,7 +93,7 @@ public sealed partial class ProcessRequirementServiceTests
         Assert.False(proposalItem.RequiresReview);
         Assert.True(proposalItem.IsTechnicallyComplete);
         Assert.True(proposalItem.IsPriceable);
-        await context.Requirements.Received(3).SaveChangesAsync(
+        await context.Requirements.Received(2).SaveChangesAsync(
             Arg.Any<CancellationToken>());
     }
 
@@ -1035,7 +1035,7 @@ public sealed partial class ProcessRequirementServiceTests
             result.Attempt.ProcessingAttemptId,
             "REQUIREMENT_PERSISTENCE_ERROR",
             Arg.Any<DateTimeOffset>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>(), UserId);
     }
 
     [Fact]
@@ -1091,7 +1091,7 @@ public sealed partial class ProcessRequirementServiceTests
             result.Attempt.ProcessingAttemptId,
             "AI2_SERVICE_ERROR",
             Arg.Any<DateTimeOffset>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<CancellationToken>(), UserId);
     }
 
     [Fact]
@@ -1150,7 +1150,7 @@ public sealed partial class ProcessRequirementServiceTests
             result.Attempt.ProcessingAttemptId,
             "AI2_SERVICE_ERROR",
             Arg.Any<DateTimeOffset>(),
-            Arg.Is<CancellationToken>(token => !token.IsCancellationRequested));
+            Arg.Is<CancellationToken>(token => !token.IsCancellationRequested), UserId);
     }
 
     [Fact]
@@ -1284,6 +1284,15 @@ public sealed partial class ProcessRequirementServiceTests
                 : RequirementCommercialLine.Essential,
             At.AddMinutes(1));
         RequirementProcessingAttempt? activeAttempt = null;
+        requirements.BeginLegacyWriteAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                var write = Substitute.For<IRequirementLegacyWrite>();
+                write.Requirement.Returns(requirement);
+                write.PreQuote.Returns(preQuote);
+                write.Attempts.Returns(activeAttempt is null ? [] : new[] { activeAttempt });
+                return write;
+            });
 
         if (scenario == "already_processing")
         {
@@ -1389,7 +1398,7 @@ public sealed partial class ProcessRequirementServiceTests
                 Arg.Any<Guid>(),
                 Arg.Any<string>(),
                 Arg.Any<DateTimeOffset>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(), Arg.Any<Guid?>())
             .Returns(call =>
             {
                 var errorCode = call.ArgAt<string>(2);
@@ -1421,7 +1430,7 @@ public sealed partial class ProcessRequirementServiceTests
                 requirement.Id,
                 Arg.Any<Guid>(),
                 Arg.Any<DateTimeOffset>(),
-                Arg.Any<CancellationToken>())
+                Arg.Any<CancellationToken>(), Arg.Any<Guid?>())
             .Returns(call =>
             {
                 var completedAtUtc = call.ArgAt<DateTimeOffset>(2);

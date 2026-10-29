@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using Application.Common.Abstractions.Projects;
 using Application.PreQuotes.ProcessRequirement;
@@ -34,6 +35,7 @@ public sealed record PublicExperienceRequirementProcessingResult(
 }
 
 public sealed class ProcessPublicExperienceRequirementService(
+    IIdentityRepository identityRepository,
     IPublicExperienceSubmissionRepository submissions,
     IProjectRepository projects,
     IPreQuoteRepository preQuotes,
@@ -43,22 +45,27 @@ public sealed class ProcessPublicExperienceRequirementService(
     ILogger<ProcessPublicExperienceRequirementService> logger)
 {
     public async Task<PublicExperienceRequirementProcessingResult> ExecuteAsync(
-        string submissionId, CancellationToken cancellationToken)
+        string submissionId, Guid actorUserId, CancellationToken cancellationToken)
     {
         PublicExperienceSubmission? submission = null;
         Requirement? requirement = null;
+        var authorized = false;
         try
         {
+            if (actorUserId == Guid.Empty)
+                return Rejected(ProcessRequirementFailure.InvalidRequest);
+            var actor = await identityRepository.FindUserByIdAsync(actorUserId, cancellationToken);
+            if (actor is null) return Rejected(ProcessRequirementFailure.Unauthorized);
+            if (!actor.IsActive) return Rejected(ProcessRequirementFailure.InactiveUser);
+
             submission = await submissions.FindAsync(submissionId, cancellationToken);
             if (submission?.ProjectId is null || submission.PreQuoteId is null || submission.RequirementId is null)
                 return Result(PublicExperienceRequirementProcessingState.NotPrepared,
                     "PUBLIC_EXPERIENCE_REQUIREMENT_NOT_PREPARED");
 
-            await using var lease = await processingLock.TryAcquireAsync(submission.RequirementId.Value, cancellationToken);
-            if (lease is null)
-                return Result(PublicExperienceRequirementProcessingState.AlreadyProcessing, "ALREADY_PROCESSING");
-
             var project = await projects.FindByIdAsync(submission.ProjectId.Value, cancellationToken);
+            if (project is not null && project.CreatedByUserId != actorUserId)
+                return Rejected(ProcessRequirementFailure.RequirementNotFound);
             var preQuote = await preQuotes.FindByIdAsync(submission.PreQuoteId.Value, cancellationToken);
             requirement = await requirements.FindByIdAsync(submission.RequirementId.Value, cancellationToken);
             if (project is null || project.Id != submission.ProjectId || preQuote is null
@@ -67,6 +74,11 @@ public sealed class ProcessPublicExperienceRequirementService(
                 || requirement.PreQuoteId != preQuote.Id)
                 return Result(PublicExperienceRequirementProcessingState.InvalidLinks,
                     "PUBLIC_EXPERIENCE_PROCESSING_LINK_INVALID");
+
+            authorized = true;
+            await using var lease = await processingLock.TryAcquireAsync(requirement.Id, cancellationToken);
+            if (lease is null)
+                return Result(PublicExperienceRequirementProcessingState.AlreadyProcessing, "ALREADY_PROCESSING");
 
             if (!requirement.IsCurrent)
                 return Result(PublicExperienceRequirementProcessingState.CancelledOrSuperseded,
@@ -80,8 +92,11 @@ public sealed class ProcessPublicExperienceRequirementService(
                 return await SuccessAsync(null, replay: true);
 
             // The shared DB lease covers the state decision and the whole core execution.
-            var processed = await core.ExecuteAsync(requirement.Id, project.CreatedByUserId,
+            var processed = await core.ExecuteAsync(requirement.Id, actorUserId,
                 Stopwatch.StartNew(), cancellationToken, lease);
+            if (processed.Failure is ProcessRequirementFailure.Unauthorized or ProcessRequirementFailure.InactiveUser
+                or ProcessRequirementFailure.RequirementNotFound)
+                return Rejected(processed.Failure);
             // Failure finalization clears EF tracking; the earlier instance can still say Processing.
             try
             {
@@ -97,7 +112,9 @@ public sealed class ProcessPublicExperienceRequirementService(
                 return Result(processed.Failure == ProcessRequirementFailure.AlreadyProcessing
                         ? PublicExperienceRequirementProcessingState.AlreadyProcessing
                         : PublicExperienceRequirementProcessingState.ProcessingError,
-                    processed.Attempt?.ErrorCode ?? processed.Failure.ToString(), processed);
+                    processed.Failure == ProcessRequirementFailure.ProcessingManagedByJob
+                        ? "PROCESSING_MANAGED_BY_JOB"
+                        : processed.Attempt?.ErrorCode ?? processed.Failure.ToString(), processed);
             if (requirement is null)
                 return Result(PublicExperienceRequirementProcessingState.ProcessingError,
                     "PUBLIC_EXPERIENCE_PROCESSING_ERROR", processed);
@@ -112,6 +129,10 @@ public sealed class ProcessPublicExperienceRequirementService(
 
         RequirementProcessingAttempt? LatestAttempt() => requirement?.ProcessingAttempts
             .OrderByDescending(attempt => attempt.CreatedAtUtc).ThenByDescending(attempt => attempt.Id).FirstOrDefault();
+
+        PublicExperienceRequirementProcessingResult Rejected(ProcessRequirementFailure failure) =>
+            new(submissionId, PublicExperienceRequirementProcessingState.ProcessingError,
+                null, null, null, null, null, null, null, failure.ToString());
 
         async Task<PublicExperienceRequirementProcessingResult> SuccessAsync(ProcessRequirementResult? processed, bool replay)
         {
@@ -133,8 +154,11 @@ public sealed class ProcessPublicExperienceRequirementService(
         PublicExperienceRequirementProcessingResult Result(PublicExperienceRequirementProcessingState state,
             string? error, ProcessRequirementResult? processed = null, Guid? proposalId = null, string? reason = null,
             DocumentProcessingOutcome? outcome = null) =>
-            new(submissionId, state, submission?.ProjectId, submission?.PreQuoteId, submission?.RequirementId,
-                processed?.Attempt?.ProcessingAttemptId ?? LatestAttempt()?.Id, proposalId, requirement?.Status,
-                outcome ?? processed?.Attempt?.Outcome ?? LatestAttempt()?.Outcome, error, reason, processed);
+            new(submissionId, state, authorized ? submission?.ProjectId : null,
+                authorized ? submission?.PreQuoteId : null, authorized ? submission?.RequirementId : null,
+                authorized ? processed?.Attempt?.ProcessingAttemptId ?? LatestAttempt()?.Id : null,
+                authorized ? proposalId : null, authorized ? requirement?.Status : null,
+                authorized ? outcome ?? processed?.Attempt?.Outcome ?? LatestAttempt()?.Outcome : null,
+                error, reason, processed);
     }
 }

@@ -38,7 +38,7 @@ public sealed class PublicExperienceSubmissionRepository(ApplicationDbContext co
     }
 
     public Task<PublicExperienceSubmission?> FindAsync(string submissionId, CancellationToken cancellationToken) =>
-        context.Set<PublicExperienceSubmission>().AsNoTracking()
+        context.Set<PublicExperienceSubmission>().AsNoTracking().Include(x => x.IdeaPhoto)
             .SingleOrDefaultAsync(x => x.SubmissionId == submissionId, cancellationToken);
 
     public async Task<bool> TryInsertAsync(PublicExperienceSubmission submission, CancellationToken cancellationToken)
@@ -58,6 +58,7 @@ public sealed class PublicExperienceSubmissionRepository(ApplicationDbContext co
         finally
         {
             foreach (var file in submission.Files.ToArray()) context.Entry(file).State = EntityState.Detached;
+            if (submission.IdeaPhoto is not null) context.Entry(submission.IdeaPhoto).State = EntityState.Detached;
             context.Entry(submission).State = EntityState.Detached;
         }
     }

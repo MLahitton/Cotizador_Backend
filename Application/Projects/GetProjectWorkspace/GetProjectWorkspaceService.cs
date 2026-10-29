@@ -16,7 +16,8 @@ public sealed class GetProjectWorkspaceService(
     IClientRepository clientRepository,
     IPreQuoteRepository preQuoteRepository,
     IRequirementRepository requirementRepository,
-    IPublicExperienceProjectContextRepository publicContextRepository)
+    IPublicExperienceProjectContextRepository publicContextRepository,
+    IWorkspaceExtractionReader extractionReader)
 {
     public async Task<GetProjectWorkspaceResult> ExecuteAsync(
         GetProjectWorkspaceQuery query,
@@ -126,6 +127,20 @@ public sealed class GetProjectWorkspaceService(
         {
             return GetProjectWorkspaceResult.Failed(
                 GetProjectWorkspaceFailure.QueryError);
+        }
+
+        if (workflow.PreQuoteId is Guid preQuoteId)
+        {
+            try
+            {
+                var coherent = await extractionReader.ReadCurrentAsync(project.Id, preQuoteId, userId, cancellationToken);
+                if (coherent is null) return GetProjectWorkspaceResult.Failed(GetProjectWorkspaceFailure.NotFound);
+                workflow = coherent;
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return GetProjectWorkspaceResult.Failed(GetProjectWorkspaceFailure.QueryError);
+            }
         }
 
         return GetProjectWorkspaceResult.Success(

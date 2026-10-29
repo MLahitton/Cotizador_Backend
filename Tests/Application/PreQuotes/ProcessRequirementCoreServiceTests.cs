@@ -12,7 +12,6 @@ public sealed partial class ProcessRequirementServiceTests
     [Theory]
     [InlineData("ai2")]
     [InlineData("storage")]
-    [InlineData("attempt_start")]
     public async Task Core_RequestAborted_FinalizesProcessingBeforePropagatingCancellation(string stage)
     {
         using var cancellation = new CancellationTokenSource();
@@ -27,16 +26,6 @@ public sealed partial class ProcessRequirementServiceTests
         else if (stage == "storage")
             context.Storage.OpenReadAsync(file.StorageKey, Arg.Any<CancellationToken>())
                 .Returns(_ => { cancellation.Cancel(); return Task.FromCanceled<Stream>(cancellation.Token); });
-        else
-        {
-            var saves = 0;
-            context.Requirements.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
-            {
-                if (++saves != 2) return Task.CompletedTask;
-                cancellation.Cancel();
-                return Task.FromCanceled(cancellation.Token);
-            });
-        }
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             context.Core.ExecuteAsync(context.Requirement.Id, UserId, cancellation.Token));
@@ -47,10 +36,27 @@ public sealed partial class ProcessRequirementServiceTests
         Assert.Equal(DocumentProcessingOutcome.Cancelled, attempt.Outcome);
         await context.Requirements.Received(1).FinalizeProcessingCancellationAsync(
             context.Requirement.Id, attempt.Id, Arg.Any<DateTimeOffset>(),
-            Arg.Is<CancellationToken>(token => !token.CanBeCanceled));
+            Arg.Is<CancellationToken>(token => !token.CanBeCanceled), Arg.Any<Guid?>());
         context.CancellationRegistry.Received(1).Complete(Arg.Any<string>());
         context.Requirements.DidNotReceive().AddTechnicalProposal(Arg.Any<RequirementTechnicalProposal>());
         context.Requirements.DidNotReceive().RemoveFile(Arg.Any<RequirementFile>());
+    }
+
+    [Fact]
+    public async Task Core_StartAborted_DoesNotCallProviderOrCompensatingFinalizer()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var context = CreateContext("success", File("source.pdf", PdfContentType));
+        context.Requirements.SaveChangesAsync(Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            cancellation.Cancel();
+            return Task.FromCanceled(cancellation.Token);
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            context.Core.ExecuteAsync(context.Requirement.Id, UserId, cancellation.Token));
+        Assert.DoesNotContain(context.Requirements.ReceivedCalls(), x => x.GetMethodInfo().Name.StartsWith("FinalizeProcessing"));
+        Assert.Empty(context.Ai2.ReceivedCalls());
+        context.CancellationRegistry.Received(1).Complete(Arg.Any<string>());
     }
 
     [Fact]
@@ -155,7 +161,7 @@ public sealed partial class ProcessRequirementServiceTests
             : await context.Service.ExecuteAsync(new(context.Requirement.Id), TestContext.Current.CancellationToken);
         Assert.Equal(ProcessRequirementFailure.AiRemoteRejected, result.Failure);
         await context.Requirements.Received(1).FinalizeProcessingFailureAsync(context.Requirement.Id,
-            Arg.Any<Guid>(), "AI2_REQUEST_REJECTED", Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+            Arg.Any<Guid>(), "AI2_REQUEST_REJECTED", Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>(), Arg.Any<Guid?>());
     }
 
     [Theory]

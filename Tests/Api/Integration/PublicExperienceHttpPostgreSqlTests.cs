@@ -35,7 +35,7 @@ namespace CotizadorBackend.Tests.Api.Integration;
 
 [Collection(PostgreSqlIntegrationCollection.Name)]
 [Trait("Category", "PostgreSql")]
-public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFixture fixture)
+public sealed partial class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFixture fixture)
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -51,6 +51,8 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         var created = await first.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token);
         Assert.Equal("RECEIVED", created!.Status);
         Assert.False(created.IsReplay);
+        await AssertChainAsync(created, host.Storage);
+        Assert.Equal(0, host.Ai.Calls);
         using var retry = await host.PostAsync(payload);
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         var replay = await retry.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token);
@@ -83,9 +85,75 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
             Assert.True(replay.IsReplay);
             Assert.Equal("RECEIVED", replay.Status);
             Assert.Equal(0, host.Ai.Calls);
-            await AssertChainAsync(replay, host.Storage);
+            await AssertChainAsync(replay, host.Storage, competing: true);
         }
         finally { foreach (var response in responses) response.Dispose(); }
+    }
+
+    [Fact]
+    public async Task PrivateUploadOnPublicProject_PersistsEvidenceWithoutChangingPublicSource()
+    {
+        await using var host = await StartAsync();
+        using var first = await host.PostAsync(Payload());
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var receipt = (await first.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token))!;
+        string answers;
+        string fingerprint;
+        Guid originalId;
+        await using (var read = fixture.CreateDbContext())
+        {
+            var submission = await read.Set<PublicExperienceSubmission>().SingleAsync(Token);
+            answers = submission.AnswersJson;
+            fingerprint = submission.PayloadFingerprint;
+            originalId = (await read.RequirementFiles.SingleAsync(Token)).Id;
+        }
+        var root = Directory.CreateTempSubdirectory("sng-private-public-").FullName;
+        try
+        {
+            var storage = new global::Infrastructure.Storage.LocalFileStorage(
+                new global::Infrastructure.Storage.FileStorageOptions(root), Substitute.For<Microsoft.Extensions.Hosting.IHostEnvironment>());
+            await using (var db = fixture.CreateDbContext())
+            {
+                var actorId = (await db.Users.SingleAsync(Token)).Id;
+                var actor = Substitute.For<ICurrentUser>();
+                actor.IsAuthenticated.Returns(true);
+                actor.UserId.Returns(actorId);
+                var service = new global::Application.PreQuotes.ManageRequirementDocuments.ManageRequirementDocumentsService(
+                    actor, new IdentityRepository(db), new RequirementRepository(db), new PreQuoteRepository(db),
+                    new ProjectRepository(db), new ClientRepository(db), storage, TimeProvider.System,
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<global::Application.PreQuotes.ManageRequirementDocuments.ManageRequirementDocumentsService>.Instance);
+                using var content = new MemoryStream("abc"u8.ToArray());
+                Assert.True((await service.AddDocumentAsync(new(receipt.RequirementId!.Value,
+                    new("private.pdf", "application/pdf", 3, content)), Token)).IsSuccess);
+            }
+            using var replay = await host.PostAsync(Payload());
+            Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+            Assert.Equal(receipt with { IsReplay = true }, await replay.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token));
+            await using var verify = fixture.CreateDbContext();
+            var source = await verify.Set<PublicExperienceSubmission>().SingleAsync(Token);
+            Assert.Equal(answers, source.AnswersJson);
+            Assert.Equal(fingerprint, source.PayloadFingerprint);
+            var original = await verify.RequirementFiles.SingleAsync(f => f.Id == originalId, Token);
+            Assert.NotNull(original.StoredSha256);
+            Assert.Equal(original.SizeBytes, original.StoredLengthBytes);
+            Assert.NotNull(original.StoredEvidenceAtUtc);
+            Assert.Equal((short)1, original.StoredEvidenceVersion);
+            var added = await verify.RequirementFiles.SingleAsync(f => f.Id != originalId, Token);
+            Assert.Equal("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", added.StoredSha256);
+            Assert.Equal(3, added.StoredLengthBytes);
+            Assert.Equal((short)1, added.StoredEvidenceVersion);
+            Assert.NotNull(added.StoredEvidenceAtUtc);
+            await using var bytes = await storage.OpenReadAsync(added.StorageKey, Token);
+            using var buffer = new MemoryStream();
+            await bytes.CopyToAsync(buffer, Token);
+            Assert.Equal("abc"u8.ToArray(), buffer.ToArray());
+            Assert.Equal(RequirementStatus.Pending, (await verify.Requirements.SingleAsync(Token)).Status);
+            Assert.False(await verify.RequirementProcessingJobs.AnyAsync(Token));
+            Assert.False(await verify.RequirementProcessingAttempts.AnyAsync(Token));
+            Assert.Equal(0, host.Ai.Calls);
+            Assert.Equal(2, host.Storage.Writes);
+        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     [Theory]
@@ -260,7 +328,7 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
     }
 
     [Fact]
-    public async Task PreparationPersistenceFailure_Returns500_Compensates_ThenHttpRetryCompletes()
+    public async Task PreparationPersistenceFailure_Returns500_RetainsFiles_ThenHttpRetryCompletes()
     {
         await using var host = await StartAsync();
         await using var context = fixture.CreateDbContext();
@@ -281,8 +349,9 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
             Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
             await AssertPreparationFailureAsync(response, PublicExperienceRequirementPreparationErrors.Failed);
             Assert.DoesNotContain("Private database", await response.Content.ReadAsStringAsync(Token));
-            Assert.Single(host.Storage.Files);
-            Assert.Equal(1, host.Storage.Deletes);
+            Assert.Equal(2, host.Storage.Files.Count);
+            Assert.All(host.Storage.Files.Values, bytes => Assert.Equal(new byte[] { 1, 2, 3, 4 }, bytes));
+            Assert.Equal(0, host.Storage.Deletes);
             var saved = await context.Set<PublicExperienceSubmission>().AsNoTracking().SingleAsync(Token);
             clientId = saved.ClientId;
             projectId = saved.ProjectId;
@@ -300,7 +369,7 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         Assert.True(result!.IsReplay);
         Assert.Equal(clientId, result.ClientId);
         Assert.Equal(projectId, result.ProjectId);
-        await AssertChainAsync(result, host.Storage);
+        await AssertChainAsync(result, host.Storage, expectedFileCount: 3);
     }
 
     [Fact]
@@ -461,11 +530,24 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
                 .ExecuteUpdateAsync(set => set.SetProperty(x => x.PreQuoteId, other.Id), Token);
         }
         await db.SaveChangesAsync(Token);
+        var before = System.Text.Json.JsonSerializer.Serialize(await db.Set<PublicExperienceSubmission>().AsNoTracking().SingleAsync(Token));
+        var writes = host.Storage.Writes;
         using var response = await host.PostAsync(Payload());
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var receipt = (await response.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token))!;
-        Assert.Equal("RECEIVED", receipt.Status);
-        Assert.True(receipt.IsReplay);
+        if (scenario == "invalid-links")
+        {
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync(Token))!;
+            Assert.Equal(PublicExperienceRequirementPreparationErrors.InconsistentLinks, problem["processingErrorCode"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var receipt = (await response.Content.ReadFromJsonAsync<PublicExperienceSubmissionResponse>(Token))!;
+            Assert.Equal("RECEIVED", receipt.Status);
+            Assert.True(receipt.IsReplay);
+        }
+        Assert.Equal(before, System.Text.Json.JsonSerializer.Serialize(await db.Set<PublicExperienceSubmission>().AsNoTracking().SingleAsync(Token)));
+        Assert.Equal(writes, host.Storage.Writes);
         Assert.Equal(requirement.Status, (await db.Requirements.AsNoTracking().SingleAsync(Token)).Status);
         Assert.Equal(0, host.Ai.Calls);
     }
@@ -518,7 +600,7 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         Assert.False(await read.RequirementProcessingAttempts.AnyAsync(Token));
     }
 
-    private async Task AssertChainAsync(PublicExperienceSubmissionResponse response, IntakeStorage storage, bool processed = false)
+    private async Task AssertChainAsync(PublicExperienceSubmissionResponse response, IntakeStorage storage, bool processed = false, bool competing = false, int expectedFileCount = 2)
     {
         await using var read = fixture.CreateDbContext();
         var client = await read.Clients.SingleAsync(Token);
@@ -533,6 +615,7 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         var submission = await read.Set<PublicExperienceSubmission>().Include(x => x.Files).SingleAsync(Token);
         var preQuote = await read.PreQuotes.SingleAsync(Token);
         var requirement = await read.Requirements.SingleAsync(Token);
+        Assert.False(await read.RequirementProcessingJobs.AnyAsync(Token));
         Assert.Equal(response.PreQuoteId, preQuote.Id);
         Assert.Equal(response.RequirementId, requirement.Id);
         Assert.Equal(project.Id, preQuote.ProjectId);
@@ -546,7 +629,14 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         Assert.Null(submission.RequirementPreparationErrorCode);
         Assert.NotNull(submission.RequirementPreparedAtUtc);
         var original = Assert.Single(submission.Files);
+        Assert.Equal(original.SizeBytes, original.StoredLengthBytes);
+        Assert.Equal((short)1, original.StoredEvidenceVersion);
+        Assert.NotNull(original.StoredEvidenceAtUtc);
         var copy = await read.RequirementFiles.SingleAsync(Token);
+        Assert.Equal(original.ContentHash, copy.StoredSha256);
+        Assert.Equal(copy.SizeBytes, copy.StoredLengthBytes);
+        Assert.NotNull(copy.StoredEvidenceAtUtc);
+        Assert.Equal((short)1, copy.StoredEvidenceVersion);
         Assert.Equal(requirement.Id, copy.RequirementId);
         Assert.Equal(original.OriginalFileName, copy.OriginalFileName);
         Assert.Equal(original.ContentType, copy.ContentType);
@@ -554,8 +644,19 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         Assert.StartsWith($"requirements/{requirement.Id:D}/", copy.StorageKey);
         Assert.NotEqual(original.StorageKey, copy.StorageKey);
         Assert.Equal(storage.Files[original.StorageKey], storage.Files[copy.StorageKey]);
-        Assert.Equal(2, storage.Files.Count);
+        if (competing)
+        {
+            // Two intake requests and two preparation candidates may finish storage before recognition.
+            Assert.InRange(storage.Files.Count, 2, 4);
+            Assert.All(storage.Files.Values, bytes => Assert.Equal(storage.Files[original.StorageKey], bytes));
+            Assert.Equal(0, storage.Deletes);
+        }
+        else Assert.Equal(expectedFileCount, storage.Files.Count);
         Guid? proposalId = null;
+        Assert.False(await read.Set<RequirementExecutionEvidence>().AnyAsync(Token));
+        Assert.False(await read.Set<RequirementExecutionDocument>().AnyAsync(Token));
+        Assert.False(await read.JobLeaseOperations.AnyAsync(Token));
+        Assert.False(await read.ExpiredExecutionCancellations.AnyAsync(Token));
         if (processed)
         {
             var attempt = await read.RequirementProcessingAttempts.SingleAsync(Token);
@@ -576,7 +677,8 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         currentUser.UserId.Returns(owner.Id);
         var workspace = await new GetProjectWorkspaceService(new GetProjectWorkspaceQueryValidator(),
             currentUser, new IdentityRepository(read), new ProjectRepository(read), new ClientRepository(read),
-            new PreQuoteRepository(read), new RequirementRepository(read), new PublicExperienceSubmissionRepository(read))
+            new PreQuoteRepository(read), new RequirementRepository(read), new PublicExperienceSubmissionRepository(read),
+            new WorkspaceExtractionReader(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(fixture.ConnectionString).Options))
             .ExecuteAsync(new(project.Id), Token);
         Assert.True(workspace.IsSuccess);
         Assert.Equal(ProjectWorkspaceResolutionState.Resolved, workspace.Workspace!.Workflow.ResolutionState);
@@ -621,6 +723,10 @@ public sealed class PublicExperienceHttpPostgreSqlTests(PostgreSqlIntegrationFix
         builder.Services.AddScoped<IClientRepository, ClientRepository>();
         builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
         builder.Services.AddScoped<PublicExperienceIntakeService>();
+        builder.Services.AddSingleton<IInitialContentCapture>(PublicExperienceIntakeTests.Capture());
+        builder.Services.AddSingleton<IIdeaPhotoCapture, global::Infrastructure.Storage.IdeaPhotoCapture>();
+        builder.Services.AddSingleton<IVerifiedContentCopy>(new global::Infrastructure.Storage.VerifiedContentCopy(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<global::Infrastructure.Storage.VerifiedContentCopy>.Instance));
         builder.Services.AddScoped<ProcessPublicExperienceSubmissionService>();
         builder.Services.AddScoped<PreparePublicExperienceRequirementService>();
         var ai = new PublicExperienceAiStub();

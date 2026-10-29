@@ -1,20 +1,25 @@
 using Application.Common.Abstractions.Storage;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Infrastructure.Storage;
 
-public sealed class LocalFileStorage : IFileStorage
+public sealed partial class LocalFileStorage : IFileStorage
 {
+    private readonly ILogger<LocalFileStorage> logger;
     private readonly string rootPath;
     private readonly string rootPathWithSeparator;
     private readonly StringComparison pathComparison;
 
     public LocalFileStorage(
         FileStorageOptions options,
-        IHostEnvironment hostEnvironment)
+        IHostEnvironment hostEnvironment,
+        ILogger<LocalFileStorage>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        this.logger = logger ?? NullLogger<LocalFileStorage>.Instance;
 
         rootPath = Path.GetFullPath(
             Path.IsPathRooted(options.RootPath)
@@ -53,6 +58,7 @@ public sealed class LocalFileStorage : IFileStorage
         var destinationDirectory =
             Path.GetDirectoryName(destinationPath)!;
         string? temporaryPath = null;
+        var temporaryCreated = false;
 
         try
         {
@@ -78,6 +84,7 @@ public sealed class LocalFileStorage : IFileStorage
                         | FileOptions.SequentialScan
                 }))
             {
+                temporaryCreated = true;
                 await content.CopyToAsync(
                     temporaryStream,
                     cancellationToken);
@@ -124,7 +131,7 @@ public sealed class LocalFileStorage : IFileStorage
         }
         finally
         {
-            TryDeleteTemporaryFile(temporaryPath);
+            if (temporaryCreated) TryDeleteTemporaryFile(temporaryPath);
         }
     }
 

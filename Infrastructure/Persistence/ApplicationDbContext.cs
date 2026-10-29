@@ -45,6 +45,9 @@ public sealed class ApplicationDbContext(
         Set<DocumentExtractionResult>();
 
     public DbSet<Requirement> Requirements => Set<Requirement>();
+    public DbSet<RequirementProcessingJob> RequirementProcessingJobs => Set<RequirementProcessingJob>();
+    public DbSet<JobLeaseOperation> JobLeaseOperations => Set<JobLeaseOperation>();
+    public DbSet<ExpiredExecutionCancellation> ExpiredExecutionCancellations => Set<ExpiredExecutionCancellation>();
     public DbSet<RequirementFile> RequirementFiles => Set<RequirementFile>();
     public DbSet<RequirementProcessingAttempt>
         RequirementProcessingAttempts => Set<RequirementProcessingAttempt>();

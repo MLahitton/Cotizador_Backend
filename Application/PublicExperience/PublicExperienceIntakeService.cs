@@ -10,31 +10,70 @@ public sealed class PublicExperienceIntakeService(
     IPublicExperienceSubmissionRepository repository,
     IFileStorage storage,
     TimeProvider timeProvider,
-    ILogger<PublicExperienceIntakeService> logger)
+    ILogger<PublicExperienceIntakeService> logger,
+    IInitialContentCapture capture,
+    IIdeaPhotoCapture? photoCapture = null)
 {
+    public Task<PublicExperienceIntakeResult> ExecuteAsync(
+        string json, IReadOnlyList<PublicExperienceUpload> uploads, CancellationToken cancellationToken) =>
+        ExecuteAsync(json, uploads, null, cancellationToken);
+
     public async Task<PublicExperienceIntakeResult> ExecuteAsync(
-        string json, IReadOnlyList<PublicExperienceUpload> uploads, CancellationToken cancellationToken)
+        string json, IReadOnlyList<PublicExperienceUpload> uploads, PublicExperienceUpload? ideaPhoto,
+        CancellationToken cancellationToken)
     {
-        PublicExperiencePayload payload;
-        var hashes = new List<string>();
+        var captures = new List<ICapturedContent>();
+        IValidatedIdeaPhoto? photo = null;
         try
         {
-            payload = PublicExperiencePayloadValidation.Parse(json, uploads);
-            foreach (var upload in uploads)
-                hashes.Add(await HashFileAsync(upload, cancellationToken));
+            PublicExperiencePayload payload;
+            try
+            {
+                payload = PublicExperiencePayloadValidation.Parse(json, uploads);
+                if (ideaPhoto is not null)
+                    photo = await (photoCapture ?? throw new InvalidOperationException("Photo capture is not configured."))
+                        .CaptureAsync(ideaPhoto, cancellationToken);
+                foreach (var upload in uploads)
+                {
+                    await using var source = upload.OpenRead();
+                    captures.Add(await capture.CaptureAsync(source, upload.SizeBytes,
+                        PublicExperiencePayloadValidation.MaximumFileBytes, cancellationToken));
+                }
+            }
+            catch (IdeaPhotoValidationException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                return new(exception.StatusCode, Error: exception.Message, ErrorCode: exception.Code);
+            }
+            catch (ContentVerificationException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return new(400, Error: "Tamano real del archivo no coincide con metadata.");
+            }
+            catch (Exception exception) when (exception is JsonException or ArgumentException)
+            {
+                return new(400, Error: exception.Message);
+            }
+            return await PersistAsync(payload, uploads, captures, ideaPhoto, photo, cancellationToken);
         }
-        catch (Exception exception) when (exception is JsonException or ArgumentException)
+        finally
         {
-            return new(400, Error: exception.Message);
+            try { foreach (var content in captures) await content.DisposeAsync(); }
+            finally { if (photo is not null) await photo.DisposeAsync(); }
         }
+    }
 
+    private async Task<PublicExperienceIntakeResult> PersistAsync(PublicExperiencePayload payload,
+        IReadOnlyList<PublicExperienceUpload> uploads, IReadOnlyList<ICapturedContent> captures,
+        PublicExperienceUpload? ideaPhoto, IValidatedIdeaPhoto? photo,
+        CancellationToken cancellationToken)
+    {
         using var fingerprintHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         fingerprintHash.AppendData(PublicExperiencePayloadValidation.Canonicalize(payload));
-        foreach (var hash in hashes)
-            fingerprintHash.AppendData(Convert.FromHexString(hash));
+        foreach (var content in captures)
+            fingerprintHash.AppendData(Convert.FromHexString(content.Sha256));
         var fingerprint = Convert.ToHexString(fingerprintHash.GetHashAndReset());
         var existing = await repository.FindAsync(payload.SubmissionId, cancellationToken);
-        if (existing is not null) return Replay(existing, fingerprint);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (existing is not null) return Replay(existing, fingerprint, photo);
 
         var now = timeProvider.GetUtcNow();
         var submission = new PublicExperienceSubmission
@@ -64,67 +103,60 @@ public sealed class PublicExperienceIntakeService(
                 var upload = uploads[index];
                 var fileId = Guid.NewGuid();
                 var key = $"public-experience/{submission.Id:N}/{fileId:N}/original{Path.GetExtension(upload.FileName).ToLowerInvariant()}";
-                // Include the current key so even a partially written file is compensated.
+                // Track attempted destinations, not proof of creation or permission to delete them.
                 storedKeys.Add(key);
-                await using var content = upload.OpenRead();
-                await storage.SaveAsync(key, content, cancellationToken);
-                submission.Files.Add(new PublicExperienceSubmissionFile
-                {
-                    Id = fileId, SubmissionId = submission.Id, Sequence = index,
-                    OriginalFileName = upload.FileName, ContentType = upload.ContentType,
-                    SizeBytes = upload.SizeBytes, StorageKey = key, ContentHash = hashes[index],
-                    CreatedAtUtc = now
-                });
+                var captured = captures[index];
+                await using var content = captured.OpenRead();
+                var receipt = await storage.SaveVerifiedAsync(key, content, upload.SizeBytes,
+                    PublicExperiencePayloadValidation.MaximumFileBytes, cancellationToken);
+                var evidenceAt = timeProvider.GetUtcNow();
+                if (receipt.Sha256 != captured.Sha256 || receipt.Length != captured.Length)
+                    throw new FileStorageWriteException(new ContentVerificationException());
+                submission.Files.Add(PublicExperienceSubmissionFile.CreateWithStoredEvidence(
+                    fileId, submission.Id, index, upload.FileName, upload.ContentType,
+                    upload.SizeBytes, key, receipt.Sha256, now, receipt.Length, evidenceAt, 1));
+            }
+            if (photo is not null)
+            {
+                var id = Guid.NewGuid();
+                var extension = photo.ContentType == "image/png" ? ".png" : ".jpg";
+                var key = $"public-experience/{submission.Id:N}/idea-photo/{id:N}/original{extension}";
+                storedKeys.Add(key);
+                await using var content = photo.OpenRead();
+                var receipt = await storage.SaveVerifiedAsync(key, content, photo.Length,
+                    IdeaPhotoLimits.MaximumBytes, cancellationToken);
+                if (receipt.Sha256 != photo.Sha256 || receipt.Length != photo.Length)
+                    throw new FileStorageWriteException(new ContentVerificationException());
+                submission.AttachIdeaPhoto(PublicExperienceIdeaPhoto.Create(id, submission.Id,
+                    ideaPhoto!.FileName, photo.ContentType, key, receipt.Sha256, receipt.Length, timeProvider.GetUtcNow()));
             }
             if (await repository.TryInsertAsync(submission, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 return new(201, submission.SubmissionId, submission.Status);
+            }
         }
         catch
         {
-            await CompensateAsync(storedKeys);
+            logger.LogWarning("Public intake failed; attempted files retained. SubmissionId={SubmissionId} FileCount={FileCount}",
+                payload.SubmissionId, storedKeys.Count);
+            cancellationToken.ThrowIfCancellationRequested();
             throw;
         }
 
-        // A competing insert won the unique constraint. Only remove this request's unique keys.
-        await CompensateAsync(storedKeys);
+        // The winner remains authoritative. Losing upload bytes await coordinated cleanup.
         existing = await repository.FindAsync(payload.SubmissionId, cancellationToken)
             ?? throw new InvalidOperationException("Concurrent submission was not found.");
-        return Replay(existing, fingerprint);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Replay(existing, fingerprint, photo);
     }
 
-    private static PublicExperienceIntakeResult Replay(PublicExperienceSubmission existing, string fingerprint) =>
+    private static PublicExperienceIntakeResult Replay(PublicExperienceSubmission existing, string fingerprint,
+        IValidatedIdeaPhoto? photo) =>
         existing.PayloadFingerprint == fingerprint
+            && (photo is null ? existing.IdeaPhoto is null : existing.IdeaPhoto is { IdentityVersion: 1 } stored
+                && stored.StoredSha256 == photo.Sha256 && stored.StoredLengthBytes == photo.Length)
             ? new(200, existing.SubmissionId, existing.Status, true)
             : new(409, Error: "submissionId ya fue recibido con contenido diferente.");
 
-    private static async Task<string> HashFileAsync(PublicExperienceUpload upload, CancellationToken cancellationToken)
-    {
-        await using var stream = upload.OpenRead();
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        var buffer = new byte[81920];
-        long length = 0;
-        int read;
-        while ((read = await stream.ReadAsync(buffer, cancellationToken)) != 0)
-        {
-            length += read;
-            if (length > PublicExperiencePayloadValidation.MaximumFileBytes || length > upload.SizeBytes)
-                throw new ArgumentException("Tamano real del archivo no coincide con metadata.");
-            hash.AppendData(buffer.AsSpan(0, read));
-        }
-        if (length == 0 || length != upload.SizeBytes)
-            throw new ArgumentException("Tamano real del archivo no coincide con metadata.");
-        return Convert.ToHexString(hash.GetHashAndReset());
-    }
-
-    private async Task CompensateAsync(IEnumerable<string> keys)
-    {
-        foreach (var key in keys)
-        {
-            try { await storage.DeleteIfExistsAsync(key, CancellationToken.None); }
-            catch (Exception exception)
-            {
-                logger.LogError(exception, "Public intake compensation failed. StorageKey={StorageKey}", key);
-            }
-        }
-    }
 }

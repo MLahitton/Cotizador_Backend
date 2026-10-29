@@ -1,4 +1,6 @@
 using Domain.PublicExperience;
+using Domain.PreQuotes;
+using Application.Common.Abstractions.Storage;
 
 namespace Application.PublicExperience;
 
@@ -26,10 +28,29 @@ public sealed class PublicExperienceRequirementPreparationException(string error
 
 public interface IPublicExperienceRequirementPreparationRepository
 {
-    // Preparation and repositories share one transaction. Compensate only after known rollback.
-    Task<PublicExperienceRequirementPreparationResult?> PrepareLockedAsync(
-        string submissionId,
-        Func<PublicExperienceSubmission, CancellationToken, Task> prepare,
-        Func<Task> compensate,
-        CancellationToken cancellationToken);
+    Task<PublicPreparationRead> ReadAsync(string submissionId, CancellationToken cancellationToken);
+    Task<PublicExperienceRequirementPreparationResult> CommitAsync(PublicPreparationSnapshot snapshot,
+        Requirement candidate, IReadOnlyList<PublicPreparedFile> files, CancellationToken cancellationToken);
+    Task<PublicExperienceRequirementPreparationResult> FailAsync(PublicPreparationSnapshot snapshot,
+        string errorCode, CancellationToken cancellationToken);
 }
+
+public sealed record PublicPreparationRead(PublicPreparationSnapshot? Snapshot,
+    PublicExperienceRequirementPreparationResult? Result);
+
+public sealed record PublicPreparationSnapshot(Guid Id, string SubmissionId, Guid? ClientId, Guid? ProjectId,
+    Guid? OwnerId, string Status, string Fingerprint, string Answers, IReadOnlyList<PublicPreparationFile> Files,
+    string? ErrorCode)
+{
+    public bool Matches(PublicPreparationSnapshot other) => Id == other.Id && SubmissionId == other.SubmissionId
+        && ClientId == other.ClientId && ProjectId == other.ProjectId && OwnerId == other.OwnerId
+        && Status == other.Status && Fingerprint == other.Fingerprint && Answers == other.Answers
+        && ErrorCode == other.ErrorCode && Files.SequenceEqual(other.Files);
+}
+
+public sealed record PublicPreparationFile(Guid Id, int Sequence, string OriginalFileName, string ContentType,
+    long SizeBytes, string StorageKey, string ContentHash, DateTimeOffset CreatedAtUtc,
+    long? StoredLengthBytes, DateTimeOffset? StoredEvidenceAtUtc, short? StoredEvidenceVersion);
+
+public sealed record PublicPreparedFile(Guid SourceId, string StorageKey, StoredContentReceipt Receipt,
+    DateTimeOffset EvidenceAtUtc);

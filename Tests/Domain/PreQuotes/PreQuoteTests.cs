@@ -9,6 +9,19 @@ public sealed class PreQuoteTests
     private static readonly Guid UserId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly DateTimeOffset At = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    [Fact]
+    public void ReservedIdentity_IsExplicitAndDoesNotChangeSerialRules()
+    {
+        var id = Guid.NewGuid();
+        var quote = PreQuote.Create(ProjectId, UserId, " PC-2026-0042 ", null, At, id);
+        Assert.Equal(id, quote.Id);
+        Assert.Equal("PC-2026-0042", quote.Serial);
+        Assert.Throws<ArgumentException>(() => PreQuote.Create(ProjectId, UserId, "PC-2026-0042", null, At, Guid.Empty));
+        Assert.Throws<ArgumentException>(() => PreQuote.Create(ProjectId, UserId, "", null, At, id));
+        Assert.NotEqual(PreQuote.Create(ProjectId, UserId, "PC-2026-0043", null, At).Id,
+            PreQuote.Create(ProjectId, UserId, "PC-2026-0044", null, At).Id);
+    }
+
     [Theory]
     [InlineData(2026, 1, "PC-2026-0001")]
     [InlineData(2026, 47, "PC-2026-0047")]

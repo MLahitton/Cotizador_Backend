@@ -20,7 +20,8 @@ public enum CancelRequirementProcessingAttemptFailure
     ProcessingAttemptNotFound,
     QueryError,
     PersistenceError,
-    InactiveUser
+    InactiveUser,
+    ProcessingManagedByJob
 }
 
 public sealed record CancelRequirementProcessingAttemptResult(
@@ -83,13 +84,13 @@ public sealed class CancelRequirementProcessingAttemptService(
             attempt = byRequirement
                 ? await requirementRepository.FindActiveProcessingAttemptByRequirementIdAsync(id, cancellationToken)
                 : await requirementRepository.FindProcessingAttemptByIdAsync(id, cancellationToken);
-            if (attempt is null)
+            if (attempt is null && !byRequirement)
                 return CancelRequirementProcessingAttemptResult.Failed(
                     CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound);
 
             // Authorize through current Project ownership, never the attempt's original actor.
             // This also protects the read of an already finished attempt below.
-            var requirement = await requirementRepository.FindByIdAsync(attempt.RequirementId, cancellationToken);
+            var requirement = await requirementRepository.FindByIdAsync(byRequirement ? id : attempt!.RequirementId, cancellationToken);
             var preQuote = requirement is null ? null
                 : await preQuoteRepository.FindByIdAsync(requirement.PreQuoteId, cancellationToken);
             var project = preQuote is null ? null
@@ -97,6 +98,18 @@ public sealed class CancelRequirementProcessingAttemptService(
             if (project is null || project.CreatedByUserId != userId)
                 return CancelRequirementProcessingAttemptResult.Failed(
                     CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound);
+
+            await using var write = await requirementRepository.BeginLegacyWriteAsync(requirement!.Id, userId, false, cancellationToken);
+            var expectedAttemptId = attempt?.Id;
+            attempt = write.Attempts.SingleOrDefault(x => x.Id == expectedAttemptId);
+            if (attempt is null)
+                return CancelRequirementProcessingAttemptResult.Failed(CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound);
+            if (attempt.ProcessingState == DocumentProcessingState.Finished)
+                return CancelRequirementProcessingAttemptResult.Success(MapFinished(attempt));
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return Rejected(exception.Failure);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -104,22 +117,14 @@ public sealed class CancelRequirementProcessingAttemptService(
                 CancelRequirementProcessingAttemptFailure.QueryError);
         }
 
-        return await CancelAsync(attempt, cancellationToken);
+        return await CancelAsync(attempt, userId, cancellationToken);
     }
 
     private async Task<CancelRequirementProcessingAttemptResult> CancelAsync(
         RequirementProcessingAttempt attempt,
+        Guid actorUserId,
         CancellationToken cancellationToken)
     {
-        if (attempt.ProcessingState == DocumentProcessingState.Finished)
-        {
-            return CancelRequirementProcessingAttemptResult.Success(
-                MapFinished(attempt));
-        }
-
-        cancellationRegistry.TryCancel(
-            RequirementOperationKeys.ProcessingAttempt(attempt.Id));
-
         try
         {
             var finalization =
@@ -127,13 +132,18 @@ public sealed class CancelRequirementProcessingAttemptService(
                     attempt.RequirementId,
                     attempt.Id,
                     timeProvider.GetUtcNow(),
-                    cancellationToken);
+                    cancellationToken,
+                    actorUserId);
 
-            return finalization is null
-                ? CancelRequirementProcessingAttemptResult.Success(
-                    MapPendingOrProcessing(attempt))
-                : CancelRequirementProcessingAttemptResult.Success(
-                    Map(finalization));
+            if (finalization is null)
+                return CancelRequirementProcessingAttemptResult.Failed(CancelRequirementProcessingAttemptFailure.PersistenceError);
+            // The exact attempt has committed cancellation and all database locks are released.
+            cancellationRegistry.TryCancel(RequirementOperationKeys.ProcessingAttempt(finalization.ProcessingAttemptId));
+            return CancelRequirementProcessingAttemptResult.Success(Map(finalization));
+        }
+        catch (LegacyProcessingRejectedException exception)
+        {
+            return Rejected(exception.Failure);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -141,6 +151,16 @@ public sealed class CancelRequirementProcessingAttemptService(
                 CancelRequirementProcessingAttemptFailure.PersistenceError);
         }
     }
+
+    private static CancelRequirementProcessingAttemptResult Rejected(ProcessRequirementFailure failure) =>
+        CancelRequirementProcessingAttemptResult.Failed(failure switch
+        {
+            ProcessRequirementFailure.ProcessingManagedByJob => CancelRequirementProcessingAttemptFailure.ProcessingManagedByJob,
+            ProcessRequirementFailure.Unauthorized => CancelRequirementProcessingAttemptFailure.Unauthorized,
+            ProcessRequirementFailure.InactiveUser => CancelRequirementProcessingAttemptFailure.InactiveUser,
+            ProcessRequirementFailure.RequirementNotFound => CancelRequirementProcessingAttemptFailure.ProcessingAttemptNotFound,
+            _ => CancelRequirementProcessingAttemptFailure.PersistenceError
+        });
 
     private static ProcessedRequirementAttemptResult Map(
         RequirementProcessingCancellationFinalization finalization) =>
@@ -169,17 +189,4 @@ public sealed class CancelRequirementProcessingAttemptService(
                 ?? attempt.CreatedAtUtc,
             null);
 
-    private static ProcessedRequirementAttemptResult MapPendingOrProcessing(
-        RequirementProcessingAttempt attempt) =>
-        new(
-            attempt.RequirementId,
-            attempt.Id,
-            attempt.CorrelationId,
-            attempt.ProcessingState,
-            attempt.Outcome ?? DocumentProcessingOutcome.Cancelled,
-            attempt.ErrorCode,
-            attempt.StartedAtUtc ?? attempt.CreatedAtUtc,
-            attempt.CompletedAtUtc ?? attempt.StartedAtUtc
-                ?? attempt.CreatedAtUtc,
-            null);
 }

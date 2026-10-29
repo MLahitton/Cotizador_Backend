@@ -22,7 +22,7 @@ public sealed record PublicExperienceUpload(
 
 public sealed record PublicExperienceIntakeResult(
     int StatusCode, string? SubmissionId = null, string? Status = null,
-    bool IsReplay = false, string? Error = null);
+    bool IsReplay = false, string? Error = null, string? ErrorCode = null);
 
 public interface IPublicExperienceSubmissionRepository
 {

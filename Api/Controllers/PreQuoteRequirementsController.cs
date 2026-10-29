@@ -184,9 +184,9 @@ public sealed class PreQuoteRequirementsController(
                         requirement.FileCount,
                         requirement.CommercialLine,
                         requirement.Status,
-                        CanEditDocuments: true,
-                        CanCancel: true,
-                        CanReplace: false,
+                        CanEditDocuments: requirement.CanEditDocuments,
+                        CanCancel: requirement.CanCancel,
+                        CanReplace: requirement.CanReplace,
                         IsCurrent: true,
                         SupersedesRequirementId: null,
                         SupersededByRequirementId: null,
@@ -778,13 +778,13 @@ public sealed class PreQuoteRequirementsController(
                     StatusCodes.Status409Conflict,
                     RequirementErrorCodes.RequirementNotMutable,
                     "Requerimiento no editable",
-                    "Los documentos no pueden modificarse despues de iniciar procesamiento."),
+                    "El estado o historial del requerimiento no permite modificar sus documentos."),
             ManageRequirementDocumentsFailure.RequirementNotReplaceable =>
                 RequirementProblem(
                     StatusCodes.Status409Conflict,
                     RequirementErrorCodes.RequirementNotReplaceable,
                     "Requerimiento no reemplazable",
-                    "Solo un requerimiento vigente ya procesado o fallido puede reemplazarse."),
+                    "El requerimiento no cumple las condiciones de vigencia, procesamiento o cancelacion confirmada para reemplazarse."),
             ManageRequirementDocumentsFailure.PreQuoteNotFound =>
                 RequirementProblem(
                     StatusCodes.Status404NotFound,

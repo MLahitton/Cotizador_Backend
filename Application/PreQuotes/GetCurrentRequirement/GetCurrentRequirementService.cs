@@ -85,6 +85,18 @@ public sealed class GetCurrentRequirementService(
                     command.PreQuoteId,
                     cancellationToken);
 
+            if (requirement is not null)
+            {
+                var capabilities = await requirementRepository.GetDocumentCapabilitiesAsync(
+                    requirement.RequirementId, userId, cancellationToken);
+                requirement = requirement with
+                {
+                    CanEditDocuments = capabilities.CanEditDocuments,
+                    CanCancel = capabilities.CanCancel,
+                    CanReplace = capabilities.CanReplace
+                };
+            }
+
             return requirement is null
                 ? GetCurrentRequirementResult.Failed(
                     GetCurrentRequirementFailure

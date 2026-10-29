@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Application.PreQuotes.TechnicalProposalReadiness;
 using Domain.Clients;
+using Domain.Catalogs;
 using Domain.Identity;
 using Domain.PreQuotes;
 using Domain.Projects;
@@ -56,6 +57,7 @@ public sealed class RequirementRepositoryTests(
         var seeded = await SeedPreQuoteAsync();
         var first = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
         var second = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(2));
+        MakeHistorical(first, second);
 
         await using (var context = fixture.CreateDbContext())
         {
@@ -69,6 +71,7 @@ public sealed class RequirementRepositoryTests(
             cancellationToken);
 
         Assert.Equal(2, count);
+        Assert.Equal(1, await verification.Requirements.CountAsync(x => x.PreQuoteId == seeded.PreQuoteId && x.IsActive, cancellationToken));
     }
 
     [Fact]
@@ -78,6 +81,7 @@ public sealed class RequirementRepositoryTests(
         var seeded = await SeedPreQuoteAsync();
         var firstRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(1));
         var secondRequirement = Requirement.Create(seeded.PreQuoteId, seeded.UserId, RequirementCommercialLine.Essential, At.AddMinutes(2));
+        MakeHistorical(firstRequirement, secondRequirement);
         var firstFile = RequirementFile.Create(
             firstRequirement.Id,
             "first.pdf",
@@ -198,6 +202,7 @@ public sealed class RequirementRepositoryTests(
             seeded.UserId,
             Guid.NewGuid(),
             At.AddMinutes(9));
+        MakeHistorical(firstRequirement, secondRequirement);
 
         await using (var context = fixture.CreateDbContext())
         {
@@ -299,7 +304,7 @@ public sealed class RequirementRepositoryTests(
                     attempt.Id,
                     "REQUIREMENT_PERSISTENCE_ERROR",
                     At.AddMinutes(5),
-                    cancellationToken);
+                    cancellationToken, seeded.UserId);
 
             Assert.NotNull(finalization);
             Assert.Equal(requirement.Id, finalization!.RequirementId);
@@ -640,7 +645,7 @@ public sealed class RequirementRepositoryTests(
         var seeded = await SeedSegmentedTechnicalProposalAsync(
             itemFunctionalType,
             segmentRole,
-            Guid.NewGuid());
+            systemFunctionalType);
 
         await using var readContext = fixture.CreateDbContext();
         var proposal = await new RequirementRepository(readContext)
@@ -671,7 +676,7 @@ public sealed class RequirementRepositoryTests(
         var seeded = await SeedSegmentedTechnicalProposalAsync(
             "GRILLE",
             null,
-            Guid.NewGuid());
+            "FIXED");
 
         await using var readContext = fixture.CreateDbContext();
         var proposal = await new RequirementRepository(readContext)
@@ -696,7 +701,7 @@ public sealed class RequirementRepositoryTests(
     private async Task<SeededTechnicalProposal> SeedSegmentedTechnicalProposalAsync(
         string itemFunctionalType,
         string? segmentRole,
-        Guid systemId)
+        string systemFunctionalType)
     {
         var seeded = await SeedPreQuoteAsync();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -752,6 +757,10 @@ public sealed class RequirementRepositoryTests(
                 At.AddMinutes(6)));
         }
 
+        var system = global::Domain.Catalogs.ProductSystem.Create("TEST_SYSTEM", "Test system", true, true, false, false, At,
+            functionalType: systemFunctionalType, isSelectable: true);
+        var glass = GlassType.Create("TEST_GLASS", "Test glass", null, At);
+        var finish = FinishType.Create("TEST_FINISH", "Test finish", false, At);
         var proposal = RequirementTechnicalProposal.Create(
             requirement.Id,
             extraction.Id,
@@ -761,18 +770,19 @@ public sealed class RequirementRepositoryTests(
         proposal.AddItem(CreateProposalItem(
             proposal.Id,
             extracted.Id,
-            systemId,
-            Guid.NewGuid(),
-            Guid.NewGuid()));
+            system.Id,
+            glass.Id,
+            finish.Id));
 
         await using var context = fixture.CreateDbContext();
+        context.AddRange(system, glass, finish);
         context.Requirements.Add(requirement);
         context.RequirementProcessingAttempts.Add(attempt);
         context.RequirementExtractionResults.Add(extraction);
         context.RequirementExtractedItems.Add(extracted);
         context.RequirementTechnicalProposals.Add(proposal);
         await context.SaveChangesAsync(cancellationToken);
-        return new SeededTechnicalProposal(proposal.Id, systemId);
+        return new SeededTechnicalProposal(proposal.Id, system.Id);
     }
     private async Task<SeededPricedRequirement> SeedPricedRequirementAsync()
     {
@@ -811,7 +821,7 @@ public sealed class RequirementRepositoryTests(
             false,
             At.AddMinutes(6));
         var firstProposalItem = CreateProposalItem(proposal.Id, firstExtracted.Id);
-        var secondProposalItem = CreateProposalItem(proposal.Id, secondExtracted.Id);
+        var secondProposalItem = CreateProposalItem(proposal.Id, secondExtracted.Id, sequence: 2, reference: "B");
         proposal.AddItem(firstProposalItem);
         proposal.AddItem(secondProposalItem);
         var snapshot = RequirementPricingSnapshot.Create(
@@ -943,15 +953,17 @@ public sealed class RequirementRepositoryTests(
         Guid extractedItemId,
         Guid? suggestedSystemId = null,
         Guid? suggestedGlassTypeId = null,
-        Guid? suggestedFinishTypeId = null) =>
+        Guid? suggestedFinishTypeId = null,
+        int sequence = 1,
+        string reference = "A") =>
         RequirementTechnicalProposalItem.Create(
             proposalId,
             extractedItemId,
             suggestedSystemId,
             suggestedGlassTypeId,
             suggestedFinishTypeId,
-            1,
-            "A",
+            sequence,
+            reference,
             "Ventana",
             StructuredElementType.Window,
             1,
@@ -1052,7 +1064,7 @@ public sealed class RequirementRepositoryTests(
             false,
             At.AddMinutes(6));
         var firstProposalItem = CreateProposalItem(proposal.Id, firstExtracted.Id);
-        var secondProposalItem = CreateProposalItem(proposal.Id, secondExtracted.Id);
+        var secondProposalItem = CreateProposalItem(proposal.Id, secondExtracted.Id, sequence: 2, reference: "V-02");
         proposal.AddItem(firstProposalItem);
         proposal.AddItem(secondProposalItem);
 
@@ -1069,6 +1081,14 @@ public sealed class RequirementRepositoryTests(
             proposal.Id,
             firstProposalItem.Id,
             secondProposalItem.Id);
+    }
+
+    private static void MakeHistorical(Requirement previous, Requirement replacement)
+    {
+        previous.StartProcessing(At.AddMinutes(10));
+        previous.MarkFailed(At.AddMinutes(11));
+        previous.SupersedeBy(replacement.Id, At.AddMinutes(12));
+        replacement.MarkAsReplacementOf(previous.Id);
     }
 
     private async Task<SeededPreQuote> SeedPreQuoteAsync()

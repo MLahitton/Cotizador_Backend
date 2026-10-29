@@ -119,6 +119,10 @@ public static class DependencyInjection
         services.AddSingleton<IOperationCancellationRegistry,
             InMemoryOperationCancellationRegistry>();
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddScoped<Application.Projects.GetProjectIdeaPhoto.IProjectIdeaPhotoRepository, ProjectIdeaPhotoRepository>();
+        services.AddSingleton<IInitialContentCapture, InitialContentCapture>();
+        services.AddSingleton<Application.PublicExperience.IIdeaPhotoCapture, IdeaPhotoCapture>();
+        services.AddSingleton<IVerifiedContentCopy, VerifiedContentCopy>();
         services.AddHttpClient<CotizadorAiDocumentProcessingClient>(
             (serviceProvider, httpClient) =>
             {
@@ -230,6 +234,8 @@ public static class DependencyInjection
             IAdministrationPreQuoteReader,
             AdministrationPreQuoteReader>();
 
+        services.AddScoped<Application.Projects.GetProjectWorkspace.IWorkspaceExtractionReader, WorkspaceExtractionReader>();
+        services.AddExperienceExecutionHost(configuration);
         return services;
     }
 

@@ -12,6 +12,7 @@ public sealed class PublicExperienceOptions
 {
     public const string SectionName = "PublicExperience";
     public string? OwnerEmail { get; set; }
+    public bool EmitAutomaticExecution { get; set; }
 }
 
 public static class PublicExperienceProcessingErrors

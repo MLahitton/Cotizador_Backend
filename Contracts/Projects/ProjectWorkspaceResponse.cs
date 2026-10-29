@@ -25,7 +25,10 @@ public sealed record ProjectWorkspaceWorkflowResponse(
     Guid? RequirementId,
     string? RequirementStatus,
     Guid? TechnicalProposalId,
-    bool HasTechnicalProposal);
+    bool HasTechnicalProposal,
+    WorkspaceExtractionResponse? Extraction = null);
+
+public sealed record WorkspaceExtractionResponse(string State, bool RefreshRecommended, bool CanAnalyze);
 
 public sealed record ProjectWorkspaceResponse(
     ProjectWorkspaceProjectResponse Project,

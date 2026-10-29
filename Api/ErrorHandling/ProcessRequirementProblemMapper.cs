@@ -67,6 +67,12 @@ internal static class ProcessRequirementProblemMapper
                     RequirementErrorCodes.ClientInactive,
                     "Cliente inactivo",
                     "No se pueden procesar requerimientos para un cliente inactivo."),
+            ProcessRequirementFailure.ProcessingManagedByJob =>
+                RequirementProblem(
+                    StatusCodes.Status409Conflict,
+                    "PROCESSING_MANAGED_BY_JOB",
+                    "Procesamiento gestionado por job",
+                    "Este requerimiento no admite procesamiento legacy."),
             ProcessRequirementFailure.AlreadyProcessing =>
                 RequirementProblem(
                     StatusCodes.Status409Conflict,

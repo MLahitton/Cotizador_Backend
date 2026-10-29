@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.HistoricalPricing;
 using Application.Common.Diagnostics;
 using Application.Common.Abstractions.PreQuotes;
+using Application.PreQuotes.ProcessRequirement;
 using Application.PreQuotes.ResolveHistoricalTechnicalEvidence;
 using Domain.PreQuotes;
 using Microsoft.Extensions.Logging;
@@ -41,37 +42,52 @@ public sealed class BuildRequirementTechnicalProposalService(
 
     public async Task<BuildRequirementTechnicalProposalResult> ExecuteAsync(
         Guid requirementId,
+        Guid actorUserId,
         CancellationToken cancellationToken = default)
     {
-        var extraction = await requirementRepository.GetLatestSuccessfulExtractionAsync(
-            requirementId,
-            cancellationToken);
-        if (extraction is null)
+        if (actorUserId == Guid.Empty)
+            throw new LegacyProcessingRejectedException(ProcessRequirementFailure.InvalidRequest);
+
+        RequirementExtractionResult? extraction;
+        RequirementCommercialLine commercialLine;
+        IReadOnlyList<RequirementExtractedItem> items;
+        await using (var read = await requirementRepository.BeginLegacyWriteAsync(requirementId, actorUserId, true, cancellationToken))
         {
-            return BuildRequirementTechnicalProposalResult.NotFound();
+            extraction = await requirementRepository.GetLatestSuccessfulExtractionAsync(requirementId, cancellationToken);
+            if (extraction is null || read.Requirement.CommercialLine is null)
+                return BuildRequirementTechnicalProposalResult.NotFound();
+            commercialLine = read.Requirement.CommercialLine.Value;
+            items = await requirementRepository.GetExtractedItemsAsync(extraction.Id, cancellationToken);
+            if (await requirementRepository.HasTechnicalProposalForAttemptAsync(extraction.RequirementProcessingAttemptId, cancellationToken))
+                throw new LegacyProcessingRejectedException(ProcessRequirementFailure.PersistenceError);
         }
 
-        var requirement = await requirementRepository.FindByIdAsync(
-            requirementId,
-            cancellationToken);
-        if (requirement?.CommercialLine is null)
-        {
-            return BuildRequirementTechnicalProposalResult.NotFound();
-        }
-
-        var items = await requirementRepository.GetExtractedItemsAsync(
-            extraction.Id,
-            cancellationToken);
-
+        // Catalog/history work must not retain the operational writer locks.
         var proposal = await BuildAsync(
             requirementId,
-            requirement.CommercialLine.Value,
+            commercialLine,
             extraction,
             items,
             cancellationToken);
 
-        requirementRepository.AddTechnicalProposal(proposal);
+        await using var write = await requirementRepository.BeginLegacyWriteAsync(requirementId, actorUserId, true, cancellationToken);
+        var current = await requirementRepository.GetLatestSuccessfulExtractionAsync(requirementId, cancellationToken);
+        var attempt = write.Attempts.SingleOrDefault(x => x.Id == extraction.RequirementProcessingAttemptId);
+        if (write.Requirement.CommercialLine != commercialLine || current?.Id != extraction.Id
+            || current.RequirementProcessingAttemptId != extraction.RequirementProcessingAttemptId
+            || attempt is null || attempt.RequirementId != requirementId
+            || attempt.ProcessingState != DocumentProcessingState.Finished
+            || attempt.Outcome is not (DocumentProcessingOutcome.Completed or DocumentProcessingOutcome.RequiresReview))
+            throw new LegacyProcessingRejectedException(ProcessRequirementFailure.PersistenceError);
+        var currentItems = await requirementRepository.GetExtractedItemsAsync(extraction.Id, cancellationToken);
+        if (!currentItems.Select(x => x.Id).Order().SequenceEqual(items.Select(x => x.Id).Order())
+            || currentItems.Any(x => x.RequirementExtractionResultId != extraction.Id)
+            || await requirementRepository.HasTechnicalProposalForAttemptAsync(attempt.Id, cancellationToken))
+            throw new LegacyProcessingRejectedException(ProcessRequirementFailure.PersistenceError);
+
+        requirementRepository.AddTechnicalProposalForExistingExtraction(proposal, currentItems);
         await requirementRepository.SaveChangesAsync(cancellationToken);
+        await write.CommitAsync(cancellationToken);
 
         return BuildRequirementTechnicalProposalResult.Success(proposal);
     }

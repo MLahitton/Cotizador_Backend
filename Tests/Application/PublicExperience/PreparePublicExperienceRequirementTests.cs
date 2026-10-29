@@ -33,8 +33,8 @@ public sealed class PreparePublicExperienceRequirementTests
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         preQuotes.ReserveNextSerialAsync(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns("PC-2026-0042");
         var requirements = Substitute.For<IRequirementRepository>();
-        var service = new PreparePublicExperienceRequirementService(new PreparationMemoryRepository(submission),
-            projects, preQuotes, requirements, storage, TimeProvider.System,
+        var service = new PreparePublicExperienceRequirementService(new PreparationMemoryRepository(submission, projects, preQuotes, requirements),
+            storage, Copy(), TimeProvider.System,
             NullLogger<PreparePublicExperienceRequirementService>.Instance);
         var result = await service.ExecuteAsync(submission.SubmissionId, TestContext.Current.CancellationToken);
         Assert.True(result!.IsSuccess);
@@ -67,8 +67,8 @@ public sealed class PreparePublicExperienceRequirementTests
             .Returns(scenario == "missing-project" ? null : project);
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var storage = new IntakeStorage();
-        var service = new PreparePublicExperienceRequirementService(new PreparationMemoryRepository(submission),
-            projects, preQuotes, Substitute.For<IRequirementRepository>(), storage, TimeProvider.System,
+        var service = new PreparePublicExperienceRequirementService(new PreparationMemoryRepository(submission, projects, preQuotes, Substitute.For<IRequirementRepository>()),
+            storage, Copy(), TimeProvider.System,
             NullLogger<PreparePublicExperienceRequirementService>.Instance);
         var result = await service.ExecuteAsync(submission.SubmissionId, TestContext.Current.CancellationToken);
         Assert.False(result!.IsSuccess);
@@ -78,19 +78,52 @@ public sealed class PreparePublicExperienceRequirementTests
         Assert.Equal(0, storage.Writes);
     }
 
-    private sealed class PreparationMemoryRepository(PublicExperienceSubmission submission)
+    internal static global::Application.Common.Abstractions.Storage.IVerifiedContentCopy Copy() =>
+        new global::Infrastructure.Storage.VerifiedContentCopy(NullLogger<global::Infrastructure.Storage.VerifiedContentCopy>.Instance);
+
+    internal sealed class PreparationMemoryRepository(PublicExperienceSubmission submission,
+        IProjectRepository projects, IPreQuoteRepository preQuotes, IRequirementRepository requirements)
         : IPublicExperienceRequirementPreparationRepository
     {
-        public async Task<PublicExperienceRequirementPreparationResult?> PrepareLockedAsync(string id,
-            Func<PublicExperienceSubmission, CancellationToken, Task> prepare, Func<Task> compensate, CancellationToken token)
+        public async Task<PublicPreparationRead> ReadAsync(string id, CancellationToken token)
         {
-            try { await prepare(submission, token); }
-            catch (PublicExperienceRequirementPreparationException exception)
+            if (submission.RequirementId is not null)
+                return new(null, new(id, submission.PreQuoteId, submission.RequirementId, null, true));
+            var project = submission.ProjectId is null ? null : await projects.FindByIdAsync(submission.ProjectId.Value, token);
+            var error = submission.ClientId is null || submission.ProjectId is null
+                ? PublicExperienceRequirementPreparationErrors.NotReady
+                : project is null || !project.IsActive || project.ClientId != submission.ClientId
+                    ? PublicExperienceRequirementPreparationErrors.InvalidProject : null;
+            return new(new(submission.Id, id, submission.ClientId, submission.ProjectId, project?.CreatedByUserId,
+                submission.Status, submission.PayloadFingerprint, submission.AnswersJson,
+                submission.Files.OrderBy(f => f.Sequence).Select(f => new PublicPreparationFile(f.Id, f.Sequence,
+                    f.OriginalFileName, f.ContentType, f.SizeBytes, f.StorageKey, f.ContentHash, f.CreatedAtUtc,
+                    f.StoredLengthBytes, f.StoredEvidenceAtUtc, f.StoredEvidenceVersion)).ToArray(), error), null);
+        }
+
+        public async Task<PublicExperienceRequirementPreparationResult> CommitAsync(PublicPreparationSnapshot snapshot,
+            Requirement candidate, IReadOnlyList<PublicPreparedFile> files, CancellationToken token)
+        {
+            var serial = await preQuotes.ReserveNextSerialAsync(candidate.CreatedAtUtc, token);
+            preQuotes.Add(PreQuote.Create(snapshot.ProjectId!.Value, snapshot.OwnerId!.Value, serial,
+                null, candidate.CreatedAtUtc, candidate.PreQuoteId));
+            requirements.Add(candidate);
+            for (var i = 0; i < files.Count; i++)
             {
-                await compensate();
-                submission.FailRequirementPreparation(exception.ErrorCode, DateTimeOffset.UtcNow);
+                var source = snapshot.Files[i];
+                requirements.AddFile(RequirementFile.CreateWithStoredEvidence(candidate.Id, source.OriginalFileName,
+                    source.ContentType, source.SizeBytes, files[i].StorageKey, candidate.CreatedAtUtc.AddTicks(i * 10L),
+                    files[i].Receipt.Sha256, files[i].Receipt.Length, files[i].EvidenceAtUtc, 1));
             }
-            return new(id, submission.PreQuoteId, submission.RequirementId, submission.RequirementPreparationErrorCode);
+            submission.CompleteRequirementPreparation(candidate.PreQuoteId, candidate.Id, DateTimeOffset.UtcNow);
+            return new(snapshot.SubmissionId, candidate.PreQuoteId, candidate.Id, null);
+        }
+
+        public Task<PublicExperienceRequirementPreparationResult> FailAsync(PublicPreparationSnapshot snapshot,
+            string code, CancellationToken token)
+        {
+            submission.FailRequirementPreparation(code, DateTimeOffset.UtcNow);
+            return Task.FromResult(new PublicExperienceRequirementPreparationResult(snapshot.SubmissionId, null, null, code));
         }
     }
 }

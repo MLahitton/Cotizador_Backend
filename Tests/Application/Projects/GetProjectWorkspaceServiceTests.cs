@@ -20,6 +20,39 @@ public sealed class GetProjectWorkspaceServiceTests
     private static readonly DateTimeOffset At =
         new(2026, 9, 29, 0, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData("Waiting")] [InlineData("Admitted")] [InlineData("Running")]
+    [InlineData("Succeeded")] [InlineData("Inconsistent")] [InlineData("Manual")]
+    public async Task WorkspaceExtraction_ServiceUsesExactProposalNotGenericSuccess(string state)
+    {
+        var reader = Substitute.For<IWorkspaceExtractionReader>();
+        var context = CreateContext(extractionReader: reader);
+        var quote = Guid.NewGuid(); var requirement = Guid.NewGuid(); var oldProposal = Guid.NewGuid(); var exactProposal = Guid.NewGuid();
+        context.PreQuotes.ListWorkspaceCandidatesByProjectIdAsync(context.Project.Id, 2, Arg.Any<CancellationToken>())
+            .Returns([new ProjectWorkspacePreQuoteCandidate(quote)]);
+        context.Requirements.GetCurrentByPreQuoteIdAsync(quote, Arg.Any<CancellationToken>())
+            .Returns(CreateRequirement(requirement, quote, RequirementStatus.Processed, oldProposal));
+        reader.ReadAsync(context.Project.Id, requirement, UserId, Arg.Any<CancellationToken>())
+            .Returns(new WorkspaceExtraction(state, false, false, state == "Succeeded" ? exactProposal : null));
+        var result = await context.Service.ExecuteAsync(new(context.Project.Id), TestContext.Current.CancellationToken);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(state, result.Workspace!.Workflow.Extraction!.State);
+        Assert.Equal(state is "Succeeded" or "Manual", result.Workspace.Workflow.HasTechnicalProposal);
+        Assert.Equal(state == "Manual" ? oldProposal : state == "Succeeded" ? exactProposal : (Guid?)null,
+            result.Workspace.Workflow.TechnicalProposalId);
+        await reader.Received(1).ReadAsync(context.Project.Id, requirement, UserId, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WorkspaceExtraction_ServiceDoesNotReadForUnauthorizedProject()
+    {
+        var reader = Substitute.For<IWorkspaceExtractionReader>();
+        var context = CreateContext(projectOwnerUserId: Guid.NewGuid(), extractionReader: reader);
+        var result = await context.Service.ExecuteAsync(new(context.Project.Id), TestContext.Current.CancellationToken);
+        Assert.Equal(GetProjectWorkspaceFailure.NotFound, result.Failure); Assert.Null(result.Workspace);
+        await reader.DidNotReceiveWithAnyArgs().ReadAsync(default, default, default, TestContext.Current.CancellationToken);
+    }
+
     [Fact]
     public async Task ExecuteAsync_ProjectWithoutPreQuotes_ReturnsEmptyWorkflow()
     {
@@ -253,7 +286,8 @@ public sealed class GetProjectWorkspaceServiceTests
 
     private static Context CreateContext(
         UserRole role = UserRole.User,
-        Guid? projectOwnerUserId = null)
+        Guid? projectOwnerUserId = null,
+        IWorkspaceExtractionReader? extractionReader = null)
     {
         var currentUser = Substitute.For<ICurrentUser>();
         var identity = Substitute.For<IIdentityRepository>();
@@ -262,6 +296,27 @@ public sealed class GetProjectWorkspaceServiceTests
         var preQuotes = Substitute.For<IPreQuoteRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
         var publicContext = Substitute.For<IPublicExperienceProjectContextRepository>();
+        if (extractionReader is null)
+        {
+            extractionReader = Substitute.For<IWorkspaceExtractionReader>();
+            extractionReader.ReadAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                .Returns(new WorkspaceExtraction("Manual", false, true));
+        }
+        var reader = extractionReader;
+        reader.ReadCurrentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                var quoteId = call.ArgAt<Guid>(1); var ct = call.ArgAt<CancellationToken>(3);
+                var current = await requirements.GetCurrentByPreQuoteIdAsync(quoteId, ct);
+                if (current is null) return new ProjectWorkspaceWorkflowResult(ProjectWorkspaceResolutionState.Resolved,
+                    quoteId, null, null, null, false);
+                var extraction = await reader.ReadAsync(call.ArgAt<Guid>(0), current.RequirementId, call.ArgAt<Guid>(2), ct);
+                if (extraction is null) return null;
+                var proposal = extraction.State == "Manual" ? current.TechnicalProposalId : extraction.TechnicalProposalId;
+                return new ProjectWorkspaceWorkflowResult(ProjectWorkspaceResolutionState.Resolved, quoteId,
+                    current.RequirementId, current.Status.ToString().ToUpperInvariant(), proposal,
+                    extraction.State == "Manual" ? current.HasTechnicalProposal : proposal is not null, extraction);
+            });
         var user = User.CreateFromGoogle(
             "user@example.com",
             "User",
@@ -311,7 +366,8 @@ public sealed class GetProjectWorkspaceServiceTests
             clients,
             preQuotes,
             requirements,
-            publicContext);
+            publicContext,
+            extractionReader);
 
         return new Context(
             service,

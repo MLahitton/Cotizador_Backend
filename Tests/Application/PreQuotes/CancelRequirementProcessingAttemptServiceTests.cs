@@ -26,7 +26,7 @@ public sealed class CancelRequirementProcessingAttemptServiceTests
         Assert.Equal(DocumentProcessingOutcome.Cancelled, result.Attempt.Outcome);
         context.Registry.Received(1).TryCancel(RequirementOperationKeys.ProcessingAttempt(context.Attempt.Id));
         await context.Requirements.Received(1).FinalizeProcessingCancellationAsync(
-            context.Requirement.Id, context.Attempt.Id, At.AddMinutes(2), Arg.Any<CancellationToken>());
+            context.Requirement.Id, context.Attempt.Id, At.AddMinutes(2), Arg.Any<CancellationToken>(), context.User.Id);
         Assert.NotEqual(context.User.Id, context.Attempt.RequestedByUserId);
     }
 
@@ -128,7 +128,7 @@ public sealed class CancelRequirementProcessingAttemptServiceTests
     {
         var context = Create();
         context.Requirements.FinalizeProcessingCancellationAsync(Arg.Any<Guid>(), Arg.Any<Guid>(),
-            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("private"));
+            Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>(), Arg.Any<Guid?>()).ThrowsAsync(new InvalidOperationException("private"));
         var result = await Execute(context, byRequirement);
         Assert.Equal(CancelRequirementProcessingAttemptFailure.PersistenceError, result.Failure);
         Assert.Null(result.Attempt);
@@ -169,7 +169,8 @@ public sealed class CancelRequirementProcessingAttemptServiceTests
     {
         Assert.Empty(context.Registry.ReceivedCalls());
         Assert.DoesNotContain(context.Requirements.ReceivedCalls(), call =>
-            !call.GetMethodInfo().Name.StartsWith("Find", StringComparison.Ordinal));
+            !call.GetMethodInfo().Name.StartsWith("Find", StringComparison.Ordinal)
+            && call.GetMethodInfo().Name != nameof(IRequirementRepository.BeginLegacyWriteAsync));
     }
 
     public static Context Create(string scenario = "owner")
@@ -196,10 +197,16 @@ public sealed class CancelRequirementProcessingAttemptServiceTests
         requirements.FindProcessingAttemptByIdAsync(attempt.Id, Arg.Any<CancellationToken>()).Returns(attempt);
         requirements.FindActiveProcessingAttemptByRequirementIdAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(attempt);
         requirements.FindByIdAsync(requirement.Id, Arg.Any<CancellationToken>()).Returns(requirement);
+        var write = Substitute.For<IRequirementLegacyWrite>();
+        write.Requirement.Returns(requirement);
+        write.Attempts.Returns(new[] { attempt });
+        requirements.BeginLegacyWriteAsync(requirement.Id, user.Id, false, Arg.Any<CancellationToken>()).Returns(write);
+        if (scenario == "managed") requirements.BeginLegacyWriteAsync(requirement.Id, user.Id, false, Arg.Any<CancellationToken>())
+            .ThrowsAsync(new LegacyProcessingRejectedException(ProcessRequirementFailure.ProcessingManagedByJob));
         preQuotes.FindByIdAsync(requirement.PreQuoteId, Arg.Any<CancellationToken>())
             .Returns(new PreQuoteDetails(requirement.PreQuoteId, project.Id, 0, At, At));
         projects.FindByIdAsync(project.Id, Arg.Any<CancellationToken>()).Returns(project);
-        requirements.FinalizeProcessingCancellationAsync(requirement.Id, attempt.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+        requirements.FinalizeProcessingCancellationAsync(requirement.Id, attempt.Id, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>(), user.Id)
             .Returns(new RequirementProcessingCancellationFinalization(requirement.Id, attempt.Id, attempt.CorrelationId,
                 DocumentProcessingState.Finished, DocumentProcessingOutcome.Cancelled, At, At.AddMinutes(2)));
         return new(new(current, identity, preQuotes, projects, requirements, registry, new FixedTimeProvider()),

@@ -24,7 +24,8 @@ public enum ProcessRequirementFailure
     AiInvalidResponse = 17,
     AiServiceError = 18,
     PersistenceError = 19,
-    Cancelled = 20
+    Cancelled = 20,
+    ProcessingManagedByJob = 21
 }
 
 public sealed record ProcessedRequirementSummary(

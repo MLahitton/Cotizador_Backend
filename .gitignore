@@ -488,6 +488,7 @@ $RECYCLE.BIN/
 temp_api*
 temp_*.stdout
 temp_*.stderr
+/ai-response-debug.json
 
 # Local Steel & Glass report/export files
 **/S&G*.pdf

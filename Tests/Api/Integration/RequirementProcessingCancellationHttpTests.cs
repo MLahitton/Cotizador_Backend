@@ -21,10 +21,10 @@ public sealed class RequirementProcessingCancellationHttpTests
     public static IEnumerable<object[]> Cases()
     {
         foreach (var byRequirement in new[] { false, true })
-        foreach (var scenario in new[] { "owner", "other", "admin-other", "inactive", "missing-user", "finished-other" })
+        foreach (var scenario in new[] { "owner", "other", "admin-other", "inactive", "missing-user", "finished-other", "managed" })
             yield return [byRequirement, scenario, scenario switch
             {
-                "owner" => 200, "inactive" => 403, "missing-user" => 401, _ => 404
+                "owner" => 200, "inactive" => 403, "missing-user" => 401, "managed" => 409, _ => 404
             }];
     }
 
@@ -83,6 +83,7 @@ public sealed class RequirementProcessingCancellationHttpTests
                 {
                     403 => PreQuoteErrorCodes.InactiveUser,
                     401 => PreQuoteErrorCodes.Unauthorized,
+                    409 => "PROCESSING_MANAGED_BY_JOB",
                     _ => RequirementErrorCodes.ProcessingAttemptNotFound
                 }, body);
                 Assert.DoesNotContain(context.Attempt.CorrelationId.ToString(), body);

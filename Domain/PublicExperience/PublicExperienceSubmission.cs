@@ -37,6 +37,15 @@ public sealed class PublicExperienceSubmission
     public DateTimeOffset? RequirementPreparedAtUtc { get; private set; }
     public string? RequirementPreparationErrorCode { get; private set; }
     public List<PublicExperienceSubmissionFile> Files { get; init; } = [];
+    public PublicExperienceIdeaPhoto? IdeaPhoto { get; private set; }
+
+    public void AttachIdeaPhoto(PublicExperienceIdeaPhoto photo)
+    {
+        ArgumentNullException.ThrowIfNull(photo);
+        if (IdeaPhoto is not null || photo.SubmissionId != Id)
+            throw new InvalidOperationException("Idea photo cannot be replaced or assigned across submissions.");
+        IdeaPhoto = photo;
+    }
 
     public void CompleteRequirementPreparation(Guid preQuoteId, Guid requirementId, DateTimeOffset now)
     {
@@ -92,6 +101,33 @@ public sealed class PublicExperienceSubmission
 
 public sealed class PublicExperienceSubmissionFile
 {
+    public long? StoredLengthBytes { get; private set; }
+    public DateTimeOffset? StoredEvidenceAtUtc { get; private set; }
+    public short? StoredEvidenceVersion { get; private set; }
+
+    public static PublicExperienceSubmissionFile CreateWithStoredEvidence(Guid id, Guid submissionId,
+        int sequence, string originalFileName, string contentType, long sizeBytes, string storageKey,
+        string contentHash, DateTimeOffset createdAtUtc, long storedLengthBytes,
+        DateTimeOffset storedEvidenceAtUtc, short storedEvidenceVersion)
+    {
+        if (contentHash is null || contentHash.Length != 64
+            || contentHash.Any(c => !(c is >= '0' and <= '9' or >= 'A' and <= 'F')))
+            throw new ArgumentException("An uppercase SHA256 digest is required.", nameof(contentHash));
+        if (storedLengthBytes <= 0 || storedLengthBytes != sizeBytes)
+            throw new ArgumentOutOfRangeException(nameof(storedLengthBytes));
+        if (storedEvidenceVersion != 1) throw new ArgumentOutOfRangeException(nameof(storedEvidenceVersion));
+        if (storedEvidenceAtUtc.Offset != TimeSpan.Zero)
+            throw new ArgumentException("UTC is required.", nameof(storedEvidenceAtUtc));
+        return new PublicExperienceSubmissionFile
+        {
+            Id = id, SubmissionId = submissionId, Sequence = sequence, OriginalFileName = originalFileName,
+            ContentType = contentType, SizeBytes = sizeBytes, StorageKey = storageKey,
+            ContentHash = contentHash, CreatedAtUtc = createdAtUtc,
+            StoredLengthBytes = storedLengthBytes, StoredEvidenceAtUtc = storedEvidenceAtUtc,
+            StoredEvidenceVersion = storedEvidenceVersion
+        };
+    }
+
     public Guid Id { get; init; } = Guid.NewGuid();
     public Guid SubmissionId { get; init; }
     public int Sequence { get; init; }

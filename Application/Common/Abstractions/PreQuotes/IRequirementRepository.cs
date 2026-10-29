@@ -4,6 +4,16 @@ namespace Application.Common.Abstractions.PreQuotes;
 
 public interface IRequirementRepository
 {
+    Task<IRequirementDocumentWrite> BeginDocumentWriteAsync(
+        Guid requirementId, Guid actorUserId, CancellationToken cancellationToken);
+
+    Task<RequirementDocumentCapabilities> GetDocumentCapabilitiesAsync(
+        Guid requirementId, Guid actorUserId, CancellationToken cancellationToken);
+
+    Task<IRequirementLegacyWrite> BeginLegacyWriteAsync(
+        Guid requirementId, Guid actorUserId, bool requireActiveContext,
+        CancellationToken cancellationToken);
+
     Task LockExperienceConfigurationAsync(
         Guid technicalProposalId,
         CancellationToken cancellationToken);
@@ -49,14 +59,16 @@ public interface IRequirementRepository
             Guid processingAttemptId,
             string errorCode,
             DateTimeOffset completedAtUtc,
-            CancellationToken cancellationToken);
+            CancellationToken cancellationToken,
+            Guid? actorUserId = null);
 
     Task<RequirementProcessingCancellationFinalization?>
         FinalizeProcessingCancellationAsync(
             Guid requirementId,
             Guid processingAttemptId,
             DateTimeOffset completedAtUtc,
-            CancellationToken cancellationToken);
+            CancellationToken cancellationToken,
+            Guid? actorUserId = null);
 
     void Add(Requirement requirement);
 
@@ -75,6 +87,8 @@ public interface IRequirementRepository
     void AddExtractedItemSegment(RequirementExtractedItemSegment segment);
 
     void AddTechnicalProposal(RequirementTechnicalProposal proposal);
+    void AddTechnicalProposalForExistingExtraction(
+        RequirementTechnicalProposal proposal, IReadOnlyList<RequirementExtractedItem> currentItems);
 
     void AddExperienceDraft(RequirementItemExperienceDraft draft);
 
@@ -89,6 +103,8 @@ public interface IRequirementRepository
     void ReplacePricingSnapshot(
         RequirementPricingSnapshot current,
         RequirementPricingSnapshot replacement);
+
+    Task<bool> HasTechnicalProposalForAttemptAsync(Guid processingAttemptId, CancellationToken cancellationToken);
 
     Task<RequirementExtractionResult?> GetLatestSuccessfulExtractionAsync(
         Guid requirementId,

@@ -52,7 +52,7 @@ public sealed class GetCurrentRequirementServiceTests
             TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccess);
-        Assert.Same(current, result.Requirement);
+        Assert.Equal(current, result.Requirement);
         await context.Requirements.Received(1).GetCurrentByPreQuoteIdAsync(
             context.PreQuote.Id,
             Arg.Any<CancellationToken>());
@@ -109,6 +109,8 @@ public sealed class GetCurrentRequirementServiceTests
         var projects = Substitute.For<IProjectRepository>();
         var clients = Substitute.For<IClientRepository>();
         var requirements = Substitute.For<IRequirementRepository>();
+        requirements.GetDocumentCapabilitiesAsync(Arg.Any<Guid>(), UserId, Arg.Any<CancellationToken>())
+            .Returns(new RequirementDocumentCapabilities(false, false, true));
         var user = User.CreateFromGoogle(
             "user@example.com", "User", null, null, At);
         var client = Client.Create(

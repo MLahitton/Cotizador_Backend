@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Infrastructure.Persistence.Repositories;
 
-public sealed class RequirementRepository(ApplicationDbContext dbContext)
+public sealed partial class RequirementRepository(ApplicationDbContext dbContext)
     : IRequirementRepository
 {
     public async Task<Requirement?> FindByIdAsync(
@@ -202,9 +202,9 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 selected.LatestAttemptState,
                 selected.LatestAttemptOutcome,
                 selected.LatestAttemptErrorCode,
-                selected.CanEditDocuments,
-                selected.CanCancel,
-                selected.CanReplace,
+                false, // This query has no actor; authorized services supply capabilities separately.
+                false,
+                false,
                 selected.IsCurrent,
                 selected.SupersedesRequirementId,
                 selected.SupersededByRequirementId,
@@ -265,43 +265,27 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             Guid processingAttemptId,
             string errorCode,
             DateTimeOffset completedAtUtc,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Guid? actorUserId = null)
     {
         try
         {
-            dbContext.ChangeTracker.Clear();
-            var requirement = await dbContext.Requirements
-                .SingleOrDefaultAsync(
-                    value => value.Id == requirementId,
-                    cancellationToken);
-            var attempt = await dbContext.RequirementProcessingAttempts
-                .SingleOrDefaultAsync(
-                    value => value.Id == processingAttemptId
-                        && value.RequirementId == requirementId,
-                    cancellationToken);
-
-            if (requirement is null || attempt is null)
-            {
+            await using var write = await BeginLegacyWriteAsync(requirementId,
+                actorUserId ?? Guid.Empty, false, cancellationToken);
+            var requirement = write.Requirement;
+            var attempt = write.Attempts.SingleOrDefault(x => x.Id == processingAttemptId);
+            if (attempt is null || write.Attempts.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id).Last().Id != attempt.Id)
                 return null;
-            }
-
-            var preQuote = await dbContext.PreQuotes
-                .SingleOrDefaultAsync(
-                    value => value.Id == requirement.PreQuoteId,
-                    cancellationToken);
-
-            if (attempt.ProcessingState == DocumentProcessingState.Processing)
-            {
-                attempt.Fail(errorCode, completedAtUtc);
-            }
-
-            if (requirement.Status == RequirementStatus.Processing)
-            {
-                requirement.MarkFailed(completedAtUtc);
-            }
-
-            preQuote?.RegisterActivity(completedAtUtc);
+            if (attempt.ProcessingState == DocumentProcessingState.Finished)
+                return attempt.Outcome == DocumentProcessingOutcome.Failed && attempt.ErrorCode == errorCode
+                    ? CreateFailureFinalization(requirement.Id, attempt) : null;
+            if (attempt.ProcessingState != DocumentProcessingState.Processing
+                || requirement.Status != RequirementStatus.Processing || !requirement.IsCurrent) return null;
+            attempt.Fail(errorCode, completedAtUtc);
+            requirement.MarkFailed(completedAtUtc);
+            write.PreQuote.RegisterActivity(completedAtUtc);
             await SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
 
             return CreateFailureFinalization(requirement.Id, attempt);
         }
@@ -320,25 +304,17 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             Guid requirementId,
             Guid processingAttemptId,
             DateTimeOffset completedAtUtc,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Guid? actorUserId = null)
     {
         try
         {
-            dbContext.ChangeTracker.Clear();
-            var requirement = await dbContext.Requirements
-                .SingleOrDefaultAsync(
-                    value => value.Id == requirementId,
-                    cancellationToken);
-            var attempt = await dbContext.RequirementProcessingAttempts
-                .SingleOrDefaultAsync(
-                    value => value.Id == processingAttemptId
-                        && value.RequirementId == requirementId,
-                    cancellationToken);
-
-            if (requirement is null || attempt is null)
-            {
+            await using var write = await BeginLegacyWriteAsync(requirementId,
+                actorUserId ?? Guid.Empty, false, cancellationToken);
+            var requirement = write.Requirement;
+            var attempt = write.Attempts.SingleOrDefault(x => x.Id == processingAttemptId);
+            if (attempt is null || write.Attempts.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id).Last().Id != attempt.Id)
                 return null;
-            }
 
             if (attempt.ProcessingState != DocumentProcessingState.Processing)
             {
@@ -347,11 +323,7 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                     : null;
             }
 
-            var preQuote = await dbContext.PreQuotes
-                .SingleOrDefaultAsync(
-                    value => value.Id == requirement.PreQuoteId,
-                    cancellationToken);
-
+            if (requirement.Status != RequirementStatus.Processing || !requirement.IsCurrent) return null;
             attempt.Cancel(completedAtUtc);
 
             if (requirement.Status == RequirementStatus.Processing)
@@ -359,8 +331,9 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
                 requirement.MarkProcessingCancelled(completedAtUtc);
             }
 
-            preQuote?.RegisterActivity(completedAtUtc);
+            write.PreQuote.RegisterActivity(completedAtUtc);
             await SaveChangesAsync(cancellationToken);
+            await write.CommitAsync(cancellationToken);
 
             return CreateCancellationFinalization(requirement.Id, attempt);
         }
@@ -416,6 +389,21 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
 
     public void AddTechnicalProposal(RequirementTechnicalProposal proposal)
     {
+        dbContext.RequirementTechnicalProposals.Add(proposal);
+    }
+
+    public void AddTechnicalProposalForExistingExtraction(
+        RequirementTechnicalProposal proposal, IReadOnlyList<RequirementExtractedItem> currentItems)
+    {
+        // Only the references reread in the guarded transaction are attached, never the preparation graph.
+        var byId = currentItems.ToDictionary(x => x.Id);
+        foreach (var item in proposal.Items)
+        {
+            var extracted = byId[item.RequirementExtractedItemId
+                ?? throw new InvalidOperationException("An extracted proposal item must reference its source.")];
+            item.AttachExtractedItem(extracted);
+            dbContext.Attach(extracted);
+        }
         dbContext.RequirementTechnicalProposals.Add(proposal);
     }
 
@@ -490,6 +478,10 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             current.AddItem(replacementItem);
         }
     }
+
+    public Task<bool> HasTechnicalProposalForAttemptAsync(Guid processingAttemptId, CancellationToken cancellationToken) =>
+        dbContext.RequirementTechnicalProposals.AsNoTracking()
+            .AnyAsync(x => x.RequirementProcessingAttemptId == processingAttemptId, cancellationToken);
 
     public async Task<RequirementExtractionResult?>
         GetLatestSuccessfulExtractionAsync(
@@ -1027,17 +1019,6 @@ public sealed class RequirementRepository(ApplicationDbContext dbContext)
             Status is not RequirementStatus.Cancelled
             && Status is not RequirementStatus.Superseded
             && SupersededByRequirementId is null;
-
-        public bool CanEditDocuments =>
-            IsCurrent
-            && Status == RequirementStatus.Pending
-            && LatestAttemptState is null;
-
-        public bool CanCancel => CanEditDocuments;
-
-        public bool CanReplace =>
-            IsCurrent
-            && Status is RequirementStatus.Processed or RequirementStatus.Failed;
 
         public int Rank =>
             !IsCurrent ? 5 :

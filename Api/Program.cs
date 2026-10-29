@@ -158,7 +158,9 @@ if (builder.Environment.IsDevelopment())
                         "OPTIONS")
                     .WithHeaders(
                         "Content-Type",
-                        "Authorization");
+                        "Authorization",
+                        "Accept")
+                    .WithExposedHeaders("Content-Disposition");
             });
     });
 }
@@ -185,6 +187,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseExceptionHandler();
+
+app.UseProjectIdeaPhotoHeaders();
+app.UseDocumentDownloadHeaders();
 
 app.UseAuthentication();
 app.UseAuthorization();

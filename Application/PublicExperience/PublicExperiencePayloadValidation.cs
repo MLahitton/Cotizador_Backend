@@ -56,10 +56,7 @@ public static class PublicExperiencePayloadValidation
             Require(metadata is not null && metadata.FileName == file.FileName
                 && metadata.ContentType == file.ContentType && metadata.SizeBytes == file.SizeBytes,
                 "Metadata de files no coincide con multipart en nombre, MIME, orden o tamano.");
-            Required(file.FileName, 255, "fileName");
-            Require(file.FileName is not "." and not ".."
-                && !file.FileName.Any(c => char.IsControl(c) || "/\\:<>|\"?*".Contains(c)),
-                "fileName no admite rutas ni caracteres invalidos.");
+            ValidateFileName(file.FileName);
             var mime = Path.GetExtension(file.FileName).ToLowerInvariant() switch
             {
                 ".pdf" => "application/pdf",
@@ -74,6 +71,14 @@ public static class PublicExperiencePayloadValidation
             Require(total <= MaximumTotalBytes, "Archivos superan 100 MiB.");
         }
         return payload;
+    }
+
+    public static void ValidateFileName(string fileName)
+    {
+        Required(fileName, 255, "fileName");
+        Require(fileName is not "." and not ".."
+            && !fileName.Any(c => char.IsControl(c) || "/\\:<>|\"?*".Contains(c)),
+            "fileName no admite rutas ni caracteres invalidos.");
     }
 
     public static byte[] Canonicalize(PublicExperiencePayload payload)

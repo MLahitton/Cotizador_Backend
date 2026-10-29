@@ -1,101 +1,82 @@
-using System.Security.Cryptography;
-using Application.Common.Abstractions.PreQuotes;
-using Application.Common.Abstractions.Projects;
 using Application.Common.Abstractions.Storage;
 using Application.PreQuotes.CreateRequirement;
 using Domain.PreQuotes;
-using Domain.PublicExperience;
 using Microsoft.Extensions.Logging;
 
 namespace Application.PublicExperience;
 
 public sealed class PreparePublicExperienceRequirementService(
     IPublicExperienceRequirementPreparationRepository submissions,
-    IProjectRepository projects,
-    IPreQuoteRepository preQuotes,
-    IRequirementRepository requirements,
-    IFileStorage storage,
-    TimeProvider timeProvider,
+    IFileStorage storage, IVerifiedContentCopy copies, TimeProvider timeProvider,
     ILogger<PreparePublicExperienceRequirementService> logger)
 {
     // PUBLIC_EXPERIENCE_REQUIREMENT_COMMERCIAL_LINE_BRIDGE = ESSENTIAL.
-    // Legacy technical bridge only: public answers do not determine commercial line.
     public const RequirementCommercialLine CommercialLineBridge = RequirementCommercialLine.Essential;
 
-    public Task<PublicExperienceRequirementPreparationResult?> ExecuteAsync(
+    public async Task<PublicExperienceRequirementPreparationResult?> ExecuteAsync(
         string submissionId, CancellationToken cancellationToken)
     {
-        var copiedKeys = new List<string>();
-        return submissions.PrepareLockedAsync(submissionId,
-            (submission, token) => PrepareAsync(submission, copiedKeys, token),
-            () => CompensateAsync(copiedKeys), cancellationToken);
+        var read = await submissions.ReadAsync(submissionId, cancellationToken);
+        if (read.Result is not null || read.Snapshot is null) return read.Result;
+        var snapshot = read.Snapshot;
+        var prepared = new List<PublicPreparedFile>();
+        Requirement candidate;
+        try
+        {
+            if (snapshot.ErrorCode is not null) throw Failure(snapshot.ErrorCode);
+            if (snapshot.Files.Count == 0) throw Failure(PublicExperienceRequirementPreparationErrors.DocumentsRequired);
+            var normalized = snapshot.Files.Select(f => RequirementFileValidation.NormalizeFile(
+                new CreateRequirementFileInput(f.OriginalFileName, f.ContentType, f.SizeBytes, Stream.Null))).ToArray();
+            if (normalized.Any(f => f.Failure is not null))
+                throw Failure(PublicExperienceRequirementPreparationErrors.FileMetadata);
+            // PostgreSQL preserves microseconds; normalize before assigning document order.
+            var now = timeProvider.GetUtcNow();
+            now = new DateTimeOffset(now.Ticks - now.Ticks % 10, TimeSpan.Zero);
+            candidate = Requirement.Create(Guid.NewGuid(), snapshot.OwnerId!.Value, CommercialLineBridge, now);
+            for (var i = 0; i < snapshot.Files.Count; i++)
+            {
+                var file = snapshot.Files[i];
+                var hash = ExpectedHash(file);
+                await using var source = await storage.OpenReadAsync(file.StorageKey, cancellationToken);
+                await using var copy = await copies.PrepareAsync(source, file.SizeBytes, hash,
+                    PublicExperiencePayloadValidation.MaximumFileBytes, cancellationToken);
+                await using var content = copy.OpenRead();
+                var key = RequirementFileValidation.CreateStorageKey(candidate.Id, normalized[i].StorageExtension);
+                var receipt = await storage.SaveVerifiedAsync(key, content, file.SizeBytes,
+                    PublicExperiencePayloadValidation.MaximumFileBytes, cancellationToken);
+                var at = timeProvider.GetUtcNow();
+                if (receipt.Sha256 != hash || receipt.Length != file.SizeBytes
+                    || receipt.Sha256 != copy.Sha256 || receipt.Length != copy.Length)
+                    throw new FileStorageWriteException(new ContentVerificationException());
+                prepared.Add(new(file.Id, key, receipt, at));
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            var code = exception switch
+            {
+                PublicExperienceRequirementPreparationException expected => expected.ErrorCode,
+                ContentVerificationException => PublicExperienceRequirementPreparationErrors.FileIntegrity,
+                _ => PublicExperienceRequirementPreparationErrors.Failed
+            };
+            logger.LogWarning("Public preparation copy failed; destinations retained. CompletedCount={Count}", prepared.Count);
+            return await submissions.FailAsync(snapshot, code, cancellationToken);
+        }
+        // An uncertain commit must not fall through to a compensating failure write.
+        return await submissions.CommitAsync(snapshot, candidate, prepared, cancellationToken);
     }
 
-    private async Task PrepareAsync(PublicExperienceSubmission submission, List<string> copiedKeys,
-        CancellationToken cancellationToken)
+    private static string ExpectedHash(PublicPreparationFile file)
     {
-        if (submission.ClientId is null || submission.ProjectId is null)
-            throw Failure(PublicExperienceRequirementPreparationErrors.NotReady);
-        var project = await projects.FindByIdAsync(submission.ProjectId.Value, cancellationToken);
-        if (project is null || !project.IsActive || project.ClientId != submission.ClientId
-            || project.CreatedByUserId == Guid.Empty)
-            throw Failure(PublicExperienceRequirementPreparationErrors.InvalidProject);
-        var files = submission.Files.OrderBy(file => file.Sequence).ToArray();
-        if (files.Length == 0)
-            throw Failure(PublicExperienceRequirementPreparationErrors.DocumentsRequired);
-
-        // Reuse the Requirement metadata helper; intake's stricter policy remains authoritative.
-        var normalizedFiles = files.Select(file => RequirementFileValidation.NormalizeFile(
-            new CreateRequirementFileInput(file.OriginalFileName, file.ContentType, file.SizeBytes, Stream.Null))).ToArray();
-        if (normalizedFiles.Any(file => file.Failure is not null))
-            throw Failure(PublicExperienceRequirementPreparationErrors.FileMetadata);
-
-        var now = timeProvider.GetUtcNow();
-        var serial = await preQuotes.ReserveNextSerialAsync(now, cancellationToken);
-        var preQuote = PreQuote.Create(project.Id, project.CreatedByUserId, serial, null, now);
-        var requirement = Requirement.Create(preQuote.Id, project.CreatedByUserId, CommercialLineBridge, now);
-        preQuotes.Add(preQuote);
-        requirements.Add(requirement);
-        for (var index = 0; index < files.Length; index++)
-        {
-            var file = files[index];
-            await using var original = await storage.OpenReadAsync(file.StorageKey, cancellationToken);
-            using var copy = new MemoryStream();
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[81920];
-            int read;
-            while ((read = await original.ReadAsync(buffer, cancellationToken)) > 0)
-            {
-                if (copy.Length + read > file.SizeBytes)
-                    throw Failure(PublicExperienceRequirementPreparationErrors.FileIntegrity);
-                hash.AppendData(buffer, 0, read);
-                await copy.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
-            }
-            if (copy.Length != file.SizeBytes
-                || !string.Equals(Convert.ToHexString(hash.GetHashAndReset()), file.ContentHash, StringComparison.OrdinalIgnoreCase))
-                throw Failure(PublicExperienceRequirementPreparationErrors.FileIntegrity);
-            copy.Position = 0;
-            var key = RequirementFileValidation.CreateStorageKey(requirement.Id, normalizedFiles[index].StorageExtension);
-            // Include a partially written key in compensation if SaveAsync throws.
-            copiedKeys.Add(key);
-            await storage.SaveAsync(key, copy, cancellationToken);
-            // Existing readers order by CreatedAtUtc then Id. PostgreSQL stores microseconds.
-            requirements.AddFile(RequirementFile.Create(requirement.Id, file.OriginalFileName,
-                file.ContentType, file.SizeBytes, key, now.AddTicks(index * 10L)));
-        }
-        submission.CompleteRequirementPreparation(preQuote.Id, requirement.Id, now);
-    }
-
-    private async Task CompensateAsync(IReadOnlyList<string> copiedKeys)
-    {
-        foreach (var key in copiedKeys)
-        {
-            try { await storage.DeleteIfExistsAsync(key, CancellationToken.None); }
-            catch (Exception exception)
-            {
-                logger.LogError(exception, "Public experience requirement copy cleanup failed. StorageKey={StorageKey}", key);
-            }
-        }
+        var hash = file.ContentHash;
+        if (hash.Length != 64 || hash.Any(c => !(c is >= '0' and <= '9' or >= 'A' and <= 'F' or >= 'a' and <= 'f')))
+            throw Failure(PublicExperienceRequirementPreparationErrors.FileIntegrity);
+        var unknown = file.StoredLengthBytes is null && file.StoredEvidenceAtUtc is null && file.StoredEvidenceVersion is null;
+        if (!unknown && (file.StoredLengthBytes != file.SizeBytes || file.StoredEvidenceVersion != 1
+            || file.StoredEvidenceAtUtc is null || hash != hash.ToUpperInvariant()))
+            throw Failure(PublicExperienceRequirementPreparationErrors.FileIntegrity);
+        return hash.ToUpperInvariant();
     }
 
     private static PublicExperienceRequirementPreparationException Failure(string code) => new(code);

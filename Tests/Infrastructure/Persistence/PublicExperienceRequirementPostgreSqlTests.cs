@@ -76,6 +76,10 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
             Assert.StartsWith($"requirements/{requirement.Id:D}/", files[i].StorageKey);
             Assert.NotEqual(originals[i].StorageKey, files[i].StorageKey);
             Assert.Equal(storage.Files[originals[i].StorageKey], storage.Files[files[i].StorageKey]);
+            Assert.Equal(originals[i].ContentHash, files[i].StoredSha256);
+            Assert.Equal(files[i].SizeBytes, files[i].StoredLengthBytes);
+            Assert.NotNull(files[i].StoredEvidenceAtUtc);
+            Assert.Equal((short)1, files[i].StoredEvidenceVersion);
         }
         Assert.Equal(count * 2, storage.Files.Count);
         Assert.Equal(count * 2, storage.Writes);
@@ -96,7 +100,8 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
         currentUser.UserId.Returns(project.CreatedByUserId);
         var workspace = await new GetProjectWorkspaceService(new GetProjectWorkspaceQueryValidator(),
             currentUser, new IdentityRepository(context), new ProjectRepository(context), new ClientRepository(context),
-            new PreQuoteRepository(context), new RequirementRepository(context), new PublicExperienceSubmissionRepository(context))
+            new PreQuoteRepository(context), new RequirementRepository(context), new PublicExperienceSubmissionRepository(context),
+            new WorkspaceExtractionReader(new DbContextOptionsBuilder<ApplicationDbContext>().UseNpgsql(fixture.ConnectionString).Options))
             .ExecuteAsync(new(project.Id), Token);
         Assert.True(workspace.IsSuccess);
         Assert.Equal(ProjectWorkspaceResolutionState.Resolved, workspace.Workspace!.Workflow.ResolutionState);
@@ -110,13 +115,26 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
     }
 
     [Fact]
-    public async Task ConcurrentPreparation_CreatesOnePairAndOneCopy()
+    public async Task ConcurrentPreparation_CreatesOnePairAndRetainsBothCandidates()
     {
         var (submission, storage) = await SeedAsync(1);
         await using var first = fixture.CreateDbContext();
         await using var second = fixture.CreateDbContext();
-        var results = await Task.WhenAll(Service(first, storage).ExecuteAsync(submission.SubmissionId, Token),
-            Service(second, storage).ExecuteAsync(submission.SubmissionId, Token));
+        var copies = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var arrivals = 0;
+        var coordinated = Substitute.For<IFileStorage>();
+        coordinated.OpenReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(c => storage.OpenReadAsync(c.ArgAt<string>(0), c.ArgAt<CancellationToken>(1)));
+        coordinated.SaveVerifiedAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
+            .Returns(async c =>
+            {
+                var receipt = await storage.SaveVerifiedAsync(c.ArgAt<string>(0), c.ArgAt<Stream>(1), c.ArgAt<long>(2), c.ArgAt<long>(3), c.ArgAt<CancellationToken>(4));
+                if (Interlocked.Increment(ref arrivals) == 2) copies.TrySetResult();
+                await copies.Task.WaitAsync(TimeSpan.FromSeconds(20), Token);
+                return receipt;
+            });
+        var results = await Task.WhenAll(Service(first, coordinated).ExecuteAsync(submission.SubmissionId, Token),
+            Service(second, coordinated).ExecuteAsync(submission.SubmissionId, Token));
         Assert.All(results, result => Assert.True(result!.IsSuccess, result.ErrorCode));
         Assert.Single(results.Where(x => x!.IsReplay));
         Assert.Equal(results[0]!.PreQuoteId, results[1]!.PreQuoteId);
@@ -125,7 +143,8 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
         Assert.Equal(1, await read.PreQuotes.CountAsync(Token));
         Assert.Equal(1, await read.Requirements.CountAsync(Token));
         Assert.Equal(1, await read.RequirementFiles.CountAsync(Token));
-        Assert.Equal(2, storage.Files.Count);
+        Assert.Equal(3, storage.Files.Count);
+        await coordinated.DidNotReceive().DeleteIfExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -164,24 +183,24 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
     }
 
     [Fact]
-    public async Task SecondCopyPartialFailure_CompensatesAndCanRetryInSameContext()
+    public async Task SecondCopyPartialFailure_RetainsCopiesAndCanRetryInSameContext()
     {
         var (submission, storage) = await SeedAsync(2, failOnWrite: 4);
         await using var context = fixture.CreateDbContext();
         var service = Service(context, storage);
         var result = await service.ExecuteAsync(submission.SubmissionId, Token);
         Assert.Equal(PublicExperienceRequirementPreparationErrors.Failed, result!.ErrorCode);
-        await AssertNoPreparedEntitiesAsync(submission, storage, 2);
-        Assert.Equal(2, storage.Deletes);
+        await AssertNoPreparedEntitiesAsync(submission, storage, 4);
+        Assert.Equal(0, storage.Deletes);
         var retry = await service.ExecuteAsync(submission.SubmissionId, Token);
         Assert.True(retry!.IsSuccess, retry.ErrorCode);
-        Assert.Equal(4, storage.Files.Count);
+        Assert.Equal(6, storage.Files.Count);
         Assert.Equal(1, await context.PreQuotes.CountAsync(Token));
         Assert.Equal(1, await context.Requirements.CountAsync(Token));
     }
 
     [Fact]
-    public async Task DatabaseFailureAfterCopies_CompensatesAndRetryDoesNotDuplicate()
+    public async Task DatabaseFailureAfterCopies_RetainsCopiesAndRetryDoesNotDuplicateEntities()
     {
         var (submission, storage) = await SeedAsync(2);
         await using var context = fixture.CreateDbContext();
@@ -199,8 +218,8 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
         {
             var result = await service.ExecuteAsync(submission.SubmissionId, Token);
             Assert.Equal(PublicExperienceRequirementPreparationErrors.Failed, result!.ErrorCode);
-            await AssertNoPreparedEntitiesAsync(submission, storage, 2);
-            Assert.Equal(2, storage.Deletes);
+            await AssertNoPreparedEntitiesAsync(submission, storage, 4);
+            Assert.Equal(0, storage.Deletes);
         }
         finally
         {
@@ -211,32 +230,34 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
         }
         var retry = await service.ExecuteAsync(submission.SubmissionId, Token);
         Assert.True(retry!.IsSuccess, retry.ErrorCode);
-        Assert.Equal(4, storage.Files.Count);
+        Assert.Equal(6, storage.Files.Count);
         Assert.Equal(1, await context.PreQuotes.CountAsync(Token));
         Assert.Equal(1, await context.Requirements.CountAsync(Token));
     }
 
     [Fact]
-    public async Task CancellationDuringCopy_CompensatesWithoutChangingOriginals()
+    public async Task CancellationDuringCopy_RetainsCopyWithoutChangingOriginals()
     {
         var (submission, storage) = await SeedAsync(1);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var cancellingStorage = Substitute.For<IFileStorage>();
         cancellingStorage.OpenReadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call => storage.OpenReadAsync(call.ArgAt<string>(0), call.ArgAt<CancellationToken>(1)));
-        cancellingStorage.SaveAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<CancellationToken>())
+        cancellingStorage.SaveVerifiedAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<long>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
             .Returns(async call =>
             {
-                await storage.SaveAsync(call.ArgAt<string>(0), call.ArgAt<Stream>(1), Token);
+                var receipt = await storage.SaveVerifiedAsync(call.ArgAt<string>(0), call.ArgAt<Stream>(1),
+                    call.ArgAt<long>(2), call.ArgAt<long>(3), Token);
                 cancellation.Cancel();
                 cancellation.Token.ThrowIfCancellationRequested();
+                return receipt;
             });
         cancellingStorage.DeleteIfExistsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call => storage.DeleteIfExistsAsync(call.ArgAt<string>(0), call.ArgAt<CancellationToken>(1)));
         await using var context = fixture.CreateDbContext();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             Service(context, cancellingStorage).ExecuteAsync(submission.SubmissionId, cancellation.Token));
-        await AssertNoPreparedEntitiesAsync(submission, storage, 1);
+        await AssertNoPreparedEntitiesAsync(submission, storage, 2);
     }
 
     private async Task<(PublicExperienceSubmission, IntakeStorage)> SeedAsync(int count, int failOnWrite = 0)
@@ -250,7 +271,7 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
         var files = Enumerable.Range(0, count).Select(index =>
             PublicExperienceIntakeTests.Upload() with { FileName = $"document-{index}.pdf" }).ToArray();
         var intake = new PublicExperienceIntakeService(new PublicExperienceSubmissionRepository(context),
-            storage, TimeProvider.System, NullLogger<PublicExperienceIntakeService>.Instance);
+            storage, TimeProvider.System, NullLogger<PublicExperienceIntakeService>.Instance, PublicExperienceIntakeTests.Capture());
         var received = await intake.ExecuteAsync(PublicExperienceIntakeTests.Payload(files), files, Token);
         var processed = await new ProcessPublicExperienceSubmissionService(
             new PublicExperienceProcessingRepository(context, TimeProvider.System, NullLogger<PublicExperienceProcessingRepository>.Instance),
@@ -282,6 +303,6 @@ public sealed class PublicExperienceRequirementPostgreSqlTests(PostgreSqlIntegra
     private static PreparePublicExperienceRequirementService Service(ApplicationDbContext context, IFileStorage storage) =>
         new(new PublicExperienceRequirementPreparationRepository(context, TimeProvider.System,
                 NullLogger<PublicExperienceRequirementPreparationRepository>.Instance),
-            new ProjectRepository(context), new PreQuoteRepository(context), new RequirementRepository(context),
-            storage, TimeProvider.System, NullLogger<PreparePublicExperienceRequirementService>.Instance);
+            storage, new global::Infrastructure.Storage.VerifiedContentCopy(NullLogger<global::Infrastructure.Storage.VerifiedContentCopy>.Instance),
+            TimeProvider.System, NullLogger<PreparePublicExperienceRequirementService>.Instance);
 }

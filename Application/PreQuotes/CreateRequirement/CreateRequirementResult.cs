@@ -28,7 +28,12 @@ public sealed record CreatedRequirementResult(
     string CommercialLine,
     string Status,
     DateTimeOffset CreatedAtUtc,
-    IReadOnlyList<CreatedRequirementDocumentResult> Documents);
+    IReadOnlyList<CreatedRequirementDocumentResult> Documents)
+{
+    public bool CanEditDocuments { get; init; }
+    public bool CanCancel { get; init; }
+    public bool CanReplace { get; init; }
+}
 
 public sealed record CreatedRequirementDocumentResult(
     Guid RequirementFileId,

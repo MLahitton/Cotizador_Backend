@@ -42,7 +42,8 @@ public sealed record ProjectWorkspaceWorkflowResult(
     Guid? RequirementId,
     string? RequirementStatus,
     Guid? TechnicalProposalId,
-    bool HasTechnicalProposal);
+    bool HasTechnicalProposal,
+    WorkspaceExtraction? Extraction = null);
 
 public sealed record ProjectWorkspaceResult(
     ProjectWorkspaceProjectResult Project,

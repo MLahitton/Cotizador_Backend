@@ -225,6 +225,8 @@ public async Task Execute_AdminReadingAnotherUsersRequirement_ReturnsSuccess()
         var files = requirement.Files as ICollection<RequirementFile>;
         files?.Add(file);
 
+        requirements.GetDocumentCapabilitiesAsync(requirement.Id, UserId, Arg.Any<CancellationToken>())
+            .Returns(_ => RequirementDocumentPolicy.Evaluate(requirement, [], requirement.ProcessingAttempts.ToArray(), true));
         var service = new GetRequirementDetailsService(
             currentUser,
             identity,
@@ -347,6 +349,8 @@ public async Task Execute_AdminReadingAnotherUsersRequirement_ReturnsSuccess()
             Arg.Any<CancellationToken>())
         .Returns(client);
 
+    requirements.GetDocumentCapabilitiesAsync(requirement.Id, currentUserEntity.Id, Arg.Any<CancellationToken>())
+        .Returns(RequirementDocumentPolicy.Evaluate(requirement, [], [], ownerIsCurrentUser));
     var service =
         new GetRequirementDetailsService(
             currentUser,

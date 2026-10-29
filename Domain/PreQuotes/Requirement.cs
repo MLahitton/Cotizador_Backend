@@ -196,6 +196,20 @@ public sealed class Requirement
         UpdatedAtUtc = updatedAtUtc;
     }
 
+    // The coordinator must prove terminal cancellation under locks; this is only the local transition.
+    public void SupersedeAfterConfirmedCancellationBy(Guid replacementRequirementId, DateTimeOffset updatedAtUtc)
+    {
+        if (replacementRequirementId == Guid.Empty || replacementRequirementId == Id)
+            throw new ArgumentException("A distinct replacement identity is required.", nameof(replacementRequirementId));
+        if (!IsCurrent || Status != RequirementStatus.Pending)
+            throw new InvalidOperationException("Only a current pending requirement can use this transition.");
+        EnsureValidUpdateDate(updatedAtUtc);
+        Status = RequirementStatus.Superseded;
+        IsActive = false;
+        SupersededByRequirementId = replacementRequirementId;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     public void MarkAsReplacementOf(Guid replacedRequirementId)
     {
         if (replacedRequirementId == Guid.Empty)
@@ -315,7 +329,32 @@ public sealed class RequirementFile
     public long SizeBytes { get; private set; }
     public string StorageKey { get; private set; } = string.Empty;
     public DateTimeOffset CreatedAtUtc { get; private set; }
+    public string? StoredSha256 { get; private set; }
+    public long? StoredLengthBytes { get; private set; }
+    public DateTimeOffset? StoredEvidenceAtUtc { get; private set; }
+    public short? StoredEvidenceVersion { get; private set; }
     public Requirement Requirement { get; private set; } = null!;
+
+    public static RequirementFile CreateWithStoredEvidence(
+        Guid requirementId, string originalFileName, string contentType, long sizeBytes,
+        string storageKey, DateTimeOffset createdAtUtc, string storedSha256,
+        long storedLengthBytes, DateTimeOffset storedEvidenceAtUtc, short storedEvidenceVersion)
+    {
+        if (storedSha256 is null || storedSha256.Length != 64
+            || storedSha256.Any(c => !(c is >= '0' and <= '9' or >= 'A' and <= 'F')))
+            throw new ArgumentException("An uppercase SHA256 digest is required.", nameof(storedSha256));
+        if (storedEvidenceVersion != 1)
+            throw new ArgumentOutOfRangeException(nameof(storedEvidenceVersion));
+        if (storedLengthBytes <= 0 || storedLengthBytes != sizeBytes)
+            throw new ArgumentOutOfRangeException(nameof(storedLengthBytes));
+        Requirement.EnsureUtc(storedEvidenceAtUtc, nameof(storedEvidenceAtUtc));
+        var file = Create(requirementId, originalFileName, contentType, sizeBytes, storageKey, createdAtUtc);
+        file.StoredSha256 = storedSha256;
+        file.StoredLengthBytes = storedLengthBytes;
+        file.StoredEvidenceAtUtc = storedEvidenceAtUtc;
+        file.StoredEvidenceVersion = storedEvidenceVersion;
+        return file;
+    }
 
     public static RequirementFile Create(
         Guid requirementId,

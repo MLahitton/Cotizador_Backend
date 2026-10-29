@@ -112,6 +112,7 @@ public static class DependencyInjection
         services.AddScoped<GetRequirementTechnicalProposalService>();
         services.AddScoped<GetCurrentRequirementService>();
         services.AddScoped<GetRequirementDetailsService>();
+        services.AddScoped<DownloadRequirementDocumentService>();
         services.AddScoped<GetRequirementChatService>();
         services.AddScoped<SendRequirementChatMessageService>();
         services.AddSingleton<IRequirementExperienceCatalogProvider, RequirementExperienceCatalogProvider>();
@@ -160,6 +161,7 @@ public static class DependencyInjection
         services.AddScoped<GetClientProjectsService>();
         services.AddScoped<GetProjectByIdService>();
         services.AddScoped<GetProjectWorkspaceService>();
+        services.AddScoped<Application.Projects.GetProjectIdeaPhoto.GetProjectIdeaPhotoService>();
         services.AddScoped<Application.Projects.GetProjectDiagnosis.GetProjectDiagnosisService>();
         services.AddScoped<GetProjectsService>();
         services.AddScoped<SetProjectActivationService>();
