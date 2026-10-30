@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.Identity;
 using Domain.PreQuotes;
+using Application.Projects.GetProjectDiagnosis;
 
 namespace Application.PreQuotes.RequirementExperience;
 
@@ -13,7 +14,8 @@ public sealed class UpdateRequirementExperienceLevel2SelectionService(
     IProductSystemCatalogRepository productSystemCatalogRepository,
     IGlassTypeCatalogRepository glassTypeCatalogRepository,
     RequirementExperienceLevel2Resolver resolver,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    IProjectDiagnosisSourceRepository? sources = null)
 {
     public Task<RequirementExperienceResult<RequirementExperienceLevel2Response>> UpdateSystemAsync(
         Guid technicalProposalId,
@@ -151,9 +153,10 @@ public sealed class UpdateRequirementExperienceLevel2SelectionService(
             technicalProposalId,
             cancellationToken);
         var draft = drafts.FirstOrDefault(value => value.TechnicalProposalItemId == technicalProposalItemId);
-        var level1 = draft is null
-            ? null
-            : GetRequirementExperienceDraftsService.MapDraft(technicalProposalItemId, draft).Level1Resolution;
+        var initial = draft is null
+            ? await RequirementExperiencePreferences.ReadInitialAsync(sources, proposal.Requirement.PreQuote.ProjectId, cancellationToken)
+            : [];
+        var level1 = RequirementExperiencePreferences.Resolve(technicalProposalItemId, draft, initial).Level1Resolution;
         var technicalSelection =
             await requirementRepository.FindExperienceTechnicalSelectionForUpdateAsync(
                 technicalProposalItemId,

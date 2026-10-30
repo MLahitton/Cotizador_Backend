@@ -3,6 +3,7 @@ using Application.Common.Abstractions.Catalogs;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.Identity;
 using Domain.PreQuotes;
+using Application.Projects.GetProjectDiagnosis;
 
 namespace Application.PreQuotes.RequirementExperience;
 
@@ -17,7 +18,8 @@ public sealed class RequirementExperienceConfigurationResolver(
     IRequirementRepository requirementRepository,
     IProductSystemCatalogRepository productSystemCatalogRepository,
     IGlassTypeCatalogRepository glassTypeCatalogRepository,
-    RequirementExperienceLevel2Resolver level2Resolver)
+    RequirementExperienceLevel2Resolver level2Resolver,
+    IProjectDiagnosisSourceRepository? sources = null)
     : IRequirementExperienceConfigurationResolver
 {
     public async Task<RequirementExperienceCurrentConfiguration> ResolveAsync(
@@ -29,6 +31,9 @@ public sealed class RequirementExperienceConfigurationResolver(
                 proposal.Id,
                 cancellationToken);
         var draftsByItem = drafts.ToDictionary(value => value.TechnicalProposalItemId);
+        var initial = proposal.Items.Any(item => item.IsIncluded && !draftsByItem.ContainsKey(item.Id))
+            ? await RequirementExperiencePreferences.ReadInitialAsync(sources, proposal.Requirement.PreQuote.ProjectId, cancellationToken)
+            : [];
         var selections = await requirementRepository
             .ListExperienceTechnicalSelectionsByTechnicalProposalIdAsync(
                 proposal.Id,
@@ -55,10 +60,7 @@ public sealed class RequirementExperienceConfigurationResolver(
 
             draftsByItem.TryGetValue(item.Id, out var draft);
             selectionsByItem.TryGetValue(item.Id, out var selection);
-            var level1 = draft is null
-                ? null
-                : GetRequirementExperienceDraftsService.MapDraft(item.Id, draft)
-                    .Level1Resolution;
+            var level1 = RequirementExperiencePreferences.Resolve(item.Id, draft, initial).Level1Resolution;
             var level2 = await level2Resolver.ResolveAsync(
                 proposal,
                 item,

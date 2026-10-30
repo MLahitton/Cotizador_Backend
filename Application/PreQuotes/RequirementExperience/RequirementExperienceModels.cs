@@ -35,7 +35,11 @@ public sealed record RequirementExperienceItemDraftResponse(
     DateTimeOffset? UpdatedAtUtc,
     Guid? UpdatedByUserId,
     RequirementExperienceLevel1ResolutionResponse? Level1Resolution,
-    IReadOnlyList<RequirementExperienceAnswerResponse> Answers);
+    IReadOnlyList<RequirementExperienceAnswerResponse> Answers)
+{
+    public bool HasSavedDraft => Revision > 0;
+    public string PreferenceOrigin { get; init; } = "NONE";
+}
 
 public sealed record RequirementExperienceLevel1ResolutionResponse(
     string? SystemTier,

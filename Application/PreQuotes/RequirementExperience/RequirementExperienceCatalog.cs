@@ -73,7 +73,7 @@ public sealed record RequirementExperienceCatalog(
                     Option("UV_NO", "No", "No", ["Sin proteccion UV adicional"]),
                     Option("UV_YES", "Sí", "Sí", ["Proteccion UV requerida"])
                 ]),
-                Question("AESTHETICS", "Estetica", "Que nivel de protagonismo visual busca?", [
+                Question("AESTHETICS", "Estetica", "Que prioridad tiene la estetica para este elemento?", [
                     Option("AESTHETICS_LOW", "Baja", "Baja", ["Baja"]),
                     Option("AESTHETICS_MEDIUM", "Media", "Media", ["Media"]),
                     Option("AESTHETICS_HIGH", "Alta", "Alta", ["Alta"])

@@ -2,6 +2,7 @@ using Application.Common.Abstractions.Authentication;
 using Application.Common.Abstractions.PreQuotes;
 using Domain.Identity;
 using Domain.PreQuotes;
+using Application.Projects.GetProjectDiagnosis;
 
 namespace Application.PreQuotes.RequirementExperience;
 
@@ -41,7 +42,8 @@ public sealed class GetRequirementExperienceCatalogService(
 public sealed class GetRequirementExperienceDraftsService(
     IRequirementRepository requirementRepository,
     IIdentityRepository identityRepository,
-    ICurrentUser currentUser)
+    ICurrentUser currentUser,
+    IProjectDiagnosisSourceRepository? sources = null)
 {
     public async Task<RequirementExperienceResult<RequirementExperienceDraftsResponse>> ExecuteAsync(
         Guid technicalProposalId,
@@ -88,12 +90,14 @@ public sealed class GetRequirementExperienceDraftsService(
             technicalProposalId,
             cancellationToken);
         var draftsByItem = drafts.ToDictionary(value => value.TechnicalProposalItemId);
+        var initial = proposal.Items.Any(item => !draftsByItem.ContainsKey(item.Id))
+            ? await RequirementExperiencePreferences.ReadInitialAsync(sources, proposal.Requirement.PreQuote.ProjectId, cancellationToken)
+            : [];
 
         var items = proposal.Items
             .OrderBy(value => value.Sequence)
-            .Select(item => draftsByItem.TryGetValue(item.Id, out var draft)
-                ? MapDraft(item.Id, draft)
-                : EmptyDraft(item.Id))
+            .Select(item => RequirementExperiencePreferences.Resolve(item.Id,
+                draftsByItem.GetValueOrDefault(item.Id), initial))
             .ToArray();
 
         return RequirementExperienceResult<RequirementExperienceDraftsResponse>.Success(
@@ -132,10 +136,10 @@ public sealed class GetRequirementExperienceDraftsService(
             draft.UpdatedAtUtc,
             draft.UpdatedByUserId,
             MapLevel1Resolution(draft.CatalogVersion, answers),
-            answers);
+            answers) { PreferenceOrigin = "SAVED" };
     }
 
-    private static RequirementExperienceLevel1ResolutionResponse? MapLevel1Resolution(
+    internal static RequirementExperienceLevel1ResolutionResponse? MapLevel1Resolution(
         string catalogVersion,
         IReadOnlyList<RequirementExperienceAnswerResponse> answers)
     {
@@ -237,6 +241,9 @@ public sealed class UpdateRequirementExperienceDraftService(
             technicalProposalItemId,
             cancellationToken);
         var currentRevision = draft?.Revision ?? 0;
+        if (draft is not null && draft.CatalogVersion != request.CatalogVersion)
+            return RequirementExperienceResult<RequirementExperienceItemDraftResponse>.Failed(
+                RequirementExperienceFailure.UnknownCatalogVersion);
         if (currentRevision != request.ExpectedRevision)
         {
             return RequirementExperienceResult<RequirementExperienceItemDraftResponse>.Failed(

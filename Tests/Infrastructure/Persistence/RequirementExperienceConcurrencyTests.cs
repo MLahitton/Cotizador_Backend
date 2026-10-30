@@ -30,7 +30,7 @@ public sealed class ExperienceConcurrencyFixture : IAsyncLifetime
 
 [Collection("Experience concurrency")]
 [Trait("Category", "PostgreSql")]
-public sealed class RequirementExperienceConcurrencyTests(ExperienceConcurrencyFixture fixture)
+public sealed partial class RequirementExperienceConcurrencyTests(ExperienceConcurrencyFixture fixture)
 {
     private static readonly DateTimeOffset At = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
 
